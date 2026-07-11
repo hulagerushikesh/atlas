@@ -1,0 +1,216 @@
+{
+  "name": "atlas_enterprise_kb_v1",
+  "description": "30 Q&A pairs covering HR policies, IT procedures, finance rules, and product documentation. Designed to test retrieval across heterogeneous enterprise documents.",
+  "samples": [
+    {
+      "id": "hr-001",
+      "question": "How many days of annual leave are employees entitled to?",
+      "ground_truth_answer": "Full-time employees are entitled to 20 days of annual leave per year, increasing to 25 days after 5 years of service.",
+      "relevant_doc_ids": ["doc-hr-leave-policy"],
+      "metadata": {"category": "hr", "difficulty": "easy"}
+    },
+    {
+      "id": "hr-002",
+      "question": "What is the process for requesting parental leave?",
+      "ground_truth_answer": "Employees must submit a parental leave request to HR at least 8 weeks before the expected start date, using the HR portal. Supporting documentation (e.g., birth certificate or adoption order) must be provided within 4 weeks of the child's arrival.",
+      "relevant_doc_ids": ["doc-hr-parental-leave"],
+      "metadata": {"category": "hr", "difficulty": "medium"}
+    },
+    {
+      "id": "hr-003",
+      "question": "What is the company's remote work policy for engineering roles?",
+      "ground_truth_answer": "Engineering roles are eligible for up to 3 days of remote work per week. Employees must be reachable during core hours (10am–3pm local time) and attend in-person on Tuesdays and Thursdays.",
+      "relevant_doc_ids": ["doc-hr-remote-work"],
+      "metadata": {"category": "hr", "difficulty": "easy"}
+    },
+    {
+      "id": "hr-004",
+      "question": "How is the performance review cycle structured?",
+      "ground_truth_answer": "Performance reviews occur twice per year: a mid-year check-in in July and a full review in January. Ratings are on a 5-point scale (Exceptional, Exceeds, Meets, Developing, Unsatisfactory). Compensation adjustments are tied to the January review.",
+      "relevant_doc_ids": ["doc-hr-performance"],
+      "metadata": {"category": "hr", "difficulty": "medium"}
+    },
+    {
+      "id": "hr-005",
+      "question": "What is the disciplinary procedure for repeated tardiness?",
+      "ground_truth_answer": "The disciplinary procedure follows three stages: (1) verbal warning from the line manager, (2) written warning with a 90-day improvement plan, (3) final written warning or termination. HR must be notified at each stage.",
+      "relevant_doc_ids": ["doc-hr-disciplinary"],
+      "metadata": {"category": "hr", "difficulty": "hard"}
+    },
+    {
+      "id": "it-001",
+      "question": "How do I reset my corporate password?",
+      "ground_truth_answer": "Passwords can be reset via the self-service portal at identity.company.internal. If the account is locked, contact the IT helpdesk at ext. 4000 or helpdesk@company.com. The IT helpdesk is available Monday–Friday, 8am–6pm.",
+      "relevant_doc_ids": ["doc-it-password-reset"],
+      "metadata": {"category": "it", "difficulty": "easy"}
+    },
+    {
+      "id": "it-002",
+      "question": "What software can I install on my work laptop without IT approval?",
+      "ground_truth_answer": "Employees may install software from the approved software catalogue without IT approval. Any software not in the catalogue requires a formal IT request, which is reviewed within 5 business days. Installing unlicensed or unapproved software is a policy violation.",
+      "relevant_doc_ids": ["doc-it-software-policy"],
+      "metadata": {"category": "it", "difficulty": "medium"}
+    },
+    {
+      "id": "it-003",
+      "question": "What is the data classification scheme used by the company?",
+      "ground_truth_answer": "The company uses four data classification levels: Public, Internal, Confidential, and Restricted. Restricted data (e.g., PII, financial records, IP) requires encryption at rest and in transit, and access is limited to authorised personnel with a documented business need.",
+      "relevant_doc_ids": ["doc-it-data-classification"],
+      "metadata": {"category": "it", "difficulty": "medium"}
+    },
+    {
+      "id": "it-004",
+      "question": "How long are access logs retained?",
+      "ground_truth_answer": "Access logs for production systems are retained for 12 months. Security incident logs are retained for 7 years in compliance with regulatory requirements. Logs are stored in the centralised SIEM and access is restricted to the Security team.",
+      "relevant_doc_ids": ["doc-it-log-retention"],
+      "metadata": {"category": "it", "difficulty": "hard"}
+    },
+    {
+      "id": "it-005",
+      "question": "What is the procedure for reporting a suspected phishing email?",
+      "ground_truth_answer": "Do not click any links or download attachments. Forward the email as an attachment to security@company.com and then delete it. If you clicked a link or entered credentials, contact the IT Security team immediately at ext. 4001.",
+      "relevant_doc_ids": ["doc-it-phishing"],
+      "metadata": {"category": "it", "difficulty": "easy"}
+    },
+    {
+      "id": "fin-001",
+      "question": "What is the expense reimbursement limit for business travel meals?",
+      "ground_truth_answer": "The daily meal allowance for domestic business travel is $75. For international travel the limit is $120 per day. Alcohol is not reimbursable. Receipts are required for any single expense over $25.",
+      "relevant_doc_ids": ["doc-fin-expenses"],
+      "metadata": {"category": "finance", "difficulty": "easy"}
+    },
+    {
+      "id": "fin-002",
+      "question": "What approval is required for capital expenditure above $50,000?",
+      "ground_truth_answer": "Capital expenditure between $10,000 and $50,000 requires VP-level approval. Above $50,000 requires CFO approval and must be included in the annual capital budget plan. Emergency capex above $50,000 can be approved by the CFO and CEO jointly.",
+      "relevant_doc_ids": ["doc-fin-capex"],
+      "metadata": {"category": "finance", "difficulty": "hard"}
+    },
+    {
+      "id": "fin-003",
+      "question": "When are quarterly financial results published internally?",
+      "ground_truth_answer": "Quarterly results are shared with all employees within 5 business days of the earnings call. The CFO hosts an all-hands webinar to present results and answer questions. The results deck is published on the internal finance portal.",
+      "relevant_doc_ids": ["doc-fin-reporting"],
+      "metadata": {"category": "finance", "difficulty": "easy"}
+    },
+    {
+      "id": "fin-004",
+      "question": "What is the policy on accepting gifts from vendors?",
+      "ground_truth_answer": "Employees may accept gifts from vendors up to a value of $50. Gifts above $50 must be declined or, if unavoidable, reported to the Ethics & Compliance team within 48 hours. Cash gifts of any amount are prohibited.",
+      "relevant_doc_ids": ["doc-fin-gifts"],
+      "metadata": {"category": "finance", "difficulty": "medium"}
+    },
+    {
+      "id": "fin-005",
+      "question": "How should contractors be engaged for projects under $25,000?",
+      "ground_truth_answer": "Contractors for engagements under $25,000 can be engaged using the standard purchase order (PO) process with manager approval. A signed Statement of Work (SOW) is required. Legal review is not required below this threshold but is recommended for recurring engagements.",
+      "relevant_doc_ids": ["doc-fin-procurement"],
+      "metadata": {"category": "finance", "difficulty": "medium"}
+    },
+    {
+      "id": "prod-001",
+      "question": "What is the SLA for P1 production incidents?",
+      "ground_truth_answer": "P1 (Critical) incidents must be acknowledged within 15 minutes and have an initial update posted within 30 minutes. The target time-to-resolution is 4 hours. A post-incident review (PIR) must be completed within 5 business days.",
+      "relevant_doc_ids": ["doc-prod-sla"],
+      "metadata": {"category": "product", "difficulty": "medium"}
+    },
+    {
+      "id": "prod-002",
+      "question": "What is the release cadence for the platform?",
+      "ground_truth_answer": "Production releases occur every two weeks on Wednesdays at 2pm UTC during a 2-hour maintenance window. Hotfixes can be deployed outside the cycle with on-call engineer approval. Release notes are published on the internal wiki within 24 hours of each release.",
+      "relevant_doc_ids": ["doc-prod-release"],
+      "metadata": {"category": "product", "difficulty": "easy"}
+    },
+    {
+      "id": "prod-003",
+      "question": "How is feature flag rollout managed?",
+      "ground_truth_answer": "Feature flags are managed via the LaunchDarkly integration. New flags default to off. Gradual rollout follows: 1% → 10% → 50% → 100% of traffic, with a minimum 24-hour soak at each stage. Rollout decisions require sign-off from the product owner.",
+      "relevant_doc_ids": ["doc-prod-feature-flags"],
+      "metadata": {"category": "product", "difficulty": "hard"}
+    },
+    {
+      "id": "prod-004",
+      "question": "What observability tools are used in production?",
+      "ground_truth_answer": "Production observability is provided by three tools: Datadog for metrics and APM, PagerDuty for alerting and on-call scheduling, and Grafana Loki for log aggregation. All services must emit OpenTelemetry traces and publish a /health endpoint.",
+      "relevant_doc_ids": ["doc-prod-observability"],
+      "metadata": {"category": "product", "difficulty": "medium"}
+    },
+    {
+      "id": "prod-005",
+      "question": "What is the process for deprecating a public API endpoint?",
+      "ground_truth_answer": "API deprecation requires: (1) a 6-month notice period communicated via the developer changelog, (2) a Sunset header added to all responses, (3) a migration guide published in the docs. The endpoint is removed only after usage drops below 0.1% of peak traffic.",
+      "relevant_doc_ids": ["doc-prod-api-lifecycle"],
+      "metadata": {"category": "product", "difficulty": "hard"}
+    },
+    {
+      "id": "legal-001",
+      "question": "How long must contracts be retained after expiry?",
+      "ground_truth_answer": "Executed contracts must be retained for 7 years after expiry or termination. Contracts involving real estate or intellectual property must be retained for 10 years. All contracts are stored in the contract management system (CMS) with access restricted to Legal and Finance.",
+      "relevant_doc_ids": ["doc-legal-retention"],
+      "metadata": {"category": "legal", "difficulty": "medium"}
+    },
+    {
+      "id": "legal-002",
+      "question": "Who has authority to sign contracts on behalf of the company?",
+      "ground_truth_answer": "Contracts up to $100,000 may be signed by a Director or above. Contracts between $100,000 and $1,000,000 require VP sign-off. Contracts above $1,000,000 require the CEO or CFO. All contracts must be reviewed by Legal before execution regardless of value.",
+      "relevant_doc_ids": ["doc-legal-signing-authority"],
+      "metadata": {"category": "legal", "difficulty": "hard"}
+    },
+    {
+      "id": "legal-003",
+      "question": "What is the company's data retention policy for GDPR compliance?",
+      "ground_truth_answer": "Personal data is retained only as long as necessary for the original purpose, with a default maximum of 3 years for customer data. Data subject requests (access, deletion, portability) must be fulfilled within 30 days. The DPO must be notified of any breach within 72 hours.",
+      "relevant_doc_ids": ["doc-legal-gdpr"],
+      "metadata": {"category": "legal", "difficulty": "hard"}
+    },
+    {
+      "id": "sec-001",
+      "question": "What encryption standard is required for data at rest?",
+      "ground_truth_answer": "All Confidential and Restricted data at rest must be encrypted using AES-256. Encryption keys are managed via the company's KMS (AWS KMS). Key rotation is required annually for production keys and immediately upon suspected compromise.",
+      "relevant_doc_ids": ["doc-sec-encryption"],
+      "metadata": {"category": "security", "difficulty": "medium"}
+    },
+    {
+      "id": "sec-002",
+      "question": "What is the vulnerability disclosure and patching SLA?",
+      "ground_truth_answer": "Critical (CVSS ≥9.0) vulnerabilities must be patched within 48 hours. High (CVSS 7.0–8.9) within 7 days. Medium (CVSS 4.0–6.9) within 30 days. Low within 90 days. Exceptions require documented risk acceptance from the CISO.",
+      "relevant_doc_ids": ["doc-sec-patching"],
+      "metadata": {"category": "security", "difficulty": "hard"}
+    },
+    {
+      "id": "sec-003",
+      "question": "Is multi-factor authentication mandatory?",
+      "ground_truth_answer": "MFA is mandatory for all corporate accounts including email, VPN, and cloud consoles. The approved second factors are TOTP authenticator apps or hardware security keys (FIDO2). SMS-based MFA is not permitted due to SIM-swap risk.",
+      "relevant_doc_ids": ["doc-sec-mfa"],
+      "metadata": {"category": "security", "difficulty": "easy"}
+    },
+    {
+      "id": "multi-001",
+      "question": "What are the steps to onboard a new vendor who will handle customer PII?",
+      "ground_truth_answer": "Vendor onboarding for PII handlers requires: (1) Legal review and DPA signature, (2) Security questionnaire assessed by InfoSec, (3) Finance PO creation, (4) IT provisioning of access. All four steps must be completed before the vendor can access any production data.",
+      "relevant_doc_ids": ["doc-legal-gdpr", "doc-it-data-classification", "doc-fin-procurement", "doc-sec-encryption"],
+      "metadata": {"category": "cross-functional", "difficulty": "hard"}
+    },
+    {
+      "id": "multi-002",
+      "question": "How do the annual leave policy and performance review cycle interact for employees who join mid-year?",
+      "ground_truth_answer": "Mid-year joiners receive pro-rated annual leave based on their start date. Their first performance review occurs at the January cycle regardless of tenure, but they receive a shortened mid-year check-in within 90 days of joining instead of the standard July check-in.",
+      "relevant_doc_ids": ["doc-hr-leave-policy", "doc-hr-performance"],
+      "metadata": {"category": "cross-functional", "difficulty": "hard"}
+    },
+    {
+      "id": "multi-003",
+      "question": "What are the security requirements for production deployments?",
+      "ground_truth_answer": "Production deployments must pass automated SAST/DAST scans with no Critical or High findings, have all container images scanned for known CVEs, and be approved by the on-call security engineer during the maintenance window. Feature flags must default to off.",
+      "relevant_doc_ids": ["doc-sec-patching", "doc-prod-release", "doc-prod-feature-flags"],
+      "metadata": {"category": "cross-functional", "difficulty": "hard"}
+    },
+    {
+      "id": "oos-001",
+      "question": "What is the best programming language to learn for machine learning?",
+      "ground_truth_answer": "This question is outside the scope of the knowledge base.",
+      "relevant_doc_ids": [],
+      "metadata": {"category": "out_of_scope", "difficulty": "easy"}
+    }
+  ]
+}
