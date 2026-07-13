@@ -171,15 +171,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(TracingMiddleware)
     app.add_middleware(PrometheusMiddleware)
 
-    # Landing page
+    # Landing page at /
     import pathlib as _pl
     _web_index = _pl.Path(__file__).parent / "web" / "index.html"
     if _web_index.exists():
         _landing_html = _web_index.read_text()
 
-        @app.get("/", include_in_schema=False, response_class=HTMLResponse)
-        async def _landing() -> HTMLResponse:  # type: ignore[return]
-            return HTMLResponse(_landing_html)
+        async def _landing() -> HTMLResponse:
+            return HTMLResponse(content=_landing_html)
+
+        app.add_api_route("/", _landing, include_in_schema=False, response_class=HTMLResponse)
 
     # Routes
     app.include_router(health.router, tags=["ops"])
