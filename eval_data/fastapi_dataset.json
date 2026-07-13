@@ -1,0 +1,111 @@
+{
+  "name": "fastapi_docs_v1",
+  "description": "15 developer questions over the FastAPI official documentation (MIT license). Covers simple factual, multi-hop, negation constraint, and out-of-scope categories.",
+  "samples": [
+    {
+      "id": "fq-001",
+      "question": "How do you declare a path parameter in FastAPI?",
+      "ground_truth_answer": "Path parameters are declared by including them in curly braces in the path string, e.g. @app.get('/items/{item_id}'). The same name must appear as a function argument, and FastAPI will parse and validate it automatically.",
+      "relevant_doc_ids": ["path-params"],
+      "metadata": {"category": "simple_factual", "difficulty": "easy"}
+    },
+    {
+      "id": "fq-002",
+      "question": "What Python version does FastAPI require?",
+      "ground_truth_answer": "FastAPI requires Python 3.8 or later. It is compatible with Python 3.8, 3.9, 3.10, 3.11, and 3.12.",
+      "relevant_doc_ids": ["index"],
+      "metadata": {"category": "simple_factual", "difficulty": "easy"}
+    },
+    {
+      "id": "fq-003",
+      "question": "How do you make a query parameter optional with a default value in FastAPI?",
+      "ground_truth_answer": "Declare the function argument with a default value, for example: def read_items(skip: int = 0, limit: int = 10). FastAPI treats any function argument not in the path as an optional query parameter when a default is provided. You can also use Optional[str] = None for nullable parameters.",
+      "relevant_doc_ids": ["query-params"],
+      "metadata": {"category": "simple_factual", "difficulty": "easy"}
+    },
+    {
+      "id": "fq-004",
+      "question": "What decorator do you use to define a POST endpoint in FastAPI?",
+      "ground_truth_answer": "Use the @app.post() decorator to define a POST endpoint. For example: @app.post('/items/'). The router equivalents are @router.post().",
+      "relevant_doc_ids": ["first-steps"],
+      "metadata": {"category": "simple_factual", "difficulty": "easy"}
+    },
+    {
+      "id": "fq-005",
+      "question": "How does FastAPI validate request body data?",
+      "ground_truth_answer": "FastAPI uses Pydantic models for request body validation. You declare a class that inherits from BaseModel with typed fields, then use it as a type annotation on the endpoint function parameter. FastAPI automatically parses the JSON body, validates types and constraints, and returns a 422 Unprocessable Entity error with details if validation fails.",
+      "relevant_doc_ids": ["body"],
+      "metadata": {"category": "simple_factual", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-006",
+      "question": "What is dependency injection in FastAPI and how do you use it?",
+      "ground_truth_answer": "Dependency injection in FastAPI is done via the Depends() function. You define a callable (function or class) that returns some resource, then declare it as a default argument using Depends(your_dependency). FastAPI resolves and injects dependencies automatically, supporting sub-dependencies, async dependencies, and yield-based cleanup.",
+      "relevant_doc_ids": ["dependencies"],
+      "metadata": {"category": "simple_factual", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-007",
+      "question": "How do you add authentication and then use the current user in a protected endpoint?",
+      "ground_truth_answer": "Define an OAuth2PasswordBearer scheme and a get_current_user dependency that reads the token. In the protected endpoint, add current_user: User = Depends(get_current_user). FastAPI will call get_current_user on every request, decode the JWT or validate the token, and inject the resulting User object into the handler.",
+      "relevant_doc_ids": ["security", "security-oauth2-jwt"],
+      "metadata": {"category": "multi_hop", "difficulty": "hard"}
+    },
+    {
+      "id": "fq-008",
+      "question": "How do you stream a large file download through FastAPI without loading it all into memory?",
+      "ground_truth_answer": "Use StreamingResponse with a generator function. Define an async generator that yields chunks of the file, wrap it in StreamingResponse(generator(), media_type='application/octet-stream'), and FastAPI will stream the response without buffering the entire content in memory.",
+      "relevant_doc_ids": ["custom-response"],
+      "metadata": {"category": "multi_hop", "difficulty": "hard"}
+    },
+    {
+      "id": "fq-009",
+      "question": "How do you run startup and shutdown logic in a FastAPI application?",
+      "ground_truth_answer": "Use the lifespan context manager with @asynccontextmanager. Define an async function that yields after startup logic; code after yield runs on shutdown. Pass it as the lifespan parameter to FastAPI(). The older @app.on_event('startup') and @app.on_event('shutdown') decorators still work but are deprecated in favour of lifespan.",
+      "relevant_doc_ids": ["events"],
+      "metadata": {"category": "multi_hop", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-010",
+      "question": "Can you use synchronous blocking database calls directly in a FastAPI async endpoint without any workaround?",
+      "ground_truth_answer": "No. Calling synchronous blocking I/O directly inside an async def endpoint blocks the event loop and degrades performance. The correct approach is to either use an async driver (e.g. asyncpg, motor) or run the blocking call in a thread pool via asyncio.run_in_executor or Starlette's run_in_threadpool helper.",
+      "relevant_doc_ids": ["async"],
+      "metadata": {"category": "negation_constraint", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-011",
+      "question": "Is it possible to return a plain dict from a FastAPI endpoint without declaring a response model?",
+      "ground_truth_answer": "Yes, you can return a plain dict and FastAPI will serialize it to JSON. However, without a response_model you lose automatic validation, filtering of extra fields, and OpenAPI schema generation for that endpoint's response.",
+      "relevant_doc_ids": ["response-model"],
+      "metadata": {"category": "negation_constraint", "difficulty": "easy"}
+    },
+    {
+      "id": "fq-012",
+      "question": "Does FastAPI require you to use Pydantic for input validation, or can you skip it entirely?",
+      "ground_truth_answer": "Pydantic is optional per endpoint. You can declare parameters without Pydantic models — plain Python type hints (int, str, float) and Query()/Path()/Body() with basic constraints are supported. Pydantic models are required only for complex nested request bodies.",
+      "relevant_doc_ids": ["query-params-str-validations"],
+      "metadata": {"category": "negation_constraint", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-013",
+      "question": "How do you handle file uploads and form data in the same FastAPI endpoint?",
+      "ground_truth_answer": "Use UploadFile for files and Form() for form fields in the same function signature. Both are declared as regular parameters. Because they use multipart/form-data, you cannot mix them with a JSON request body in the same endpoint.",
+      "relevant_doc_ids": ["request-files", "request-forms-and-files"],
+      "metadata": {"category": "multi_hop", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-014",
+      "question": "How do you mount a sub-application or another ASGI app inside FastAPI?",
+      "ground_truth_answer": "Use app.mount('/subpath', other_asgi_app). The mounted app handles all requests that start with that prefix. You can mount another FastAPI instance, a Starlette app, or any ASGI-compatible application, including StaticFiles for serving static assets.",
+      "relevant_doc_ids": ["sub-applications"],
+      "metadata": {"category": "simple_factual", "difficulty": "medium"}
+    },
+    {
+      "id": "fq-015",
+      "question": "How does FastAPI handle real-time WebSocket connections with a React frontend?",
+      "ground_truth_answer": "This question is partially out of scope: FastAPI does support WebSockets natively via the websocket endpoint decorator and WebSocket object, but integrating with a specific React frontend is not covered by the FastAPI documentation.",
+      "relevant_doc_ids": [],
+      "metadata": {"category": "out_of_scope", "difficulty": "hard"}
+    }
+  ]
+}
