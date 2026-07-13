@@ -327,30 +327,131 @@
   askBtn.onclick = ask;
   qInput.onkeydown = e => { if (e.key === 'Enter') ask(); };
 
+  // Map SSE stage names → trace keys used in the DOM
+  const STAGE_NAME_MAP = {
+    routing: 'route', decompose: 'decompose',
+    retrieval: 'retrieve', grading: 'grade', generation: 'generate',
+  };
+
   async function ask() {
     const question = qInput.value.trim();
     if (!question) return;
     askBtn.disabled = true;
     resetTrace();
-    document.getElementById('answerCard').innerHTML = '<div class="placeholder">// running pipeline…</div>';
+    // Hide rerank + faithful — streaming path skips those
+    ['rerank', 'faithful'].forEach(k => {
+      const el = document.querySelector(`.stage[data-key="${k}"]`);
+      if (el) el.style.display = 'none';
+    });
+    document.getElementById('answerCard').innerHTML =
+      '<div class="placeholder">// connecting to pipeline…</div>';
 
-    // Try the real API first; fall back to a simulated trace so the demo always works.
-    let result = null;
+    let streamed = false;
     try {
       const r = await fetch(API_BASE + '/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: question }), signal: AbortSignal.timeout(30000)
+        body: JSON.stringify({ query: question, stream: true }),
+        signal: AbortSignal.timeout(60000),
       });
-      if (r.ok) result = await r.json();
-    } catch { /* fall through to simulation */ }
+      if (r.ok && r.body) {
+        await consumeStream(r.body);
+        streamed = true;
+      }
+    } catch { /* fall through */ }
 
-    if (result) await animateFromResult(question, result);
-    else await animateSimulated(question);
-
+    if (!streamed) await animateSimulated(question);
     askBtn.disabled = false;
   }
 
-  // Animate the trace, marking each stage active then done with a timing.
+  // ---- real streaming consumer ----
+  async function consumeStream(body) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let answerHtml = '';
+    let answerEl = null;
+    let totalMs = 0;
+    let finalEvt = null;
+
+    // Prepare answer box for streaming
+    document.getElementById('answerCard').innerHTML =
+      '<div class="answer-text" id="streamAnswer" style="white-space:pre-wrap"></div>';
+    answerEl = document.getElementById('streamAnswer');
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+
+      // SSE messages are separated by double newlines
+      const parts = buf.split('\n\n');
+      buf = parts.pop();
+
+      for (const part of parts) {
+        const line = part.trim();
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (payload === '[DONE]') break;
+
+        let evt;
+        try { evt = JSON.parse(payload); } catch { continue; }
+
+        if (evt.type === 'stage') {
+          const key = STAGE_NAME_MAP[evt.name] || evt.name;
+          const el = document.querySelector(`.stage[data-key="${key}"]`);
+          if (!el) continue;
+
+          if (evt.status === 'start') {
+            el.style.display = '';
+            el.classList.add('active');
+          } else if (evt.status === 'done') {
+            el.classList.remove('active');
+            el.classList.add('done');
+            if (evt.ms) {
+              totalMs += evt.ms;
+              document.querySelector(`[data-ms="${key}"]`).textContent = evt.ms + 'ms';
+            }
+            // Update stage badges
+            const b = document.querySelector(`[data-badge="${key}"]`);
+            if (!b) continue;
+            if (key === 'route' && evt.classification) {
+              b.textContent = evt.classification; b.className = 'badge route';
+            } else if (key === 'retrieve' && evt.chunks !== undefined) {
+              b.textContent = evt.chunks + ' chunks'; b.className = 'badge';
+            } else if (key === 'grade' && evt.score !== undefined) {
+              b.textContent = evt.sufficient ? 'ok' : 're-queried';
+              b.className = 'badge ' + (evt.sufficient ? 'grade-ok' : 'retry');
+            } else if (key === 'decompose' && evt.sub_queries !== undefined) {
+              b.textContent = evt.sub_queries + ' sub-qs'; b.className = 'badge';
+            }
+          }
+        } else if (evt.type === 'delta') {
+          answerHtml += evt.text;
+          if (answerEl) answerEl.textContent = answerHtml;
+        } else if (evt.type === 'done') {
+          finalEvt = evt;
+        }
+      }
+    }
+
+    document.getElementById('traceTotal').textContent =
+      totalMs ? `completed in ${totalMs}ms` : 'completed';
+
+    if (finalEvt) {
+      const cites = (finalEvt.citations || []).map(c => ({
+        n: c.number, src: c.source, loc: c.page_number ? 'p.' + c.page_number : '',
+      }));
+      if (finalEvt.classification === 'out_of_scope') {
+        renderRefusal();
+      } else {
+        // Convert plain text with [N] markers to HTML superscripts
+        const html = answerHtml.replace(/\[(\d+)\]/g, '<sup>[$1]</sup>');
+        renderAnswer(html, cites, finalEvt.is_faithful !== false, finalEvt.classification || 'simple');
+      }
+    }
+  }
+
+  // ---- simulated fallback (API offline) ----
   async function runTrace(activeKeys, timings, badges) {
     let total = 0;
     for (const s of STAGES) {
@@ -369,39 +470,6 @@
       }
     }
     document.getElementById('traceTotal').textContent = 'completed in ' + total + 'ms';
-  }
-
-  async function animateFromResult(question, res) {
-    // QueryResponse field mapping:
-    //   res.classification  — "simple" | "complex" | "out_of_scope"
-    //   res.is_faithful     — bool
-    //   res.grader_retries  — int (0 = no retry)
-    //   res.timings         — {routing_ms, retrieval_ms, grading_ms, generation_ms, faithfulness_ms, total_ms}
-    //   res.citations       — [{number, chunk_id, source, page_number}]
-    const route = res.classification || 'simple';
-    const active = ['route'];
-    if (route === 'complex') active.push('decompose');
-    active.push('retrieve','rerank','grade');
-    if (route !== 'out_of_scope') active.push('generate','faithful');
-    const badges = {
-      route: { text: route, cls: 'route' },
-      grade: { text: res.grader_retries ? 're-queried' : 'ok', cls: res.grader_retries ? 'retry' : 'grade-ok' },
-    };
-    // Remap API timing keys → trace stage keys
-    const t = res.timings || {};
-    const timings = {
-      route: t.routing_ms,
-      retrieve: t.retrieval_ms,
-      grade: t.grading_ms,
-      generate: t.generation_ms,
-      faithful: t.faithfulness_ms,
-    };
-    // Remap citations: API uses {number, source, page_number} → display {n, src, loc}
-    const cites = (res.citations || []).map(c => ({
-      n: c.number, src: c.source, loc: c.page_number ? 'p.' + c.page_number : ''
-    }));
-    await runTrace(active, timings, badges);
-    renderAnswer(res.answer, cites, res.is_faithful !== false, route);
   }
 
   // Simulated fallback — recognises the three sample questions, otherwise generic.
