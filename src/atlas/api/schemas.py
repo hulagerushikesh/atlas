@@ -59,6 +59,7 @@ class QueryResponse(BaseModel):
     retrieved_chunk_ids: list[str]
     timings: StageTimings
     token_usage: TokenUsage
+    grader_retries: int = 0
     cached: bool = False
 
 

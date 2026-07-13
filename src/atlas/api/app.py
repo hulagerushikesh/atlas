@@ -31,6 +31,8 @@ from typing import AsyncIterator
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from atlas import __version__
 from atlas.api.cache import QueryCache
@@ -169,14 +171,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(TracingMiddleware)
     app.add_middleware(PrometheusMiddleware)
 
+    # Landing page
+    import pathlib as _pl
+    _web_index = _pl.Path(__file__).parent / "web" / "index.html"
+    if _web_index.exists():
+        _landing_html = _web_index.read_text()
+
+        @app.get("/", include_in_schema=False, response_class=HTMLResponse)
+        async def _landing() -> HTMLResponse:  # type: ignore[return]
+            return HTMLResponse(_landing_html)
+
     # Routes
     app.include_router(health.router, tags=["ops"])
     app.include_router(metrics_route.router, tags=["ops"])
     app.include_router(ingest.router, tags=["ingestion"])
     app.include_router(query.router, tags=["query"])
 
+    # Static console — served at /app (must come after API routes)
+    import pathlib
+    _static_dir = pathlib.Path(__file__).parent / "static"
+    if _static_dir.is_dir():
+        app.mount("/app", StaticFiles(directory=str(_static_dir), html=True), name="console")
+
+    # Eval reports — served at /out so the console dashboard can load eval_report.json
+    _out_dir = pathlib.Path(__file__).parent.parent.parent.parent / "out"
+    if _out_dir.is_dir():
+        app.mount("/out", StaticFiles(directory=str(_out_dir)), name="out")
+
     return app
 
 
-# Module-level app for uvicorn / docker-compose
-app = create_app()

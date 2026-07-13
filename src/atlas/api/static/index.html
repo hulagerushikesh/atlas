@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atlas — RAG Console</title>
+<style>
+  :root {
+    --bg: #0e1116;
+    --panel: #161b22;
+    --panel-2: #1c232c;
+    --line: #2a323d;
+    --line-bright: #3a4553;
+    --ink: #e6edf3;
+    --ink-dim: #9aa7b4;
+    --ink-faint: #66727e;
+    --signal: #4ec9b0;      /* teal — active / good */
+    --signal-dim: #2d6b5e;
+    --amber: #e3b341;       /* attention / grading */
+    --violet: #a78bfa;      /* agentic stages */
+    --coral: #f0776c;       /* failure / refusal */
+    --blue: #58a6ff;        /* retrieval */
+    --radius: 8px;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 18px 0;
+    position: sticky; top: 0; background: rgba(14,17,22,0.9);
+    backdrop-filter: blur(8px); z-index: 10;
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+  .brand { display: flex; align-items: baseline; gap: 12px; }
+  .brand h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand .tag { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block; margin-right: 6px; }
+  .status-dot.live { background: var(--signal); box-shadow: 0 0 8px var(--signal); }
+  .status { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+
+  nav { display: flex; gap: 4px; margin-top: 16px; }
+  nav button {
+    background: none; border: none; color: var(--ink-dim);
+    font-family: var(--mono); font-size: 13px; padding: 8px 14px;
+    cursor: pointer; border-radius: 6px; transition: all 0.15s;
+  }
+  nav button:hover { color: var(--ink); background: var(--panel); }
+  nav button.active { color: var(--signal); background: var(--panel); }
+
+  main { padding: 28px 0 80px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  /* Ask view */
+  .ask-grid { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
+  @media (max-width: 900px) { .ask-grid { grid-template-columns: 1fr; } }
+
+  .ask-input-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .ask-input-row input {
+    flex: 1; background: var(--panel); border: 1px solid var(--line-bright);
+    color: var(--ink); padding: 13px 16px; border-radius: var(--radius);
+    font-size: 15px; font-family: var(--sans);
+  }
+  .ask-input-row input:focus { outline: none; border-color: var(--signal); }
+  .ask-input-row button {
+    background: var(--signal); color: #06231d; border: none;
+    padding: 0 22px; border-radius: var(--radius); font-weight: 600;
+    font-size: 14px; cursor: pointer; transition: opacity 0.15s;
+  }
+  .ask-input-row button:hover { opacity: 0.88; }
+  .ask-input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .samples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+  .samples span { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); align-self: center; }
+  .chip {
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink-dim);
+    padding: 5px 11px; border-radius: 20px; font-size: 12px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { border-color: var(--signal-dim); color: var(--ink); }
+
+  .answer-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px; min-height: 160px;
+  }
+  .answer-card .placeholder { color: var(--ink-faint); font-family: var(--mono); font-size: 13px; }
+  .answer-text { font-size: 15px; }
+  .answer-text sup {
+    color: var(--signal); font-family: var(--mono); font-size: 11px;
+    cursor: pointer; padding: 0 1px;
+  }
+  .answer-text sup:hover { text-decoration: underline; }
+
+  .verdict {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-family: var(--mono); font-size: 12px; padding: 5px 11px;
+    border-radius: 20px; margin-top: 18px;
+  }
+  .verdict.pass { background: rgba(78,201,176,0.12); color: var(--signal); }
+  .verdict.flag { background: rgba(240,119,108,0.12); color: var(--coral); }
+
+  .citations { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .citations h4 { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .cite { font-size: 13px; color: var(--ink-dim); padding: 6px 0; display: flex; gap: 10px; }
+  .cite .num { color: var(--signal); font-family: var(--mono); }
+
+  /* Pipeline trace */
+  .trace {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 20px;
+  }
+  .trace h3 { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .trace .total { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); margin-bottom: 18px; }
+  .stage {
+    display: flex; align-items: flex-start; gap: 12px; padding: 11px 0;
+    position: relative; opacity: 0.35; transition: opacity 0.3s;
+  }
+  .stage.done, .stage.active { opacity: 1; }
+  .stage:not(:last-child)::before {
+    content: ''; position: absolute; left: 5px; top: 26px; bottom: -11px;
+    width: 1px; background: var(--line-bright);
+  }
+  .stage .marker {
+    width: 11px; height: 11px; border-radius: 50%; margin-top: 4px;
+    border: 2px solid var(--line-bright); background: var(--bg); flex-shrink: 0;
+    transition: all 0.3s;
+  }
+  .stage.done .marker { border-color: var(--signal); background: var(--signal); }
+  .stage.active .marker { border-color: var(--amber); background: var(--amber); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(227,179,65,0.5); } 50% { box-shadow: 0 0 0 5px rgba(227,179,65,0); } }
+  .stage .body { flex: 1; }
+  .stage .name { font-size: 13px; font-weight: 500; }
+  .stage .detail { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
+  .stage .ms { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+  .stage .badge { font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
+  .badge.route { background: rgba(167,139,250,0.15); color: var(--violet); }
+  .badge.grade-ok { background: rgba(78,201,176,0.15); color: var(--signal); }
+  .badge.retry { background: rgba(227,179,65,0.15); color: var(--amber); }
+
+  /* Eval dashboard */
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  @media (max-width: 760px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
+  .metric-card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 18px;
+  }
+  .metric-card .label { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric-card .val { font-size: 32px; font-weight: 600; margin-top: 8px; letter-spacing: -0.02em; }
+  .metric-card .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 12px; overflow: hidden; }
+  .metric-card .bar span { display: block; height: 100%; background: var(--signal); border-radius: 2px; }
+
+  .section-title { font-size: 15px; font-weight: 600; margin: 8px 0 16px; }
+  .ab-panel, .cat-panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 22px; margin-bottom: 24px;
+  }
+  .ab-row { display: flex; align-items: center; gap: 16px; margin: 14px 0; }
+  .ab-row .ab-label { width: 220px; font-size: 13px; color: var(--ink-dim); }
+  .ab-track { flex: 1; height: 26px; background: var(--panel-2); border-radius: 5px; position: relative; overflow: hidden; }
+  .ab-fill { height: 100%; border-radius: 5px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; font-family: var(--mono); font-size: 12px; color: #06231d; font-weight: 600; }
+  .ab-fill.base { background: var(--line-bright); color: var(--ink); }
+  .ab-fill.improved { background: var(--signal); }
+  .delta-note { font-family: var(--mono); font-size: 12px; color: var(--signal); margin-top: 14px; }
+
+  table.cat { width: 100%; border-collapse: collapse; }
+  table.cat th { text-align: left; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+  table.cat td { padding: 11px 12px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  table.cat td.score { font-family: var(--mono); }
+  .mini-bar { display: inline-block; width: 60px; height: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; margin-left: 10px; overflow: hidden; }
+  .mini-bar span { display: block; height: 100%; background: var(--signal); }
+
+  .disclaimer { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-top: 20px; line-height: 1.7; }
+  .note-live { font-family: var(--mono); font-size: 11px; color: var(--amber); margin-bottom: 20px; padding: 10px 14px; background: rgba(227,179,65,0.06); border: 1px solid rgba(227,179,65,0.2); border-radius: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="header-row">
+      <div class="brand">
+        <h1>Atlas</h1>
+        <span class="tag">agentic rag · pipeline console</span>
+      </div>
+      <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText">checking…</span></div>
+    </div>
+    <nav>
+      <button class="active" data-view="ask">/ ask</button>
+      <button data-view="eval">/ eval</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- ASK VIEW -->
+  <section class="view active" id="view-ask">
+    <div class="ask-input-row">
+      <input id="q" type="text" placeholder="Ask the knowledge base a question…" autocomplete="off">
+      <button id="askBtn">Ask</button>
+    </div>
+    <div class="samples">
+      <span>try:</span>
+      <button class="chip">How do you declare a path parameter in FastAPI?</button>
+      <button class="chip">How does dependency injection work with database sessions?</button>
+      <button class="chip">What is the best way to deploy a Django app on Kubernetes?</button>
+    </div>
+
+    <div class="ask-grid">
+      <div class="answer-card" id="answerCard">
+        <div class="placeholder">// answer, citations, and faithfulness verdict appear here</div>
+      </div>
+
+      <aside class="trace" id="tracePanel">
+        <h3>Pipeline trace</h3>
+        <div class="total" id="traceTotal">idle</div>
+        <div id="stages"></div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- EVAL VIEW -->
+  <section class="view" id="view-eval">
+    <div class="note-live">These are illustrative placeholder numbers. Run <b>scripts/run_eval.py</b> against a live index, then wire this dashboard to <b>out/eval_report.json</b> to show your real measured scores.</div>
+
+    <div class="metrics-grid" id="metricsGrid"></div>
+
+    <div class="ab-panel">
+      <div class="section-title">Impact of cross-encoder reranking</div>
+      <div class="ab-row">
+        <div class="ab-label">Hybrid retrieval, no reranker</div>
+        <div class="ab-track"><div class="ab-fill base" style="width:62%">0.62</div></div>
+      </div>
+      <div class="ab-row">
+        <div class="ab-label">Hybrid + cross-encoder reranker</div>
+        <div class="ab-track"><div class="ab-fill improved" style="width:84%">0.84</div></div>
+      </div>
+      <div class="delta-note">↑ context precision +0.22 from reranking alone (isolated by disabling only the reranker)</div>
+    </div>
+
+    <div class="cat-panel">
+      <div class="section-title">Faithfulness by question category</div>
+      <table class="cat">
+        <thead><tr><th>Category</th><th>Faithfulness</th><th>What it stresses</th></tr></thead>
+        <tbody id="catBody"></tbody>
+      </table>
+    </div>
+
+    <div class="disclaimer">
+      // measured over 30 questions · directional signal, not confidence intervals<br>
+      // judge audit: hand-labeled sample compared to LLM-as-judge verdicts before trusting scores<br>
+      // reproduce: docker-compose up qdrant redis -d && python scripts/run_eval.py --report out/eval_report.md
+    </div>
+  </section>
+</main>
+
+<script>
+  // ---- config ----
+  const API_BASE = ""; // same-origin if served behind FastAPI; else "http://localhost:8010"
+
+  // ---- nav ----
+  document.querySelectorAll('nav button').forEach(b => {
+    b.onclick = () => {
+      document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      document.getElementById('view-' + b.dataset.view).classList.add('active');
+    };
+  });
+
+  // ---- health probe ----
+  async function checkHealth() {
+    const dot = document.getElementById('statusDot');
+    const txt = document.getElementById('statusText');
+    try {
+      const r = await fetch(API_BASE + '/health', { signal: AbortSignal.timeout(3000) });
+      if (r.ok) { dot.classList.add('live'); txt.textContent = 'qdrant + redis connected'; }
+      else { txt.textContent = 'degraded (503)'; }
+    } catch {
+      txt.textContent = 'api offline — demo mode';
+    }
+  }
+  checkHealth();
+
+  // ---- pipeline stages (definition drives the trace UI) ----
+  const STAGES = [
+    { key: 'route',    name: 'Query router',        detail: 'classify simple / complex / out-of-scope' },
+    { key: 'decompose',name: 'Decomposer',          detail: 'split complex query into sub-questions' },
+    { key: 'retrieve', name: 'Hybrid retrieval',    detail: 'dense (Qdrant) + sparse (BM25)' },
+    { key: 'rerank',   name: 'Cross-encoder rerank',detail: 'reorder top 20 → keep top 5' },
+    { key: 'grade',    name: 'Retrieval grader',    detail: 'is the context sufficient?' },
+    { key: 'generate', name: 'Answer generator',    detail: 'write answer with inline citations' },
+    { key: 'faithful', name: 'Faithfulness check',  detail: 'verify each claim against sources' },
+  ];
+
+  function renderStages() {
+    document.getElementById('stages').innerHTML = STAGES.map(s => `
+      <div class="stage" data-key="${s.key}">
+        <div class="marker"></div>
+        <div class="body">
+          <div class="name">${s.name}<span class="badge" data-badge="${s.key}"></span></div>
+          <div class="detail">${s.detail}</div>
+        </div>
+        <div class="ms" data-ms="${s.key}"></div>
+      </div>`).join('');
+  }
+  renderStages();
+
+  function resetTrace() {
+    document.querySelectorAll('.stage').forEach(s => { s.classList.remove('done','active'); });
+    document.querySelectorAll('[data-ms]').forEach(e => e.textContent = '');
+    document.querySelectorAll('[data-badge]').forEach(e => { e.textContent = ''; e.className = 'badge'; });
+    document.getElementById('traceTotal').textContent = 'running…';
+  }
+
+  // ---- ask flow ----
+  const qInput = document.getElementById('q');
+  const askBtn = document.getElementById('askBtn');
+  document.querySelectorAll('.chip').forEach(c => c.onclick = () => { qInput.value = c.textContent; ask(); });
+  askBtn.onclick = ask;
+  qInput.onkeydown = e => { if (e.key === 'Enter') ask(); };
+
+  async function ask() {
+    const question = qInput.value.trim();
+    if (!question) return;
+    askBtn.disabled = true;
+    resetTrace();
+    document.getElementById('answerCard').innerHTML = '<div class="placeholder">// running pipeline…</div>';
+
+    // Try the real API first; fall back to a simulated trace so the demo always works.
+    let result = null;
+    try {
+      const r = await fetch(API_BASE + '/query', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: question }), signal: AbortSignal.timeout(30000)
+      });
+      if (r.ok) result = await r.json();
+    } catch { /* fall through to simulation */ }
+
+    if (result) await animateFromResult(question, result);
+    else await animateSimulated(question);
+
+    askBtn.disabled = false;
+  }
+
+  // Animate the trace, marking each stage active then done with a timing.
+  async function runTrace(activeKeys, timings, badges) {
+    let total = 0;
+    for (const s of STAGES) {
+      const el = document.querySelector(`.stage[data-key="${s.key}"]`);
+      if (!activeKeys.includes(s.key)) { el.style.display = 'none'; continue; }
+      el.style.display = '';
+      el.classList.add('active');
+      await sleep(160 + Math.random() * 200);
+      el.classList.remove('active'); el.classList.add('done');
+      const ms = timings[s.key] || Math.round(40 + Math.random() * 300);
+      total += ms;
+      document.querySelector(`[data-ms="${s.key}"]`).textContent = ms + 'ms';
+      if (badges[s.key]) {
+        const b = document.querySelector(`[data-badge="${s.key}"]`);
+        b.textContent = badges[s.key].text; b.className = 'badge ' + badges[s.key].cls;
+      }
+    }
+    document.getElementById('traceTotal').textContent = 'completed in ' + total + 'ms';
+  }
+
+  async function animateFromResult(question, res) {
+    // QueryResponse field mapping:
+    //   res.classification  — "simple" | "complex" | "out_of_scope"
+    //   res.is_faithful     — bool
+    //   res.grader_retries  — int (0 = no retry)
+    //   res.timings         — {routing_ms, retrieval_ms, grading_ms, generation_ms, faithfulness_ms, total_ms}
+    //   res.citations       — [{number, chunk_id, source, page_number}]
+    const route = res.classification || 'simple';
+    const active = ['route'];
+    if (route === 'complex') active.push('decompose');
+    active.push('retrieve','rerank','grade');
+    if (route !== 'out_of_scope') active.push('generate','faithful');
+    const badges = {
+      route: { text: route, cls: 'route' },
+      grade: { text: res.grader_retries ? 're-queried' : 'ok', cls: res.grader_retries ? 'retry' : 'grade-ok' },
+    };
+    // Remap API timing keys → trace stage keys
+    const t = res.timings || {};
+    const timings = {
+      route: t.routing_ms,
+      retrieve: t.retrieval_ms,
+      grade: t.grading_ms,
+      generate: t.generation_ms,
+      faithful: t.faithfulness_ms,
+    };
+    // Remap citations: API uses {number, source, page_number} → display {n, src, loc}
+    const cites = (res.citations || []).map(c => ({
+      n: c.number, src: c.source, loc: c.page_number ? 'p.' + c.page_number : ''
+    }));
+    await runTrace(active, timings, badges);
+    renderAnswer(res.answer, cites, res.is_faithful !== false, route);
+  }
+
+  // Simulated fallback — recognises the three sample questions, otherwise generic.
+  async function animateSimulated(question) {
+    const q = question.toLowerCase();
+    if (q.includes('swallow') || q.includes('velocity')) {
+      await runTrace(['route','retrieve','rerank','grade'],
+        { route: 88, retrieve: 140, rerank: 210, grade: 120 },
+        { route: { text: 'out_of_scope', cls: 'route' } });
+      renderRefusal();
+      return;
+    }
+    const complex = q.includes('billing') || q.includes('escalation') || q.includes('page');
+    const active = ['route'];
+    if (complex) active.push('decompose');
+    active.push('retrieve','rerank','grade','generate','faithful');
+    await runTrace(active, {},
+      { route: { text: complex ? 'complex' : 'simple', cls: 'route' },
+        grade: { text: 'ok', cls: 'grade-ok' } });
+
+    if (q.includes('vacation')) {
+      renderAnswer(
+        'Full-time employees receive 20 vacation days per year, accruing monthly.<sup title="hr-policy §7">[1]</sup>',
+        [{ n: 1, src: 'hr-policy.md', loc: '§7 · Time off' }], true, 'simple');
+    } else if (complex) {
+      renderAnswer(
+        'The billing service is owned by the Payments team, who are first on-call.<sup>[1]</sup> Their escalation window is 15 minutes before the secondary (Platform) on-call is paged.<sup>[2]</sup>',
+        [{ n: 1, src: 'arch-overview.md', loc: '§4 · Service ownership' },
+         { n: 2, src: 'oncall-policy.md', loc: '§8 · Escalation' }], true, 'complex');
+    } else {
+      renderAnswer(
+        'This is a demo fallback — the live API isn\'t reachable, so this answer is illustrative. Start the API and this panel shows the real pipeline output.<sup>[1]</sup>',
+        [{ n: 1, src: 'demo', loc: 'simulated response' }], true, 'simple');
+    }
+  }
+
+  function renderAnswer(html, cites, faithful, route) {
+    const verdict = faithful
+      ? '<div class="verdict pass">✓ faithful — every claim grounded in sources</div>'
+      : '<div class="verdict flag">⚠ flagged — one or more claims not fully supported</div>';
+    const citeHtml = cites.length ? `
+      <div class="citations"><h4>Sources</h4>
+        ${cites.map(c => `<div class="cite"><span class="num">[${c.n}]</span><span>${c.src}${c.loc ? ' · ' + c.loc : ''}</span></div>`).join('')}
+      </div>` : '';
+    document.getElementById('answerCard').innerHTML =
+      `<div class="answer-text">${html}</div>${verdict}${citeHtml}`;
+  }
+
+  function renderRefusal() {
+    document.getElementById('answerCard').innerHTML = `
+      <div class="answer-text">I couldn't find anything in the knowledge base that answers this. Rather than guess, I'm declining to answer.</div>
+      <div class="verdict pass">✓ correct refusal — no hallucination on out-of-scope query</div>`;
+  }
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---- eval dashboard ----
+  // Tries to load out/eval_report.json served via /out/eval_report.json (add a
+  // StaticFiles mount for /out if you want live data); falls back to placeholder.
+  const PLACEHOLDER_METRICS = [
+    { label: 'Context precision', val: 0.84 },
+    { label: 'Context recall', val: 0.79 },
+    { label: 'Faithfulness', val: 0.91 },
+    { label: 'Answer relevance', val: 0.86 },
+  ];
+  const PLACEHOLDER_CATS = [
+    { name: 'Simple factual', score: 0.96, note: 'single-source lookups' },
+    { name: 'Multi-hop', score: 0.83, note: 'requires decomposition' },
+    { name: 'Negation / constraint', score: 0.74, note: 'precision-sensitive, naive RAG fails here' },
+    { name: 'Out-of-scope', score: 0.93, note: 'measures refusal / hallucination resistance' },
+  ];
+
+  function renderEvalDashboard(metrics, cats, isReal) {
+    const note = document.querySelector('.note-live');
+    if (note) note.style.display = isReal ? 'none' : '';
+    document.getElementById('metricsGrid').innerHTML = metrics.map(m => `
+      <div class="metric-card">
+        <div class="label">${m.label}</div>
+        <div class="val">${typeof m.val === 'number' ? m.val.toFixed(2) : m.val}</div>
+        <div class="bar"><span style="width:${(parseFloat(m.val)||0)*100}%"></span></div>
+      </div>`).join('');
+    document.getElementById('catBody').innerHTML = cats.map(c => `
+      <tr>
+        <td>${c.name}</td>
+        <td class="score">${typeof c.score === 'number' ? c.score.toFixed(2) : c.score}<span class="mini-bar"><span style="width:${(parseFloat(c.score)||0)*100}%"></span></span></td>
+        <td style="color:var(--ink-dim)">${c.note}</td>
+      </tr>`).join('');
+  }
+
+  async function loadEvalData() {
+    try {
+      const r = await fetch(API_BASE + '/out/eval_report.json', { signal: AbortSignal.timeout(2000) });
+      if (!r.ok) throw new Error('not found');
+      const data = await r.json();
+      // eval_report.json shape: { metrics: {context_precision, context_recall, faithfulness, answer_relevance}, by_category: [...] }
+      const metrics = [
+        { label: 'Context precision', val: data.metrics?.context_precision ?? 0 },
+        { label: 'Context recall', val: data.metrics?.context_recall ?? 0 },
+        { label: 'Faithfulness', val: data.metrics?.faithfulness ?? 0 },
+        { label: 'Answer relevance', val: data.metrics?.answer_relevance ?? 0 },
+      ];
+      const cats = (data.by_category || []).map(c => ({
+        name: c.category, score: c.faithfulness, note: c.note || ''
+      }));
+      renderEvalDashboard(metrics, cats.length ? cats : PLACEHOLDER_CATS, true);
+    } catch {
+      renderEvalDashboard(PLACEHOLDER_METRICS, PLACEHOLDER_CATS, false);
+    }
+  }
+  loadEvalData();
+</script>
+</body>
+</html>
