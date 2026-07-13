@@ -15,14 +15,18 @@ Design rationale:
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Resolve .env relative to this file (src/atlas/config.py → project root)
+_ENV_FILE = Path(__file__).parent.parent.parent / ".env"
+
 
 class QdrantConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="QDRANT_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="QDRANT_", env_file=_ENV_FILE, extra="ignore")
 
     url: str = "http://localhost:6333"
     collection_name: str = "atlas_chunks"
@@ -30,14 +34,14 @@ class QdrantConfig(BaseSettings):
 
 
 class RedisConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="REDIS_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="REDIS_", env_file=_ENV_FILE, extra="ignore")
 
     url: str = "redis://localhost:6379"
     cache_ttl_seconds: int = 3600
 
 
 class OpenAIConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="OPENAI_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="OPENAI_", env_file=_ENV_FILE, extra="ignore")
 
     api_key: SecretStr = Field(..., description="OpenAI API key")
     primary_model: str = "gpt-4o-mini"
@@ -47,7 +51,7 @@ class OpenAIConfig(BaseSettings):
 
 
 class ChunkingConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="CHUNK_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="CHUNK_", env_file=_ENV_FILE, extra="ignore")
 
     strategy: Literal["fixed", "recursive", "semantic"] = "recursive"
     size: int = 512
@@ -55,20 +59,20 @@ class ChunkingConfig(BaseSettings):
 
 
 class RetrievalConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="RETRIEVAL_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="RETRIEVAL_", env_file=_ENV_FILE, extra="ignore")
 
     top_k: int = 20  # candidates from each retriever before fusion
 
 
 class RerankerConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="RERANKER_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="RERANKER_", env_file=_ENV_FILE, extra="ignore")
 
     top_k: int = 5
     model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
 class APIConfig(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="API_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="API_", env_file=_ENV_FILE, extra="ignore")
 
     host: str = "0.0.0.0"
     port: int = 8000
@@ -78,7 +82,7 @@ class APIConfig(BaseSettings):
 class Settings(BaseSettings):
     """Top-level settings aggregating all sub-configs."""
 
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     log_level: str = "INFO"
     enable_prometheus: bool = True

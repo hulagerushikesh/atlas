@@ -66,6 +66,8 @@ class GeneratorResult:
     citations: dict[int, CitationRef] = field(default_factory=dict)
     # Chunks actually cited (subset of all retrieved chunks)
     cited_chunks: list[RetrievedChunk] = field(default_factory=list)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
 
 def _build_context(chunks: list[RetrievedChunk]) -> str:
@@ -125,7 +127,13 @@ class AnswerGenerator:
             citations_used=sorted(citations),
             tokens=response.total_tokens,
         )
-        return GeneratorResult(answer=answer, citations=citations, cited_chunks=cited_chunks)
+        return GeneratorResult(
+            answer=answer,
+            citations=citations,
+            cited_chunks=cited_chunks,
+            prompt_tokens=response.prompt_tokens,
+            completion_tokens=response.completion_tokens,
+        )
 
     async def stream(
         self, query: str, chunks: list[RetrievedChunk]

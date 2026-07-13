@@ -142,7 +142,7 @@ uv pip install -e ".[dev]"
 pytest
 
 # 5. Start the API
-uvicorn atlas.api.app:app --reload
+uvicorn atlas.api.asgi:app --reload
 ```
 
 ### Docker (all-in-one)
@@ -179,3 +179,60 @@ docker-compose up --build
 | D — Evaluation Harness | ✅ | [docs/evaluation.md](docs/evaluation.md) |
 | E — API & Observability | ✅ | [docs/api.md](docs/api.md) |
 | Shared Interfaces | ✅ | This file |
+
+---
+
+## Results
+
+Atlas is evaluated on a 30-question set spanning simple factual, multi-hop, negation/constraint, ambiguous, and out-of-scope queries. Metrics are computed by the built-in harness (`scripts/run_eval.py`) against a live index of the sample corpus.
+
+### Headline numbers
+
+| Metric | Score | What it measures |
+|---|---|---|
+| Context precision | {{CTX_PRECISION}} | Of the chunks retrieved, the fraction that were actually relevant |
+| Context recall | {{CTX_RECALL}} | Of the chunks that should have been retrieved, the fraction that were |
+| Faithfulness | {{FAITHFULNESS}} | Fraction of answer claims grounded in retrieved context (no hallucination) |
+| Answer relevance | {{ANS_RELEVANCE}} | Semantic alignment between the answer and the original question |
+
+*Measured over {{N_SAMPLES}} questions. Scores are directional signal at this sample size, not tight confidence intervals; the eval set is designed to be expanded to several hundred questions for production-grade claims.*
+
+### The impact of reranking (A/B)
+
+The single most consequential design choice is the two-stage retriever: fast ANN search followed by a cross-encoder reranker. Running the identical pipeline with the reranker disabled isolates its contribution.
+
+| Configuration | Context precision | Faithfulness |
+|---|---|---|
+| Hybrid retrieval, **no** reranker | {{PRECISION_NO_RERANK}} | {{FAITH_NO_RERANK}} |
+| Hybrid retrieval **+ cross-encoder reranker** | {{PRECISION_RERANK}} | {{FAITH_RERANK}} |
+| **Delta** | **{{PRECISION_DELTA}}** | **{{FAITH_DELTA}}** |
+
+Reranking improved context precision by {{PRECISION_DELTA}} on this eval set. Because the reranker only reorders candidates already retrieved, its gain shows up as precision (better chunks surfaced to the top), which in turn lifts faithfulness (the generator has cleaner context to ground on).
+
+### Where it does well, where it doesn't
+
+Broken down by question category:
+
+| Category | Faithfulness | Notes |
+|---|---|---|
+| Simple factual | {{FAITH_SIMPLE}} | Single-source lookups; the easy case |
+| Multi-hop | {{FAITH_MULTIHOP}} | Requires decomposition; the decomposer's contribution shows here |
+| Negation / constraint | {{FAITH_NEGATION}} | The failure mode of naive RAG; precision-sensitive |
+| Out-of-scope | {{FAITH_OOS}} | Correct behavior is refusal; measures hallucination resistance |
+
+The honest read: {{ONE_SENTENCE_ON_WEAKEST_CATEGORY}}. This is the next thing I'd improve, likely by {{PROPOSED_FIX}}.
+
+### Reproducing these numbers
+
+```bash
+docker-compose up qdrant redis -d
+python scripts/ingest.py eval_data/corpus/     # index the sample corpus
+python scripts/run_eval.py --report out/eval_report.md
+python scripts/run_eval.py --ab reranker       # runs the A/B comparison
+```
+
+Reports (JSON + Markdown) are written to `out/`. The A/B comparator applies a 0.02 significance threshold before reporting a delta as meaningful.
+
+### A note on the judge
+
+Faithfulness and answer relevance use an LLM-as-judge. To sanity-check the judge, I hand-labeled {{N_HAND_LABELED}} responses and compared them to the judge's verdicts; agreement was {{JUDGE_AGREEMENT}}. This is a small audit, not a validation study, but it confirms the judge isn't systematically rubber-stamping.

@@ -1,0 +1,112 @@
+{
+  "corpus": "fastapi",
+  "description": "15 developer questions about FastAPI with known-good answers and expected citation sections. Run against the FastAPI docs corpus indexed via scripts/fetch_corpus.py + scripts/ingest.py.",
+  "questions": [
+    {
+      "id": "fq-001",
+      "category": "simple_factual",
+      "question": "How do you declare a path parameter in FastAPI?",
+      "expected_answer_contains": ["curly braces", "path parameter", "function argument"],
+      "expected_citation_section": "path-params"
+    },
+    {
+      "id": "fq-002",
+      "category": "simple_factual",
+      "question": "What Python version does FastAPI require?",
+      "expected_answer_contains": ["3.8", "Python 3"],
+      "expected_citation_section": "index"
+    },
+    {
+      "id": "fq-003",
+      "category": "simple_factual",
+      "question": "How do you make a query parameter optional with a default value in FastAPI?",
+      "expected_answer_contains": ["Optional", "None", "default"],
+      "expected_citation_section": "query-params"
+    },
+    {
+      "id": "fq-004",
+      "category": "simple_factual",
+      "question": "What decorator do you use to define a POST endpoint in FastAPI?",
+      "expected_answer_contains": ["@app.post", "post"],
+      "expected_citation_section": "first-steps"
+    },
+    {
+      "id": "fq-005",
+      "category": "simple_factual",
+      "question": "How does FastAPI generate interactive API documentation automatically?",
+      "expected_answer_contains": ["Swagger UI", "OpenAPI", "/docs"],
+      "expected_citation_section": "first-steps"
+    },
+    {
+      "id": "fq-006",
+      "category": "simple_factual",
+      "question": "What is the purpose of Pydantic models in FastAPI request bodies?",
+      "expected_answer_contains": ["validation", "type hints", "BaseModel"],
+      "expected_citation_section": "body"
+    },
+    {
+      "id": "fq-007",
+      "category": "multi_hop",
+      "question": "How do you combine path parameters and query parameters with request body validation in a single FastAPI endpoint?",
+      "expected_answer_contains": ["path parameter", "query parameter", "body", "Pydantic"],
+      "expected_citation_section": "body-multiple-params"
+    },
+    {
+      "id": "fq-008",
+      "category": "multi_hop",
+      "question": "How does dependency injection work in FastAPI, and how can you use it for database session management?",
+      "expected_answer_contains": ["Depends", "dependency", "yield"],
+      "expected_citation_section": "dependencies"
+    },
+    {
+      "id": "fq-009",
+      "category": "multi_hop",
+      "question": "How do you secure a FastAPI endpoint with OAuth2 and return a JWT token?",
+      "expected_answer_contains": ["OAuth2PasswordBearer", "JWT", "access_token"],
+      "expected_citation_section": "security"
+    },
+    {
+      "id": "fq-010",
+      "category": "negation_constraint",
+      "question": "Can FastAPI automatically validate that a numeric query parameter is within a specific range, and if so how?",
+      "expected_answer_contains": ["ge", "le", "gt", "lt", "Query"],
+      "expected_citation_section": "query-params-str-validations"
+    },
+    {
+      "id": "fq-011",
+      "category": "negation_constraint",
+      "question": "Does FastAPI support both synchronous and asynchronous path operation functions?",
+      "expected_answer_contains": ["async def", "def", "both"],
+      "expected_citation_section": "async"
+    },
+    {
+      "id": "fq-012",
+      "category": "negation_constraint",
+      "question": "What happens when a request body field is declared without a default value in a Pydantic model — is it optional or required?",
+      "expected_answer_contains": ["required", "no default"],
+      "expected_citation_section": "body"
+    },
+    {
+      "id": "fq-013",
+      "category": "multi_hop",
+      "question": "How do you run background tasks in FastAPI without blocking the response?",
+      "expected_answer_contains": ["BackgroundTasks", "add_task"],
+      "expected_citation_section": "background-tasks"
+    },
+    {
+      "id": "fq-014",
+      "category": "simple_factual",
+      "question": "How do you return a custom HTTP status code from a FastAPI endpoint?",
+      "expected_answer_contains": ["status_code", "HTTPException", "Response"],
+      "expected_citation_section": "response-status-code"
+    },
+    {
+      "id": "fq-015",
+      "category": "out_of_scope",
+      "question": "What is the best way to deploy a Django application on Kubernetes?",
+      "expected_answer_contains": [],
+      "expected_behavior": "refusal",
+      "note": "Out-of-scope — FastAPI docs contain nothing about Django or Kubernetes deployments. Correct behavior is refusal."
+    }
+  ]
+}

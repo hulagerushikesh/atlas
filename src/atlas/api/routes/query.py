@@ -74,14 +74,9 @@ def _build_response(
                 page_number=ref.page_number,
             ))
 
-    # Approximate token usage from the generation step (dominant cost)
     gen = result.generation
-    prompt_tokens = 0
-    completion_tokens = 0
-    if gen:
-        # PipelineResult doesn't carry raw token counts; we log the gap
-        # In a future iteration, thread token counts through PipelineResult
-        pass
+    prompt_tokens = gen.prompt_tokens if gen else 0
+    completion_tokens = gen.completion_tokens if gen else 0
 
     cost = estimate_cost(
         model="gpt-4o-mini",   # read from settings in a full implementation
@@ -106,6 +101,7 @@ def _build_response(
         retrieved_chunk_ids=[c.chunk_id for c in result.retrieved_chunks],
         timings=timings,
         token_usage=token_usage,
+        grader_retries=result.grader_retries,
         cached=cached,
     )
 
