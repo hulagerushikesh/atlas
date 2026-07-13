@@ -6,11 +6,10 @@ import time
 from pathlib import Path
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
-from atlas.api.dependencies import get_indexer
+from atlas.api.dependencies import get_registry
 from atlas.api.schemas import IngestRequest, IngestResponse
-from atlas.ingestion.indexer import DocumentIndexer
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -19,10 +18,10 @@ router = APIRouter()
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest(
     body: IngestRequest,
-    indexer: DocumentIndexer = Depends(get_indexer),
+    request: Request,
 ) -> IngestResponse:
     """
-    Index a file or directory.
+    Index a file or directory into a named namespace (corpus).
 
     The indexer handles idempotency — files whose content has not changed since
     the last run are skipped without re-embedding or re-uploading. This makes
@@ -32,7 +31,8 @@ async def ingest(
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Path not found: {body.path}")
 
-    logger.info("ingest_request", path=body.path, glob=body.glob)
+    indexer = get_registry(request).get(body.namespace).indexer
+    logger.info("ingest_request", path=body.path, namespace=body.namespace, glob=body.glob)
     start = time.perf_counter()
 
     try:

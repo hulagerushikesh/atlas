@@ -39,72 +39,13 @@ from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
 from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
-from atlas.api.routes import health, ingest, query, metrics_route
+from atlas.api.namespaces import NamespaceRegistry, SharedComponents
+from atlas.api.routes import health, ingest, query, metrics_route, namespaces
 from atlas.config import Settings, get_settings
 from atlas.logging import configure_logging
 
 logger = structlog.get_logger(__name__)
 
-
-def _build_pipeline(settings: Settings) -> object:
-    """
-    Construct the full RAGPipeline from settings.
-
-    Separated from create_app() so tests can call _build_pipeline with a
-    test-specific Settings and assert on the pipeline configuration.
-    """
-    from atlas.ingestion.chunkers import get_chunker
-    from atlas.ingestion.dense import QdrantDenseIndex
-    from atlas.ingestion.embedder import OpenAIEmbedder
-    from atlas.ingestion.indexer import DocumentIndexer
-    from atlas.ingestion.sparse import BM25SparseIndex
-    from atlas.orchestration.decomposer import QueryDecomposer
-    from atlas.orchestration.faithfulness import FaithfulnessChecker
-    from atlas.orchestration.generator import AnswerGenerator
-    from atlas.orchestration.grader import RetrievalGrader
-    from atlas.orchestration.llm import OpenAILLMProvider
-    from atlas.orchestration.pipeline import RAGPipeline
-    from atlas.orchestration.router import QueryRouter
-    from atlas.retrieval.dense import QdrantDenseRetriever
-    from atlas.retrieval.hybrid import HybridRetriever
-    from atlas.retrieval.reranker import CrossEncoderReranker
-    from atlas.retrieval.sparse import BM25Retriever
-
-    # ── Shared components ─────────────────────────────────────────────────────
-    embedder = OpenAIEmbedder(settings.openai)
-    llm = OpenAILLMProvider(settings.openai)
-    sparse_index = BM25SparseIndex()
-
-    # ── Retrieval ─────────────────────────────────────────────────────────────
-    hybrid = HybridRetriever(
-        retrievers=[
-            QdrantDenseRetriever(settings.qdrant, embedder),
-            BM25Retriever(sparse_index),
-        ],
-        config=settings.retrieval,
-        reranker=CrossEncoderReranker(settings.reranker),
-        reranker_top_k=settings.reranker.top_k,
-    )
-
-    # ── Orchestration ─────────────────────────────────────────────────────────
-    pipeline = RAGPipeline(
-        retriever=hybrid,
-        router=QueryRouter(llm),
-        decomposer=QueryDecomposer(llm),
-        grader=RetrievalGrader(llm),
-        generator=AnswerGenerator(llm),
-        faithfulness=FaithfulnessChecker(llm),
-    )
-
-    # ── Indexer ───────────────────────────────────────────────────────────────
-    indexer = DocumentIndexer(
-        chunker=get_chunker(settings, embedder=embedder),
-        embedder=embedder,
-        dense_index=QdrantDenseIndex(settings.qdrant, embedder.dimensions),
-        sparse_index=sparse_index,
-    )
-
-    return pipeline, indexer, embedder.dimensions, settings.openai.embedding_model
 
 
 @asynccontextmanager
@@ -114,7 +55,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("atlas_startup", version=__version__)
 
-    pipeline, indexer, _dims, embedding_model = _build_pipeline(settings)
+    # Build shared (cross-namespace) components once
+    shared = SharedComponents(settings)
+    registry = NamespaceRegistry(shared)
 
     # Redis (optional — gracefully skip if not configured)
     redis_client = None
@@ -129,13 +72,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.warning("redis_unavailable", error=str(exc), detail="running without Redis cache")
 
     app.state.atlas = AppState(
-        pipeline=pipeline,  # type: ignore[arg-type]
-        indexer=indexer,  # type: ignore[arg-type]
+        registry=registry,
         cache=QueryCache(
             redis_client=redis_client,
             ttl_seconds=settings.redis.cache_ttl_seconds,
         ),
-        embedding_model=embedding_model,
+        embedding_model=shared.settings.openai.embedding_model,
     )
 
     logger.info("atlas_ready")
@@ -185,6 +127,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Routes
     app.include_router(health.router, tags=["ops"])
     app.include_router(metrics_route.router, tags=["ops"])
+    app.include_router(namespaces.router, tags=["namespaces"])
     app.include_router(ingest.router, tags=["ingestion"])
     app.include_router(query.router, tags=["query"])
 

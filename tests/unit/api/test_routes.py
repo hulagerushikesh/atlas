@@ -75,9 +75,20 @@ def client() -> TestClient:
 
     mock_pipeline._generator.stream = _gen_stream
 
+    mock_indexer = MagicMock()
+
+    # Build a mock NamespaceRegistry that returns the mocked pipeline+indexer
+    from atlas.api.namespaces import NamespaceComponents
+    mock_ns = MagicMock(spec=NamespaceComponents)
+    mock_ns.pipeline = mock_pipeline
+    mock_ns.indexer = mock_indexer
+
+    from atlas.api.namespaces import NamespaceRegistry
+    mock_registry = MagicMock(spec=NamespaceRegistry)
+    mock_registry.get.return_value = mock_ns
+
     app.state.atlas = AppState(
-        pipeline=mock_pipeline,
-        indexer=MagicMock(),
+        registry=mock_registry,
         cache=QueryCache(max_memory_size=10),
         embedding_model="text-embedding-3-small",
     )
@@ -134,7 +145,7 @@ class TestQueryRoute:
                             "total_tokens": 0, "estimated_cost_usd": 0.0},
             "cached": False,
         }
-        key = cache._make_key("cached question")
+        key = cache._make_key("default:cached question")
         cache._mem[key] = json.dumps(payload)
 
         resp = client.post("/query", json={"query": "cached question"})
@@ -165,7 +176,7 @@ class TestIngestRoute:
         mock_result.documents_skipped = 0
         mock_result.chunks_indexed = 3
         mock_result.total_tokens = 100
-        client.app.state.atlas.indexer.index_path = AsyncMock(return_value=mock_result)
+        client.app.state.atlas.registry.get.return_value.indexer.index_path = AsyncMock(return_value=mock_result)
 
         resp = client.post("/ingest", json={"path": str(f)})
         assert resp.status_code == 200

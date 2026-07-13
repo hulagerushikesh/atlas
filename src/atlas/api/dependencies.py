@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from fastapi import Request
 
 from atlas.api.cache import QueryCache
+from atlas.api.namespaces import NamespaceRegistry
 from atlas.ingestion.indexer import DocumentIndexer
 from atlas.orchestration.pipeline import RAGPipeline
 
@@ -34,8 +35,7 @@ from atlas.orchestration.pipeline import RAGPipeline
 @dataclass
 class AppState:
     """All live components shared across requests."""
-    pipeline: RAGPipeline
-    indexer: DocumentIndexer
+    registry: NamespaceRegistry
     cache: QueryCache
     embedding_model: str   # surfaced for cost estimation in routes
 
@@ -45,12 +45,18 @@ def get_app_state(request: Request) -> AppState:
     return request.app.state.atlas  # type: ignore[attr-defined]
 
 
+def get_registry(request: Request) -> NamespaceRegistry:
+    return get_app_state(request).registry
+
+
 def get_pipeline(request: Request) -> RAGPipeline:
-    return get_app_state(request).pipeline
+    """Default namespace pipeline — for routes that don't expose namespacing."""
+    return get_app_state(request).registry.get("default").pipeline
 
 
 def get_indexer(request: Request) -> DocumentIndexer:
-    return get_app_state(request).indexer
+    """Default namespace indexer."""
+    return get_app_state(request).registry.get("default").indexer
 
 
 def get_cache(request: Request) -> QueryCache:
