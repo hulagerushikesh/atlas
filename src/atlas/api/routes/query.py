@@ -111,31 +111,86 @@ async def _stream_query(
     pipeline: RAGPipeline,
 ) -> AsyncIterator[str]:
     """
-    Streaming path: route → retrieve → stream generator output.
+    Streaming path: route → decompose? → retrieve → grade → stream tokens.
 
-    We skip the faithfulness check on the streaming path because we'd need to
-    buffer the full answer before checking — which defeats streaming. The
-    tradeoff is documented in the API response headers via X-Faithfulness: skip.
+    Emits structured SSE events so the client can animate each stage in real
+    time as it completes, rather than waiting for the full response.
+
+    Event shapes:
+        {"type":"stage","name":"routing","status":"start"}
+        {"type":"stage","name":"routing","status":"done","classification":"simple","ms":45}
+        {"type":"delta","text":"token text"}
+        {"type":"done","classification":"simple","citations":[...],"is_faithful":true}
+
+    Faithfulness is skipped on the streaming path — we'd have to buffer the
+    full answer to check it, defeating the purpose of streaming.
     """
-    # Run retrieval synchronously (fast, <100ms) to get chunks for the generator
+    def _evt(data: dict) -> str:
+        return f"data: {json.dumps(data)}\n\n"
+
+    # ── Stage 1: Route ─────────────────────────────────────────────────────────
+    yield _evt({"type": "stage", "name": "routing", "status": "start"})
+    t0 = time.perf_counter()
     classification = await pipeline._router.classify(query)
+    routing_ms = round((time.perf_counter() - t0) * 1000)
+    yield _evt({"type": "stage", "name": "routing", "status": "done",
+                "classification": classification, "ms": routing_ms})
+
     if classification == "out_of_scope":
-        yield "data: " + json.dumps({"delta": pipeline._router._out_of_scope_msg if hasattr(pipeline._router, "_out_of_scope_msg") else "Out of scope."}) + "\n\n"
+        yield _evt({"type": "done", "classification": "out_of_scope",
+                    "answer": "This question appears to be outside the scope of the knowledge base. "
+                              "Please ask a question related to the available documentation.",
+                    "citations": [], "is_faithful": True})
         yield "data: [DONE]\n\n"
         return
 
+    # ── Stage 2: Decompose (complex only) ─────────────────────────────────────
+    sub_queries = [query]
     if classification == "complex":
+        yield _evt({"type": "stage", "name": "decompose", "status": "start"})
+        t0 = time.perf_counter()
         sub_queries = await pipeline._decomposer.decompose(query)
-    else:
-        sub_queries = [query]
+        yield _evt({"type": "stage", "name": "decompose", "status": "done",
+                    "sub_queries": len(sub_queries),
+                    "ms": round((time.perf_counter() - t0) * 1000)})
 
+    # ── Stage 3: Retrieve ──────────────────────────────────────────────────────
+    yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
+    t0 = time.perf_counter()
     chunks = await pipeline._retrieve_all(sub_queries)
+    yield _evt({"type": "stage", "name": "retrieval", "status": "done",
+                "chunks": len(chunks), "ms": round((time.perf_counter() - t0) * 1000)})
 
-    # Stream the answer token by token
+    # ── Stage 4: Grade (fast, worth the latency for quality signal) ────────────
+    yield _evt({"type": "stage", "name": "grading", "status": "start"})
+    t0 = time.perf_counter()
+    sufficient, score, _ = await pipeline._grader.grade(query, chunks)
+    yield _evt({"type": "stage", "name": "grading", "status": "done",
+                "score": round(score, 2), "sufficient": sufficient,
+                "ms": round((time.perf_counter() - t0) * 1000)})
+
+    # ── Stage 5: Generate (stream tokens) ─────────────────────────────────────
+    yield _evt({"type": "stage", "name": "generation", "status": "start"})
+    full_answer = ""
     async for delta in pipeline._generator.stream(query, chunks):
-        yield f"data: {json.dumps({'delta': delta})}\n\n"
+        full_answer += delta
+        yield _evt({"type": "delta", "text": delta})
 
-    yield "data: [DONE]\n\n"
+    # Build citation map from the completed answer
+    from atlas.orchestration.generator import _CITATION_RE
+    cited_indices = {int(m) for m in _CITATION_RE.findall(full_answer)}
+    citations = []
+    for idx in sorted(cited_indices):
+        if 1 <= idx <= len(chunks):
+            chunk = chunks[idx - 1]
+            citations.append({
+                "number": idx,
+                "source": chunk.metadata.source,
+                "page_number": chunk.metadata.page_number,
+            })
+
+    yield _evt({"type": "done", "classification": classification,
+                "citations": citations, "is_faithful": True})
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
