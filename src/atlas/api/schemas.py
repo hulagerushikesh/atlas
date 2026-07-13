@@ -29,6 +29,7 @@ from pydantic import BaseModel, Field
 
 class QueryRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=4096, description="User question")
+    namespace: str = Field("default", min_length=1, max_length=64, description="Corpus namespace to query")
     stream: bool = Field(False, description="Enable token-by-token streaming response")
     top_k: int = Field(5, ge=1, le=50, description="Max chunks to retrieve")
 
@@ -74,6 +75,7 @@ class TokenUsage(BaseModel):
 
 class IngestRequest(BaseModel):
     path: str = Field(..., description="Absolute path or directory to index")
+    namespace: str = Field("default", min_length=1, max_length=64, description="Corpus namespace to index into")
     glob: str = Field("**/*", description="Glob pattern when path is a directory")
 
 
@@ -97,6 +99,18 @@ class HealthResponse(BaseModel):
     status: str          # "ok" | "degraded" | "down"
     version: str
     components: dict[str, ComponentHealth]
+
+
+# ── /namespaces ───────────────────────────────────────────────────────────────
+
+class NamespaceInfo(BaseModel):
+    name: str
+    collection: str
+
+
+class NamespaceListResponse(BaseModel):
+    namespaces: list[NamespaceInfo]
+    total: int
 
 
 # ── Error ─────────────────────────────────────────────────────────────────────

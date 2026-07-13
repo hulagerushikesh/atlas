@@ -71,6 +71,13 @@
     font-size: 15px; font-family: var(--sans);
   }
   .ask-input-row input:focus { outline: none; border-color: var(--signal); }
+  .ask-input-row select {
+    background: var(--panel); border: 1px solid var(--line-bright);
+    color: var(--ink-dim); padding: 0 12px; border-radius: var(--radius);
+    font-size: 13px; font-family: var(--mono); cursor: pointer;
+    min-width: 120px; max-width: 180px;
+  }
+  .ask-input-row select:focus { outline: none; border-color: var(--signal); }
   .ask-input-row button {
     background: var(--signal); color: #06231d; border: none;
     padding: 0 22px; border-radius: var(--radius); font-weight: 600;
@@ -203,6 +210,7 @@
   <!-- ASK VIEW -->
   <section class="view active" id="view-ask">
     <div class="ask-input-row">
+      <select id="nsSelect" title="Select corpus namespace"></select>
       <input id="q" type="text" placeholder="Ask the knowledge base a question…" autocomplete="off">
       <button id="askBtn">Ask</button>
     </div>
@@ -320,6 +328,35 @@
     document.getElementById('traceTotal').textContent = 'running…';
   }
 
+  // ---- namespace picker ----
+  const nsSelect = document.getElementById('nsSelect');
+
+  async function loadNamespaces() {
+    try {
+      const r = await fetch(API_BASE + '/namespaces', { signal: AbortSignal.timeout(3000) });
+      if (!r.ok) throw new Error('failed');
+      const data = await r.json();
+      nsSelect.innerHTML = '';
+      const list = data.namespaces || [];
+      if (!list.length) {
+        // No namespaces yet — show default as placeholder
+        const opt = document.createElement('option');
+        opt.value = 'default'; opt.textContent = 'default';
+        nsSelect.appendChild(opt);
+      } else {
+        list.forEach(ns => {
+          const opt = document.createElement('option');
+          opt.value = ns.name; opt.textContent = ns.name;
+          nsSelect.appendChild(opt);
+        });
+      }
+    } catch {
+      // Offline or Qdrant unavailable — show static default
+      nsSelect.innerHTML = '<option value="default">default</option>';
+    }
+  }
+  loadNamespaces();
+
   // ---- ask flow ----
   const qInput = document.getElementById('q');
   const askBtn = document.getElementById('askBtn');
@@ -350,7 +387,7 @@
     try {
       const r = await fetch(API_BASE + '/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: question, stream: true }),
+        body: JSON.stringify({ query: question, stream: true, namespace: nsSelect.value || 'default' }),
         signal: AbortSignal.timeout(60000),
       });
       if (r.ok && r.body) {

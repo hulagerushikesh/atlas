@@ -41,7 +41,7 @@ from fastapi.responses import StreamingResponse
 
 from atlas.api.cache import QueryCache
 from atlas.api.cost import estimate_cost
-from atlas.api.dependencies import get_cache, get_pipeline, get_app_state
+from atlas.api.dependencies import get_cache, get_pipeline, get_app_state, get_registry
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.api.schemas import (
     CitationResponse,
@@ -199,15 +199,16 @@ async def _stream_query(
 async def query(
     body: QueryRequest,
     request: Request,
-    pipeline: RAGPipeline = Depends(get_pipeline),
     cache: QueryCache = Depends(get_cache),
 ) -> QueryResponse | StreamingResponse:
     """
     Run the full RAG pipeline for a user query.
 
     Set `stream: true` for token-by-token Server-Sent Events response.
+    Set `namespace` to query a specific corpus (default: "default").
     """
-    log = logger.bind(query=body.query[:80])
+    log = logger.bind(query=body.query[:80], namespace=body.namespace)
+    pipeline = get_registry(request).get(body.namespace).pipeline
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
@@ -215,12 +216,13 @@ async def query(
         return StreamingResponse(
             _stream_query(body.query, pipeline),
             media_type="text/event-stream",
-            headers={"X-Faithfulness": "skipped-streaming"},
+            headers={"X-Faithfulness": "skipped-streaming",
+                     "X-Namespace": body.namespace},
         )
 
     # ── Standard path ─────────────────────────────────────────────────────────
-    # Cache check
-    cached_payload = await cache.get(body.query)
+    cache_key = f"{body.namespace}:{body.query}"
+    cached_payload = await cache.get(cache_key)
     if cached_payload is not None:
         log.info("query_cache_hit")
         response = QueryResponse.model_validate(cached_payload)
@@ -229,7 +231,6 @@ async def query(
 
     log.info("query_start")
     t_total = time.perf_counter()
-    t0 = t_total
 
     try:
         result = await pipeline.run(body.query)
@@ -252,7 +253,7 @@ async def query(
 
     # Populate cache (fire-and-forget — don't await to block the response)
     import asyncio
-    asyncio.create_task(cache.set(body.query, response.model_dump()))
+    asyncio.create_task(cache.set(cache_key, response.model_dump()))
 
     log.info(
         "query_complete",
