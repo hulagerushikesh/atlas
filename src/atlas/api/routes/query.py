@@ -227,6 +227,14 @@ async def query(
         log.info("query_cache_hit")
         response = QueryResponse.model_validate(cached_payload)
         response.cached = True
+        import asyncio
+        from atlas.api import auth as _auth
+        api_key_id = getattr(request.state, "api_key_id", None)
+        if api_key_id is not None:
+            asyncio.create_task(_auth.log_usage(
+                api_key_id=api_key_id, namespace=body.namespace,
+                prompt_tokens=0, completion_tokens=0, latency_ms=0, cache_hit=True,
+            ))
         return response
 
     log.info("query_start")
@@ -251,9 +259,20 @@ async def query(
     )
     COST_USD.inc(response.token_usage.estimated_cost_usd)
 
-    # Populate cache (fire-and-forget — don't await to block the response)
+    # Fire-and-forget: cache + usage log (never block the response)
     import asyncio
+    from atlas.api import auth as _auth
     asyncio.create_task(cache.set(cache_key, response.model_dump()))
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if api_key_id is not None:
+        asyncio.create_task(_auth.log_usage(
+            api_key_id=api_key_id,
+            namespace=body.namespace,
+            prompt_tokens=response.token_usage.prompt_tokens,
+            completion_tokens=response.token_usage.completion_tokens,
+            latency_ms=timings.total_ms,
+            cache_hit=False,
+        ))
 
     log.info(
         "query_complete",

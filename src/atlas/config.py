@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     enable_prometheus: bool = True
 
+    # Auth (disabled by default — set AUTH_ENABLED=true in .env to require keys)
+    auth_enabled: bool = False
+    admin_secret: str = ""           # required to call POST /keys when auth is enabled
+
     # Sub-configs are instantiated here; in tests you can pass them directly.
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     qdrant: QdrantConfig = Field(default_factory=QdrantConfig)

@@ -37,10 +37,11 @@ from fastapi.staticfiles import StaticFiles
 from atlas import __version__
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
+from atlas.api.middleware.auth_mw import APIKeyMiddleware
 from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents
-from atlas.api.routes import health, ingest, query, metrics_route, namespaces
+from atlas.api.routes import health, ingest, keys, query, metrics_route, namespaces
 from atlas.config import Settings, get_settings
 from atlas.logging import configure_logging
 
@@ -54,6 +55,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(level=settings.log_level, json=True)
 
     logger.info("atlas_startup", version=__version__)
+
+    # Initialise auth DB (creates tables if first run)
+    from atlas.api.auth import init_db
+    await init_db()
 
     # Build shared (cross-namespace) components once
     shared = SharedComponents(settings)
@@ -112,6 +117,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(TracingMiddleware)
     app.add_middleware(PrometheusMiddleware)
+    app.add_middleware(APIKeyMiddleware, enabled=cfg.auth_enabled)
 
     # Landing page at /
     import pathlib as _pl
@@ -128,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, tags=["ops"])
     app.include_router(metrics_route.router, tags=["ops"])
     app.include_router(namespaces.router, tags=["namespaces"])
+    app.include_router(keys.router, tags=["auth"])
     app.include_router(ingest.router, tags=["ingestion"])
     app.include_router(query.router, tags=["query"])
 

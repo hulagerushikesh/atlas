@@ -28,5 +28,8 @@ htmlcov/
 # Output (generated, not committed — fill placeholders after eval run)
 out/
 
+# Runtime data
+data/atlas.db
+
 # Scratch
 atlas-summary.html
