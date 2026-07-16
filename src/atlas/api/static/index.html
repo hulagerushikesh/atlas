@@ -185,6 +185,22 @@
   .mini-bar { display: inline-block; width: 60px; height: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; margin-left: 10px; overflow: hidden; }
   .mini-bar span { display: block; height: 100%; background: var(--signal); }
 
+  .header-right { display: flex; align-items: center; gap: 20px; }
+  .api-key-wrap { display: flex; align-items: center; gap: 6px; }
+  .key-icon { font-size: 13px; }
+  .api-key-wrap input {
+    background: var(--panel); border: 1px solid var(--line-bright); color: var(--ink);
+    padding: 5px 10px; border-radius: 6px; font-size: 12px; font-family: var(--mono);
+    width: 180px;
+  }
+  .api-key-wrap input:focus { outline: none; border-color: var(--signal); }
+  .api-key-wrap button {
+    background: transparent; border: 1px solid var(--line); color: var(--ink-dim);
+    padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .api-key-wrap button:hover { border-color: var(--signal); color: var(--signal); }
+  .api-key-wrap.has-key input { border-color: rgba(78,201,176,0.4); }
+
   .disclaimer { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-top: 20px; line-height: 1.7; }
   .note-live { font-family: var(--mono); font-size: 11px; color: var(--amber); margin-bottom: 20px; padding: 10px 14px; background: rgba(227,179,65,0.06); border: 1px solid rgba(227,179,65,0.2); border-radius: 6px; }
 </style>
@@ -197,7 +213,14 @@
         <h1>Atlas</h1>
         <span class="tag">agentic rag · pipeline console</span>
       </div>
-      <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText">checking…</span></div>
+      <div class="header-right">
+        <div class="api-key-wrap" id="apiKeyWrap" title="API key (stored in browser, never sent to server logs)">
+          <span class="key-icon">🔑</span>
+          <input id="apiKeyInput" type="password" placeholder="API key (optional)" autocomplete="off">
+          <button id="keySaveBtn">Save</button>
+        </div>
+        <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText">checking…</span></div>
+      </div>
     </div>
     <nav>
       <button class="active" data-view="ask">/ ask</button>
@@ -273,6 +296,49 @@
   // ---- config ----
   const API_BASE = ""; // same-origin if served behind FastAPI; else "http://localhost:8010"
 
+  // ---- API key management ----
+  const API_KEY_STORAGE = 'atlas_api_key';
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const keySaveBtn  = document.getElementById('keySaveBtn');
+  const apiKeyWrap  = document.getElementById('apiKeyWrap');
+
+  function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || ''; }
+
+  function applyStoredKey() {
+    const k = getApiKey();
+    if (k) {
+      apiKeyInput.value = k;
+      apiKeyWrap.classList.add('has-key');
+      keySaveBtn.textContent = 'Clear';
+    } else {
+      apiKeyInput.value = '';
+      apiKeyWrap.classList.remove('has-key');
+      keySaveBtn.textContent = 'Save';
+    }
+  }
+
+  keySaveBtn.onclick = () => {
+    if (getApiKey()) {
+      localStorage.removeItem(API_KEY_STORAGE);
+    } else {
+      const v = apiKeyInput.value.trim();
+      if (v) localStorage.setItem(API_KEY_STORAGE, v);
+    }
+    applyStoredKey();
+  };
+
+  apiKeyInput.onkeydown = e => { if (e.key === 'Enter') keySaveBtn.click(); };
+  applyStoredKey();
+
+  // Wrap fetch to inject Authorization header when a key is present
+  function apiFetch(url, opts = {}) {
+    const key = getApiKey();
+    if (key) {
+      opts.headers = { ...(opts.headers || {}), 'Authorization': 'Bearer ' + key };
+    }
+    return fetch(url, opts);
+  }
+
   // ---- nav ----
   document.querySelectorAll('nav button').forEach(b => {
     b.onclick = () => {
@@ -288,7 +354,7 @@
     const dot = document.getElementById('statusDot');
     const txt = document.getElementById('statusText');
     try {
-      const r = await fetch(API_BASE + '/health', { signal: AbortSignal.timeout(3000) });
+      const r = await apiFetch(API_BASE +'/health', { signal: AbortSignal.timeout(3000) });
       if (r.ok) { dot.classList.add('live'); txt.textContent = 'qdrant + redis connected'; }
       else { txt.textContent = 'degraded (503)'; }
     } catch {
@@ -333,7 +399,7 @@
 
   async function loadNamespaces() {
     try {
-      const r = await fetch(API_BASE + '/namespaces', { signal: AbortSignal.timeout(3000) });
+      const r = await apiFetch(API_BASE +'/namespaces', { signal: AbortSignal.timeout(3000) });
       if (!r.ok) throw new Error('failed');
       const data = await r.json();
       nsSelect.innerHTML = '';
@@ -385,7 +451,7 @@
 
     let streamed = false;
     try {
-      const r = await fetch(API_BASE + '/query', {
+      const r = await apiFetch(API_BASE +'/query', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: question, stream: true, namespace: nsSelect.value || 'default' }),
         signal: AbortSignal.timeout(60000),
@@ -598,7 +664,7 @@
 
   async function loadEvalData() {
     try {
-      const r = await fetch(API_BASE + '/out/eval_report.json', { signal: AbortSignal.timeout(2000) });
+      const r = await apiFetch(API_BASE +'/out/eval_report.json', { signal: AbortSignal.timeout(2000) });
       if (!r.ok) throw new Error('not found');
       const data = await r.json();
       // eval_report.json shape: { metrics: {context_precision, context_recall, faithfulness, answer_relevance}, by_category: [...] }

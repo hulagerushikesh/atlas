@@ -10,7 +10,7 @@ EVAL_DATA  := eval_data/fastapi_dataset.json
 
 .PHONY: help install serve test test-unit test-integration \
         lint typecheck fetch-corpus ingest eval \
-        docker-up docker-down clean
+        create-key docker-up docker-down clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
@@ -67,6 +67,9 @@ ingest-dry: ## Preview which files would be ingested (no API calls)
 
 eval: ## Run eval harness against the FastAPI question set (requires ingested corpus)
 	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name fastapi-v1
+
+create-key: ## Create an API key: make create-key NAME="my app" EMAIL=me@example.com
+	$(PYTHON) scripts/create_key.py --name "$(NAME)" --email "$(EMAIL)" --rate-limit $(or $(RPM),60)
 
 eval-compare: ## Compare latest eval against a baseline (set BASELINE=path/to/report.json)
 	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name fastapi-v1 \

@@ -41,6 +41,9 @@ dependencies = [
     # Caching
     "redis>=5.0.6",
 
+    # Auth / usage storage
+    "aiosqlite>=0.20.0",
+
     # Observability
     "structlog>=24.2.0",
     "prometheus-client>=0.20.0",

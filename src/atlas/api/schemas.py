@@ -113,6 +113,37 @@ class NamespaceListResponse(BaseModel):
     total: int
 
 
+# ── /keys + /usage ────────────────────────────────────────────────────────────
+
+class KeyCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100, description="Human label for this key")
+    email: str = Field("", description="Owner email (optional)")
+    rate_limit_rpm: int = Field(60, ge=1, le=10000, description="Requests per minute")
+
+
+class KeyCreateResponse(BaseModel):
+    key: str          # shown once — never retrievable again
+    key_id: int
+    name: str
+    rate_limit_rpm: int
+
+
+class NamespaceUsage(BaseModel):
+    namespace: str
+    queries: int
+
+
+class UsageResponse(BaseModel):
+    total_queries: int
+    cache_hits: int
+    total_prompt_tokens: int
+    total_completion_tokens: int
+    avg_latency_ms: float
+    first_query_at: float | None
+    last_query_at: float | None
+    by_namespace: list[NamespaceUsage]
+
+
 # ── Error ─────────────────────────────────────────────────────────────────────
 
 class ErrorResponse(BaseModel):
