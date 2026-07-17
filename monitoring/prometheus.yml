@@ -1,0 +1,9 @@
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: atlas
+    static_configs:
+      - targets: ["atlas_api:8010"]
+    metrics_path: /metrics

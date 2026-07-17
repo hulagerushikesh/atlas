@@ -56,6 +56,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     logger.info("atlas_startup", version=__version__)
 
+    # Sentry (optional — only initialised when SENTRY_DSN is set)
+    if settings.sentry_dsn:
+        try:
+            import sentry_sdk
+            sentry_sdk.init(
+                dsn=settings.sentry_dsn,
+                traces_sample_rate=0.1,
+                environment="production",
+                release=f"atlas@{__version__}",
+            )
+            logger.info("sentry_enabled")
+        except ImportError:
+            logger.warning("sentry_sdk_not_installed", detail="pip install sentry-sdk to enable")
+
     # Initialise auth DB (creates tables if first run)
     from atlas.api.auth import init_db
     await init_db()
