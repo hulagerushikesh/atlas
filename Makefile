@@ -10,7 +10,8 @@ EVAL_DATA  := eval_data/fastapi_dataset.json
 
 .PHONY: help install serve test test-unit test-integration \
         lint typecheck fetch-corpus ingest eval \
-        create-key docker-up docker-down clean
+        create-key docker-up docker-down \
+        monitor-up monitor-down deploy-fly clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
@@ -82,6 +83,15 @@ docker-up: ## Start Qdrant + Redis via docker-compose
 
 docker-down: ## Stop Qdrant + Redis
 	docker compose down
+
+monitor-up: ## Start Prometheus + Grafana (requires docker-up first)
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d prometheus grafana
+
+monitor-down: ## Stop Prometheus + Grafana
+	docker compose -f docker-compose.yml -f docker-compose.prod.yml stop prometheus grafana
+
+deploy-fly: ## Deploy to Fly.io (requires fly CLI and fly auth login)
+	fly deploy
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 

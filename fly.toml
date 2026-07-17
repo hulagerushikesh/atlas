@@ -1,0 +1,53 @@
+# Atlas — Fly.io deployment configuration
+# Deploy: fly launch --no-deploy, set secrets, then fly deploy
+# Docs:   https://fly.io/docs/reference/configuration/
+
+app = "atlas-rag"
+primary_region = "sjc"   # change to your nearest region
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  API_PORT          = "8010"
+  API_WORKERS       = "1"
+  LOG_LEVEL         = "INFO"
+  ENABLE_PROMETHEUS = "true"
+  AUTH_ENABLED      = "true"
+  # Set secrets with: fly secrets set OPENAI_API_KEY=... QDRANT_URL=... etc.
+
+[[services]]
+  internal_port = 8010
+  protocol      = "tcp"
+
+  [[services.ports]]
+    port     = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port     = 443
+    handlers = ["tls", "http"]
+
+  [services.http_checks]
+    interval      = "15s"
+    timeout       = "5s"
+    grace_period  = "30s"
+    method        = "GET"
+    path          = "/health"
+    protocol      = "http"
+    tls_skip_verify = false
+
+  [services.concurrency]
+    type       = "requests"
+    hard_limit = 100
+    soft_limit = 80
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1
+
+[mounts]
+  # Persist the SQLite auth DB across deploys
+  source      = "atlas_data"
+  destination = "/app/data"

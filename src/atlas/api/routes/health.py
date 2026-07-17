@@ -24,10 +24,9 @@ async def health(request: Request) -> JSONResponse:
     """
     components: dict[str, ComponentHealth] = {}
 
-    # Qdrant probe
+    # Qdrant probe — use the shared client on the registry
     try:
-        state = request.app.state.atlas
-        qdrant_client = state.pipeline._retriever._retrievers[0]._client  # type: ignore[attr-defined]
+        qdrant_client = request.app.state.atlas.registry._shared.qdrant_client
         t = time.perf_counter()
         await qdrant_client.get_collections()
         components["qdrant"] = ComponentHealth(

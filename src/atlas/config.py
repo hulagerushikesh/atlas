@@ -86,6 +86,7 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
     enable_prometheus: bool = True
+    sentry_dsn: str = ""             # optional: set to enable Sentry error tracking
 
     # Auth (disabled by default — set AUTH_ENABLED=true in .env to require keys)
     auth_enabled: bool = False
