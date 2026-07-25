@@ -7,10 +7,11 @@ RUN pip install --no-cache-dir uv
 
 # Copy dependency spec first for layer caching
 COPY pyproject.toml .
+COPY README.md .
 COPY src/ src/
 
 # Install the package (without dev extras for production)
-RUN uv pip install --system -e "."
+RUN uv pip install --system -e ".[dev]"
 
 # Non-root user for production safety
 RUN adduser --disabled-password --gecos "" atlasuser
