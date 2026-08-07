@@ -8,14 +8,12 @@ assert that boundary detection fires at the expected positions.
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from atlas.ingestion.chunkers import FixedSizeChunker, RecursiveChunker, SemanticChunker
 from atlas.ingestion.chunkers.factory import get_chunker
 from atlas.interfaces.document import Document, DocumentType
 from atlas.interfaces.embedder import BaseEmbedder, EmbeddingResult
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

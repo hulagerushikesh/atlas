@@ -65,7 +65,8 @@ class QueryCache:
         if key in self._mem:
             self._mem.move_to_end(key)  # refresh LRU position
             logger.debug("cache_hit_memory", key=key[:20])
-            return json.loads(self._mem[key])
+            hit: dict[str, Any] = json.loads(self._mem[key])
+            return hit
 
         # L2 — Redis
         if self._redis is not None:
@@ -74,7 +75,8 @@ class QueryCache:
                 if raw is not None:
                     logger.debug("cache_hit_redis", key=key[:20])
                     self._mem_set(key, raw if isinstance(raw, str) else raw.decode())
-                    return json.loads(raw)
+                    redis_hit: dict[str, Any] = json.loads(raw)
+                    return redis_hit
             except Exception as exc:
                 logger.warning("cache_redis_get_failed", error=str(exc))
 

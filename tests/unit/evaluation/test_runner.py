@@ -8,10 +8,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from atlas.evaluation.runner import _FAILED_SENTINEL, EvalRunner
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.evaluator import EvalDataset, EvalSample, MetricScore, PipelineConfig
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.evaluation.runner import EvalRunner, _FAILED_SENTINEL
 
 
 def _chunk(cid: str) -> RetrievedChunk:
@@ -72,7 +72,9 @@ class TestEvalRunner:
         assert len(result.sample_results) == 3
 
     @pytest.mark.asyncio
-    async def test_aggregate_scores_computed(self, dataset: EvalDataset, config: PipelineConfig) -> None:
+    async def test_aggregate_scores_computed(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
         runner = EvalRunner(
             _mock_pipeline(),
             [_mock_metric("context_precision", 0.8), _mock_metric("faithfulness", 0.9)],

@@ -31,11 +31,11 @@ from __future__ import annotations
 
 import structlog
 
+from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.llm import parse_json_response
-from atlas.evaluation.metrics.base import BaseMetric
 
 logger = structlog.get_logger(__name__)
 

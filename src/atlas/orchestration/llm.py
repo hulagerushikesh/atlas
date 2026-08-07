@@ -32,10 +32,11 @@ Design rationale:
 from __future__ import annotations
 
 import json
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
-from openai import AsyncOpenAI, APIStatusError, RateLimitError
+from openai import APIStatusError, AsyncOpenAI, RateLimitError
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -79,7 +80,7 @@ class OpenAILLMProvider(BaseLLMProvider):
 
     async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         model = request.model or self._config.primary_model
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": model,
             "messages": _to_openai_messages(request.messages),
             "temperature": request.temperature,
@@ -105,7 +106,7 @@ class OpenAILLMProvider(BaseLLMProvider):
         model: str,
         fallback_triggered: bool,
     ) -> GenerationResponse:
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": model,
             "messages": _to_openai_messages(request.messages),
             "temperature": request.temperature,
@@ -155,4 +156,5 @@ def parse_json_response(content: str) -> dict:  # type: ignore[type-arg]
         lines = text.split("\n")
         # Drop first line (```json or ```) and last line (```)
         text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
-    return json.loads(text)
+    parsed: dict[Any, Any] = json.loads(text)
+    return parsed

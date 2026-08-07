@@ -28,9 +28,9 @@ Design rationale:
 
 from __future__ import annotations
 
+from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.evaluation.metrics.base import BaseMetric
 
 
 class ContextPrecisionMetric(BaseMetric):

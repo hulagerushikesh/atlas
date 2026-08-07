@@ -10,8 +10,7 @@ from __future__ import annotations
 import pytest
 
 from atlas.interfaces.document import Chunk, ChunkMetadata, Document, DocumentType
-from atlas.interfaces.retriever import RetrievedChunk, RetrievalResult
-
+from atlas.interfaces.retriever import RetrievalResult, RetrievedChunk
 
 # ── Sample data ──────────────────────────────────────────────────────────────
 

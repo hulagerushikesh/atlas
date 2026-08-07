@@ -22,7 +22,6 @@ from atlas.orchestration.faithfulness import FaithfulnessResult
 from atlas.orchestration.generator import CitationRef, GeneratorResult
 from atlas.orchestration.pipeline import RAGPipeline
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _chunk(cid: str) -> RetrievedChunk:

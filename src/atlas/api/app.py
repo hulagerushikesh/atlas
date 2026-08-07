@@ -25,8 +25,8 @@ Design rationale:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 import structlog
 from fastapi import FastAPI
@@ -41,7 +41,7 @@ from atlas.api.middleware.auth_mw import APIKeyMiddleware
 from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents
-from atlas.api.routes import health, ingest, keys, query, metrics_route, namespaces
+from atlas.api.routes import health, ingest, keys, metrics_route, namespaces, query
 from atlas.config import Settings, get_settings
 from atlas.logging import configure_logging
 
@@ -51,7 +51,7 @@ logger = structlog.get_logger(__name__)
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    settings: Settings = app.state._settings  # type: ignore[attr-defined]
+    settings: Settings = app.state._settings
     configure_logging(level=settings.log_level, json=True)
 
     logger.info("atlas_startup", version=__version__)
@@ -104,7 +104,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Shutdown
     if redis_client is not None:
-        await redis_client.aclose()
+        await redis_client.aclose()  # type: ignore[attr-defined]
     logger.info("atlas_shutdown")
 
 

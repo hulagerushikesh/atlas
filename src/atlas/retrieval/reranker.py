@@ -59,11 +59,13 @@ class CrossEncoderReranker(BaseReranker):
         pairs = [(query, c.content) for c in candidates]
         # Run synchronous batch inference off the event loop
         scores: list[float] = await asyncio.to_thread(
-            self._model.predict, pairs  # type: ignore[arg-type]
+            self._model.predict, pairs
         )
 
         ranked = sorted(
-            zip(candidates, scores),
+            # strict: the cross-encoder returns one score per pair; a mismatch
+            # would silently attach the wrong score to a candidate.
+            zip(candidates, scores, strict=True),
             key=lambda x: x[1],
             reverse=True,
         )

@@ -28,6 +28,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import aiosqlite
 import structlog
@@ -150,7 +151,8 @@ async def log_usage(
         async with aiosqlite.connect(db_path) as db:
             await db.execute(
                 "INSERT INTO usage_log "
-                "(api_key_id, namespace, prompt_tokens, completion_tokens, latency_ms, cache_hit, created_at) "
+                "(api_key_id, namespace, prompt_tokens, completion_tokens, "
+                "latency_ms, cache_hit, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (api_key_id, namespace, prompt_tokens, completion_tokens,
                  latency_ms, int(cache_hit), time.time()),
@@ -163,7 +165,7 @@ async def log_usage(
 async def get_usage_stats(
     api_key_id: int,
     db_path: Path = _DB_PATH,
-) -> dict:
+) -> dict[str, Any]:
     """Aggregate usage stats for one API key."""
     async with aiosqlite.connect(db_path) as db:
         db.row_factory = aiosqlite.Row
@@ -185,6 +187,20 @@ async def get_usage_stats(
             "WHERE api_key_id = ? GROUP BY namespace ORDER BY cnt DESC",
             (api_key_id,),
         )).fetchall()
+
+    # An aggregate SELECT always yields one row, but fetchone() is typed
+    # Optional and a schema change could make that untrue.
+    if row is None:
+        return {
+            "total_queries": 0,
+            "cache_hits": 0,
+            "total_prompt_tokens": 0,
+            "total_completion_tokens": 0,
+            "avg_latency_ms": 0.0,
+            "first_query_at": None,
+            "last_query_at": None,
+            "by_namespace": [],
+        }
 
     return {
         "total_queries": row["total_queries"] or 0,
@@ -218,7 +234,7 @@ def _check_rate_limit_memory(key_id: int, rpm: int) -> bool:
     return True
 
 
-async def check_rate_limit(key_id: int, rpm: int, redis_client=None) -> bool:  # type: ignore[return]
+async def check_rate_limit(key_id: int, rpm: int, redis_client: Any = None) -> bool:
     """Check rate limit. Uses Redis if available, in-memory fallback otherwise."""
     if redis_client is None:
         return _check_rate_limit_memory(key_id, rpm)
@@ -232,7 +248,7 @@ async def check_rate_limit(key_id: int, rpm: int, redis_client=None) -> bool:  #
         await pipe.zcard(bucket)
         await pipe.expire(bucket, 70)
         results = await pipe.execute()
-        count = results[2]
+        count = int(results[2])
         return count <= rpm
     except Exception:
         return _check_rate_limit_memory(key_id, rpm)

@@ -27,8 +27,8 @@ import asyncio
 import structlog
 
 from atlas.config import RetrievalConfig
-from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
 from atlas.interfaces.reranker import BaseReranker
+from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
 from atlas.retrieval.fusion import reciprocal_rank_fusion
 
 logger = structlog.get_logger(__name__)

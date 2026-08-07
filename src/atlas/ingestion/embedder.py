@@ -22,7 +22,7 @@ import asyncio
 
 import structlog
 from openai import AsyncOpenAI, RateLimitError
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from atlas.config import OpenAIConfig
 from atlas.interfaces.embedder import BaseEmbedder, EmbeddingResult

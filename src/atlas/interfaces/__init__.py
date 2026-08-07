@@ -9,6 +9,7 @@ Exported at package level for ergonomic imports:
     from atlas.interfaces import Document, Chunk, BaseRetriever, ...
 """
 
+from atlas.interfaces.chunker import BaseChunker
 from atlas.interfaces.document import Chunk, ChunkMetadata, Document, DocumentType
 from atlas.interfaces.embedder import BaseEmbedder, EmbeddingResult
 from atlas.interfaces.evaluator import (
@@ -21,9 +22,8 @@ from atlas.interfaces.evaluator import (
 from atlas.interfaces.index import BaseIndex, IndexStats
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, GenerationResponse, Message
 from atlas.interfaces.loader import BaseDocumentLoader
-from atlas.interfaces.chunker import BaseChunker
-from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
 from atlas.interfaces.reranker import BaseReranker
+from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
 
 __all__ = [
     # Document models

@@ -42,19 +42,21 @@ class QdrantDenseRetriever(BaseRetriever):
     async def retrieve(self, query: str, top_k: int) -> RetrievalResult:
         query_vector = await self._embedder.embed_query(query)
 
-        hits = await self._client.search(
+        # query_points supersedes the removed search(); it returns a QueryResponse
+        # wrapper rather than a bare list of hits.
+        response = await self._client.query_points(
             collection_name=self._config.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
             with_payload=True,
         )
 
-        chunks = [self._hit_to_chunk(h) for h in hits]
+        chunks = [self._hit_to_chunk(h) for h in response.points]
         logger.debug("dense_retrieve", query=query[:60], hits=len(chunks))
         return RetrievalResult(query=query, chunks=chunks, retriever_name=self.name)
 
     @staticmethod
-    def _hit_to_chunk(hit: object) -> RetrievedChunk:  # type: ignore[override]
+    def _hit_to_chunk(hit: object) -> RetrievedChunk:
         p = hit.payload  # type: ignore[attr-defined]
         meta = ChunkMetadata(
             doc_id=p["doc_id"],

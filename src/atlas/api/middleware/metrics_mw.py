@@ -48,7 +48,7 @@ REQUEST_LATENCY = Histogram(
 TOKEN_USAGE = Counter(
     "atlas_llm_tokens_total",
     "Total LLM tokens consumed",
-    ["model", "type"],  # type: prompt | completion
+    ["model", "type"],  # the "type" label is prompt | completion
 )
 
 CACHE_HITS = Counter(

@@ -34,9 +34,15 @@ from statistics import mean
 
 import structlog
 
-from atlas.interfaces.evaluator import EvalDataset, EvalResult, MetricScore, PipelineConfig, SampleResult
-from atlas.interfaces.retriever import RetrievedChunk
 from atlas.evaluation.metrics.base import BaseMetric
+from atlas.interfaces.evaluator import (
+    EvalDataset,
+    EvalResult,
+    MetricScore,
+    PipelineConfig,
+    SampleResult,
+)
+from atlas.interfaces.retriever import RetrievedChunk
 
 logger = structlog.get_logger(__name__)
 
@@ -104,7 +110,7 @@ class EvalRunner:
             duration_seconds=duration,
         )
 
-    async def _score_sample(self, sample: object) -> SampleResult:  # type: ignore[override]
+    async def _score_sample(self, sample: object) -> SampleResult:
         async with self._sem:
             try:
                 result = await self._pipeline.run(sample.question)  # type: ignore[attr-defined]

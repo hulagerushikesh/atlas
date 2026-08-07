@@ -36,13 +36,18 @@ def _make_doc(doc_id: str = "d1", content: str = "hello world " * 20) -> Documen
 @pytest.fixture
 def mock_embedder() -> MagicMock:
     embedder = MagicMock()
-    embedder.embed_texts = AsyncMock(
-        return_value=EmbeddingResult(
-            vectors=[[0.1, 0.2]] * 50,  # enough for any chunk count
+
+    # Returns exactly one vector per input text, as a real embedder does. An
+    # earlier fixed-size stub returned a surplus of vectors, which masked
+    # whether the indexer actually pairs chunks with their own embedding.
+    async def _embed(texts: list[str]) -> EmbeddingResult:
+        return EmbeddingResult(
+            vectors=[[0.1, 0.2] for _ in texts],
             model="mock",
             total_tokens=100,
         )
-    )
+
+    embedder.embed_texts = AsyncMock(side_effect=_embed)
     return embedder
 
 
@@ -50,7 +55,9 @@ def mock_embedder() -> MagicMock:
 def mock_dense() -> MagicMock:
     idx = MagicMock()
     idx.upsert = AsyncMock(return_value=3)
-    idx.stats = AsyncMock(return_value=IndexStats(total_chunks=3, collection_name="test", index_type="dense"))
+    idx.stats = AsyncMock(
+        return_value=IndexStats(total_chunks=3, collection_name="test", index_type="dense")
+    )
     return idx
 
 
@@ -58,12 +65,18 @@ def mock_dense() -> MagicMock:
 def mock_sparse() -> MagicMock:
     idx = MagicMock()
     idx.upsert = AsyncMock(return_value=3)
-    idx.stats = AsyncMock(return_value=IndexStats(total_chunks=3, collection_name="test.json", index_type="sparse"))
+    idx.stats = AsyncMock(
+        return_value=IndexStats(
+            total_chunks=3, collection_name="test.json", index_type="sparse"
+        )
+    )
     return idx
 
 
 @pytest.fixture
-def indexer(mock_embedder: MagicMock, mock_dense: MagicMock, mock_sparse: MagicMock) -> DocumentIndexer:
+def indexer(
+    mock_embedder: MagicMock, mock_dense: MagicMock, mock_sparse: MagicMock
+) -> DocumentIndexer:
     return DocumentIndexer(
         chunker=FixedSizeChunker(size=100, overlap=10),
         embedder=mock_embedder,

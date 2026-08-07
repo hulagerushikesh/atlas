@@ -56,7 +56,7 @@ class ComparisonResult:
             f"## A/B Comparison: {self.config_a_name} vs {self.config_b_name}",
             "",
             f"| Metric | {self.config_a_name} | {self.config_b_name} | Delta | Winner |",
-            f"| --- | --- | --- | --- | --- |",
+            "| --- | --- | --- | --- | --- |",
         ]
         for d in self.deltas:
             delta_str = f"{d.delta:+.4f}"
