@@ -29,6 +29,7 @@ Design rationale:
 from __future__ import annotations
 
 import re
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 import structlog
@@ -137,7 +138,7 @@ class AnswerGenerator:
 
     async def stream(
         self, query: str, chunks: list[RetrievedChunk]
-    ):  # type: ignore[return]  — AsyncIterator[str]
+    ) -> AsyncIterator[str]:
         """Streaming variant for the FastAPI /query endpoint."""
         context = _build_context(chunks)
         request = GenerationRequest(

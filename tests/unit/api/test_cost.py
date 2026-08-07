@@ -16,8 +16,10 @@ class TestEstimateCost:
     def test_unknown_model_uses_fallback(self) -> None:
         cost_known = estimate_cost("gpt-4o-mini", 100_000, 0)
         cost_unknown = estimate_cost("some-future-model", 100_000, 0)
-        # Both positive; unknown uses fallback price
-        assert cost_unknown > 0
+        # The fallback input price ($1.00/1M) is deliberately more conservative
+        # than gpt-4o-mini's ($0.15/1M), so an unknown model must cost more.
+        assert cost_unknown > cost_known
+        assert abs(cost_unknown - 0.10) < 1e-6
 
     def test_embedding_cost_added(self) -> None:
         cost_no_embed = estimate_cost("gpt-4o-mini", 1000, 500)

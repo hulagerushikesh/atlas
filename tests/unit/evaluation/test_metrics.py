@@ -12,18 +12,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from atlas.interfaces.document import ChunkMetadata, DocumentType
-from atlas.interfaces.evaluator import MetricScore
-from atlas.interfaces.llm import GenerationResponse
-from atlas.interfaces.retriever import RetrievedChunk
-from atlas.interfaces.embedder import EmbeddingResult
 from atlas.evaluation.metrics import (
     AnswerRelevanceMetric,
     ContextPrecisionMetric,
     ContextRecallMetric,
     FaithfulnessMetric,
 )
-
+from atlas.interfaces.document import ChunkMetadata, DocumentType
+from atlas.interfaces.embedder import EmbeddingResult
+from atlas.interfaces.llm import GenerationResponse
+from atlas.interfaces.retriever import RetrievedChunk
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

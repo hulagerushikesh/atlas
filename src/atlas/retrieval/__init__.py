@@ -11,7 +11,7 @@ Submodules:
 
 from atlas.retrieval.dense import QdrantDenseRetriever
 from atlas.retrieval.fusion import reciprocal_rank_fusion
-from atlas.retrieval.hybrid import HybridRetriever, HybridRetrievalResult
+from atlas.retrieval.hybrid import HybridRetrievalResult, HybridRetriever
 from atlas.retrieval.reranker import CrossEncoderReranker
 from atlas.retrieval.sparse import BM25Retriever
 

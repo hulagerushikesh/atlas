@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+from typing import Protocol
 
 import structlog
 
@@ -81,12 +82,35 @@ class PipelineResult:
         self.is_faithful = self.faithfulness.is_faithful if self.faithfulness else True
 
 
+class RetrievalLike(Protocol):
+    """
+    Anything exposing a final ranked chunk list. Declared as a read-only
+    property so it matches both RetrievalResult (a pydantic field) and
+    HybridRetrievalResult (a computed property).
+    """
+
+    @property
+    def chunks(self) -> list[RetrievedChunk]: ...
+
+
+class SupportsRetrieve(Protocol):
+    """
+    The slice of the retriever the pipeline actually depends on.
+
+    A Protocol rather than the concrete class so alternative retrievers stay
+    pluggable, and rather than `object` so the duck-typed contract is still
+    checked instead of silently accepting anything.
+    """
+
+    async def retrieve(self, query: str) -> RetrievalLike: ...
+
+
 class RAGPipeline:
     """Orchestrate routing → retrieval → grading → generation → faithfulness."""
 
     def __init__(
         self,
-        retriever: object,            # HybridRetriever or any duck-typed equivalent
+        retriever: SupportsRetrieve,
         router: QueryRouter,
         decomposer: QueryDecomposer,
         grader: RetrievalGrader,

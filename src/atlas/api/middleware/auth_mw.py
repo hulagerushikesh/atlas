@@ -11,9 +11,13 @@ requires no keys. When enabled, the following paths are always public:
 
 from __future__ import annotations
 
+import contextlib
+
 from fastapi import Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from atlas.api import auth as auth_db
 
@@ -24,11 +28,11 @@ _PUBLIC_PREFIXES = ("/app", "/out", "/namespaces")
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """Validate Bearer tokens and enforce per-key rate limits."""
 
-    def __init__(self, app, *, enabled: bool) -> None:
+    def __init__(self, app: ASGIApp, *, enabled: bool) -> None:
         super().__init__(app)
         self._enabled = enabled
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not self._enabled:
             return await call_next(request)
 
@@ -53,10 +57,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Use Redis from app cache if available for distributed rate limiting
         redis_client = None
-        try:
-            redis_client = request.app.state.atlas.cache._redis  # type: ignore[attr-defined]
-        except AttributeError:
-            pass
+        with contextlib.suppress(AttributeError):
+            redis_client = request.app.state.atlas.cache._redis
 
         allowed = await auth_db.check_rate_limit(api_key.id, api_key.rate_limit_rpm, redis_client)
         if not allowed:

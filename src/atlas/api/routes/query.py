@@ -33,7 +33,8 @@ from __future__ import annotations
 
 import json
 import time
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -41,7 +42,7 @@ from fastapi.responses import StreamingResponse
 
 from atlas.api.cache import QueryCache
 from atlas.api.cost import estimate_cost
-from atlas.api.dependencies import get_cache, get_pipeline, get_app_state, get_registry
+from atlas.api.dependencies import get_app_state, get_cache, get_registry
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.api.schemas import (
     CitationResponse,
@@ -50,7 +51,7 @@ from atlas.api.schemas import (
     StageTimings,
     TokenUsage,
 )
-from atlas.orchestration.pipeline import RAGPipeline, PipelineResult
+from atlas.orchestration.pipeline import PipelineResult, RAGPipeline
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -125,7 +126,7 @@ async def _stream_query(
     Faithfulness is skipped on the streaming path — we'd have to buffer the
     full answer to check it, defeating the purpose of streaming.
     """
-    def _evt(data: dict) -> str:
+    def _evt(data: dict[str, Any]) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
     # ── Stage 1: Route ─────────────────────────────────────────────────────────
@@ -138,7 +139,8 @@ async def _stream_query(
 
     if classification == "out_of_scope":
         yield _evt({"type": "done", "classification": "out_of_scope",
-                    "answer": "This question appears to be outside the scope of the knowledge base. "
+                    "answer": "This question appears to be outside the scope "
+                    "of the knowledge base. "
                               "Please ask a question related to the available documentation.",
                     "citations": [], "is_faithful": True})
         yield "data: [DONE]\n\n"
@@ -228,6 +230,7 @@ async def query(
         response = QueryResponse.model_validate(cached_payload)
         response.cached = True
         import asyncio
+
         from atlas.api import auth as _auth
         api_key_id = getattr(request.state, "api_key_id", None)
         if api_key_id is not None:
@@ -261,6 +264,7 @@ async def query(
 
     # Fire-and-forget: cache + usage log (never block the response)
     import asyncio
+
     from atlas.api import auth as _auth
     asyncio.create_task(cache.set(cache_key, response.model_dump()))
     api_key_id = getattr(request.state, "api_key_id", None)

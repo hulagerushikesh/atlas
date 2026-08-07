@@ -24,11 +24,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from atlas.interfaces.document import ChunkMetadata, DocumentType
-from atlas.interfaces.retriever import RetrievedChunk, RetrievalResult
+from atlas.interfaces.retriever import RetrievalResult, RetrievedChunk
 from atlas.orchestration.faithfulness import FaithfulnessResult
 from atlas.orchestration.generator import CitationRef, GeneratorResult
 from atlas.orchestration.pipeline import RAGPipeline
-
 
 # ── Fixture helpers ───────────────────────────────────────────────────────────
 
@@ -80,7 +79,9 @@ def _build_pipeline(
         return_value=GeneratorResult(
             answer=answer,
             citations=citations,
-            cited_chunks=[c for c in chunks if c.chunk_id in {r.chunk_id for r in citations.values()}]
+            cited_chunks=[
+                c for c in chunks if c.chunk_id in {r.chunk_id for r in citations.values()}
+            ]
             if citations else [],
             prompt_tokens=50,
             completion_tokens=80,

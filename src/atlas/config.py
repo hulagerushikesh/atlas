@@ -93,7 +93,7 @@ class Settings(BaseSettings):
     admin_secret: str = ""           # required to call POST /keys when auth is enabled
 
     # Sub-configs are instantiated here; in tests you can pass them directly.
-    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
+    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)  # type: ignore[arg-type]
     qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
     redis: RedisConfig = Field(default_factory=RedisConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)

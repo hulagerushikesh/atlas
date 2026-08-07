@@ -28,15 +28,15 @@ Design rationale:
 
 from __future__ import annotations
 
+# Sentence splitting: split after ". ", "! ", "? " but not inside "e.g. " etc.
+import re
+
 import numpy as np
 
 from atlas.ingestion.hashing import hash_text
 from atlas.interfaces.chunker import BaseChunker
 from atlas.interfaces.document import Chunk, ChunkMetadata, Document
 from atlas.interfaces.embedder import BaseEmbedder
-
-# Sentence splitting: split after ". ", "! ", "? " but not inside "e.g. " etc.
-import re
 
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+(?=[A-Z])")
 
@@ -89,7 +89,9 @@ class SemanticChunker(BaseChunker):
 
         # Build raw segments from boundaries
         segments: list[str] = []
-        for start_i, end_i in zip(boundary_indices, boundary_indices[1:]):
+        # Deliberately non-strict: pairwise iteration over consecutive
+        # boundaries, so the second operand is always one shorter.
+        for start_i, end_i in zip(boundary_indices, boundary_indices[1:], strict=False):
             segment = " ".join(sentences[start_i:end_i])
             segments.append(segment)
 

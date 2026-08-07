@@ -42,7 +42,8 @@ class AppState:
 
 def get_app_state(request: Request) -> AppState:
     """FastAPI dependency: retrieve the typed app state."""
-    return request.app.state.atlas  # type: ignore[attr-defined]
+    state: AppState = request.app.state.atlas
+    return state
 
 
 def get_registry(request: Request) -> NamespaceRegistry:

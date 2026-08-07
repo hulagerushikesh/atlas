@@ -115,7 +115,9 @@ class BM25SparseIndex(BaseIndex):
         tokens = _tokenize(query)
         scores = self._bm25.get_scores(tokens)
         ranked = sorted(
-            zip(self._corpus, scores), key=lambda x: x[1], reverse=True
+            # strict: BM25 must return exactly one score per corpus entry;
+            # a mismatch would silently misalign scores with documents.
+            zip(self._corpus, scores, strict=True), key=lambda x: x[1], reverse=True
         )
         return [(entry, float(score)) for entry, score in ranked[:top_k]]
 

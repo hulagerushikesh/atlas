@@ -9,10 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from atlas.interfaces.evaluator import EvalResult, PipelineConfig, SampleResult, MetricScore
-from atlas.evaluation.comparator import compare, save_comparison, _SIGNIFICANCE_THRESHOLD
-from atlas.evaluation.reporter import save_report, _md_table
-
+from atlas.evaluation.comparator import _SIGNIFICANCE_THRESHOLD, compare, save_comparison
+from atlas.evaluation.reporter import _md_table, save_report
+from atlas.interfaces.evaluator import EvalResult, MetricScore, PipelineConfig, SampleResult
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

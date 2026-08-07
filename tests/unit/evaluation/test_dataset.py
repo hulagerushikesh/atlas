@@ -9,7 +9,6 @@ import pytest
 
 from atlas.interfaces.evaluator import EvalDataset
 
-
 DATASET_PATH = Path(__file__).parents[3] / "eval_data" / "sample_dataset.json"
 
 
@@ -51,7 +50,10 @@ class TestSampleDataset:
 
     def test_categories_covered(self, dataset: EvalDataset) -> None:
         categories = {s.metadata.get("category") for s in dataset.samples}
-        expected = {"hr", "it", "finance", "product", "legal", "security", "cross-functional", "out_of_scope"}
+        expected = {
+            "hr", "it", "finance", "product", "legal", "security",
+            "cross-functional", "out_of_scope",
+        }
         assert expected.issubset(categories)
 
     def test_difficulty_levels_present(self, dataset: EvalDataset) -> None:

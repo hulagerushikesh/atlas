@@ -33,7 +33,7 @@ import structlog
 
 from atlas.ingestion.loaders.registry import get_loader
 from atlas.interfaces.chunker import BaseChunker
-from atlas.interfaces.document import Chunk, Document
+from atlas.interfaces.document import Document
 from atlas.interfaces.embedder import BaseEmbedder
 from atlas.interfaces.index import BaseIndex
 
@@ -96,7 +96,10 @@ class DocumentIndexer:
 
         combined = IndexResult()
         for result in results:
-            if isinstance(result, Exception):
+            # BaseException, not Exception: gather(return_exceptions=True) can
+            # hand back a CancelledError, which would otherwise fall through
+            # and blow up on the attribute access below.
+            if isinstance(result, BaseException):
                 logger.warning("indexing_file_failed", error=str(result))
                 continue
             combined.documents_processed += result.documents_processed
@@ -127,7 +130,9 @@ class DocumentIndexer:
 
             # Embed all chunks in a single batched call
             embed_result = await self._embedder.embed_texts([c.content for c in chunks])
-            for chunk, vector in zip(chunks, embed_result.vectors):
+            # strict: a short vector list would otherwise silently leave the
+            # trailing chunks unembedded and still index them.
+            for chunk, vector in zip(chunks, embed_result.vectors, strict=True):
                 chunk.embedding = vector
 
             # Upsert to both indexes concurrently

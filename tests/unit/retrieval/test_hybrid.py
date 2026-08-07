@@ -39,7 +39,10 @@ def _mock_retriever(name: str, chunk_ids: list[str]) -> MagicMock:
     r.retrieve = AsyncMock(
         return_value=RetrievalResult(
             query="q",
-            chunks=[_chunk(cid, score=float(len(chunk_ids) - i)) for i, cid in enumerate(chunk_ids)],
+            chunks=[
+                _chunk(cid, score=float(len(chunk_ids) - i))
+                for i, cid in enumerate(chunk_ids)
+            ],
             retriever_name=name,
         )
     )

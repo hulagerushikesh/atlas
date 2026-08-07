@@ -11,8 +11,6 @@ RRF has clean mathematical properties we can test exactly:
 
 from __future__ import annotations
 
-import pytest
-
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.retriever import RetrievalResult, RetrievedChunk
 from atlas.retrieval.fusion import reciprocal_rank_fusion

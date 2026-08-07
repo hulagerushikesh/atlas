@@ -29,7 +29,8 @@ dependencies = [
 
     # Embeddings & vector store
     "openai>=1.35.0",
-    "qdrant-client>=1.9.1",
+    # >=1.10 for query_points; the old search() was removed in later 1.x.
+    "qdrant-client>=1.10,<2.0",
 
     # Sparse retrieval
     "rank-bm25>=0.2.2",
@@ -82,6 +83,14 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+# B008 fires on `x = Depends(...)` in signature defaults, which is the intended
+# FastAPI idiom rather than the mutable-default bug the rule targets.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# The router's few-shot examples live inside a prompt string. Reflowing them to
+# satisfy line-length would change the text actually sent to the model.
+"src/atlas/orchestration/router.py" = ["E501"]
 
 [tool.mypy]
 python_version = "3.11"

@@ -79,7 +79,7 @@ class QdrantDenseIndex(BaseIndex):
             with_payload=["content_hash"],
         )
         existing_hashes: dict[str, str] = {
-            str(p.id): p.payload.get("content_hash", "") for p in existing
+            str(p.id): (p.payload or {}).get("content_hash", "") for p in existing
         }
 
         to_write = [
@@ -124,7 +124,7 @@ class QdrantDenseIndex(BaseIndex):
         from qdrant_client.models import PointIdsList
         await self._client.delete(
             collection_name=self._config.collection_name,
-            points_selector=PointIdsList(points=chunk_ids),
+            points_selector=PointIdsList(points=list(chunk_ids)),
         )
         return len(chunk_ids)
 

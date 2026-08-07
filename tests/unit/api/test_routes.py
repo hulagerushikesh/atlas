@@ -21,7 +21,6 @@ from atlas.orchestration.faithfulness import FaithfulnessResult
 from atlas.orchestration.generator import CitationRef, GeneratorResult
 from atlas.orchestration.pipeline import PipelineResult
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 def _make_pipeline_result(answer: str = "The answer [1].", faithful: bool = True) -> PipelineResult:
@@ -50,8 +49,9 @@ def _make_pipeline_result(answer: str = "The answer [1].", faithful: bool = True
 def client() -> TestClient:
     """Build the app without lifespan and inject a mock state."""
     from fastapi import FastAPI
-    from atlas.api.routes import health, ingest, query, metrics_route
+
     from atlas.api.middleware.tracing import TracingMiddleware
+    from atlas.api.routes import health, ingest, metrics_route, query
 
     app = FastAPI()
     app.add_middleware(TracingMiddleware)
@@ -129,7 +129,7 @@ class TestQueryRoute:
 
     def test_cache_hit_returns_cached_true(self, client: TestClient) -> None:
         import json
-        from atlas.ingestion.hashing import hash_text
+
         # Pre-populate the L1 memory cache directly (no event loop needed)
         cache: QueryCache = client.app.state.atlas.cache
         payload = {
@@ -176,7 +176,9 @@ class TestIngestRoute:
         mock_result.documents_skipped = 0
         mock_result.chunks_indexed = 3
         mock_result.total_tokens = 100
-        client.app.state.atlas.registry.get.return_value.indexer.index_path = AsyncMock(return_value=mock_result)
+        client.app.state.atlas.registry.get.return_value.indexer.index_path = AsyncMock(
+            return_value=mock_result
+        )
 
         resp = client.post("/ingest", json={"path": str(f)})
         assert resp.status_code == 200

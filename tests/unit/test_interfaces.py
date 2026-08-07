@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import pytest
 
-from atlas.interfaces.document import Chunk, ChunkMetadata, Document, DocumentType
-from atlas.interfaces.embedder import BaseEmbedder, EmbeddingResult
+from atlas.interfaces.document import Chunk, Document, DocumentType
+from atlas.interfaces.embedder import BaseEmbedder
 from atlas.interfaces.evaluator import EvalDataset, EvalSample, PipelineConfig
 from atlas.interfaces.llm import GenerationRequest, Message
-from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
-
+from atlas.interfaces.retriever import BaseRetriever, RetrievalResult
 
 # ── Document models ───────────────────────────────────────────────────────────
 

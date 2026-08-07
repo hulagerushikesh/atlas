@@ -18,7 +18,8 @@ Design rationale:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import AsyncIterator, Literal
+from collections.abc import AsyncIterator
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -54,8 +55,12 @@ class BaseLLMProvider(ABC):
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         """Non-streaming generation. Implements retry + fallback internally."""
 
+    # Declared without `async` on purpose: implementations are async generators,
+    # so the call returns an AsyncIterator directly rather than a coroutine that
+    # resolves to one. Marking this `async def` here would make every concrete
+    # implementation an incompatible override.
     @abstractmethod
-    async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
+    def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
         """
         Streaming generation — yields text deltas as they arrive.
         Module E uses this for the /query endpoint's streaming response.
