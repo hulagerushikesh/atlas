@@ -48,12 +48,16 @@ class IndexResult:
         self.documents_skipped: int = 0
         self.chunks_indexed: int = 0
         self.total_tokens: int = 0
+        # Per-file failures from index_directory, which continues past errors.
+        # Without these a run where every file failed still looks like success.
+        self.errors: list[str] = []
 
     def __repr__(self) -> str:
         return (
             f"IndexResult(docs_processed={self.documents_processed}, "
             f"docs_skipped={self.documents_skipped}, "
-            f"chunks={self.chunks_indexed}, tokens={self.total_tokens})"
+            f"chunks={self.chunks_indexed}, tokens={self.total_tokens}, "
+            f"errors={len(self.errors)})"
         )
 
 
@@ -95,17 +99,20 @@ class DocumentIndexer:
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         combined = IndexResult()
-        for result in results:
+        # Pair each result with its path so a failure names the file it came from.
+        for path, result in zip(paths, results, strict=True):
             # BaseException, not Exception: gather(return_exceptions=True) can
             # hand back a CancelledError, which would otherwise fall through
             # and blow up on the attribute access below.
             if isinstance(result, BaseException):
-                logger.warning("indexing_file_failed", error=str(result))
+                logger.warning("indexing_file_failed", path=str(path), error=str(result))
+                combined.errors.append(f"{path}: {result}")
                 continue
             combined.documents_processed += result.documents_processed
             combined.documents_skipped += result.documents_skipped
             combined.chunks_indexed += result.chunks_indexed
             combined.total_tokens += result.total_tokens
+            combined.errors.extend(result.errors)
 
         return combined
 

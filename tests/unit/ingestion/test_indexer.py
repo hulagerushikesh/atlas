@@ -145,3 +145,30 @@ class TestDocumentIndexer:
         (tmp_path / "b.md").write_text("content beta " * 20)
         result = await indexer.index_directory(tmp_path)
         assert result.documents_processed == 2
+
+    async def test_index_directory_records_per_file_errors(
+        self, tmp_path: Path, indexer: DocumentIndexer, mock_embedder: MagicMock
+    ) -> None:
+        """
+        index_directory deliberately continues past a failing file. Before
+        IndexResult carried an errors list, a run in which every file failed
+        still reported success and exited 0.
+        """
+        (tmp_path / "a.txt").write_text("content alpha " * 20)
+        (tmp_path / "b.md").write_text("content beta " * 20)
+        mock_embedder.embed_texts = AsyncMock(side_effect=RuntimeError("quota exhausted"))
+
+        result = await indexer.index_directory(tmp_path)
+
+        assert result.documents_processed == 0
+        assert len(result.errors) == 2
+        assert all("quota exhausted" in e for e in result.errors)
+        # Each entry names the file it came from, not just the message.
+        assert {Path(e.split(":")[0]).name for e in result.errors} == {"a.txt", "b.md"}
+
+    async def test_index_directory_has_no_errors_on_success(
+        self, tmp_path: Path, indexer: DocumentIndexer
+    ) -> None:
+        (tmp_path / "a.txt").write_text("content alpha " * 20)
+        result = await indexer.index_directory(tmp_path)
+        assert result.errors == []

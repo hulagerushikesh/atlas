@@ -21,11 +21,12 @@ from __future__ import annotations
 import asyncio
 
 import structlog
-from openai import AsyncOpenAI, RateLimitError
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from openai import AsyncOpenAI
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from atlas.config import OpenAIConfig
 from atlas.interfaces.embedder import BaseEmbedder, EmbeddingResult
+from atlas.retry_policy import is_retryable_rate_limit
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +39,12 @@ class OpenAIEmbedder(BaseEmbedder):
     def __init__(self, config: OpenAIConfig, batch_size: int = _DEFAULT_BATCH_SIZE) -> None:
         self._config = config
         self._batch_size = batch_size
-        self._client = AsyncOpenAI(api_key=config.api_key.get_secret_value())
+        # max_retries=0: tenacity owns the retry policy. Leaving the SDK's
+        # default of 2 nested a second ladder inside every tenacity attempt,
+        # multiplying a failing call into ~15 HTTP requests.
+        self._client = AsyncOpenAI(
+            api_key=config.api_key.get_secret_value(), max_retries=0
+        )
 
     @property
     def dimensions(self) -> int:
@@ -62,7 +68,7 @@ class OpenAIEmbedder(BaseEmbedder):
         )
 
     @retry(
-        retry=retry_if_exception_type(RateLimitError),
+        retry=retry_if_exception(is_retryable_rate_limit),
         wait=wait_exponential(multiplier=1, min=2, max=60),
         stop=stop_after_attempt(5),
     )
