@@ -36,16 +36,17 @@ from collections.abc import AsyncIterator
 from typing import Any
 
 import structlog
-from openai import APIStatusError, AsyncOpenAI, RateLimitError
+from openai import APIStatusError, AsyncOpenAI
 from tenacity import (
     retry,
-    retry_if_exception_type,
+    retry_if_exception,
     stop_after_attempt,
     wait_exponential,
 )
 
 from atlas.config import OpenAIConfig
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, GenerationResponse, Message
+from atlas.retry_policy import is_retryable_rate_limit
 
 logger = structlog.get_logger(__name__)
 
@@ -59,7 +60,12 @@ class OpenAILLMProvider(BaseLLMProvider):
 
     def __init__(self, config: OpenAIConfig) -> None:
         self._config = config
-        self._client = AsyncOpenAI(api_key=config.api_key.get_secret_value())
+        # max_retries=0: tenacity owns the retry policy. Leaving the SDK's
+        # default of 2 nested a second ladder inside every tenacity attempt,
+        # multiplying a failing call into ~15 HTTP requests.
+        self._client = AsyncOpenAI(
+            api_key=config.api_key.get_secret_value(), max_retries=0
+        )
 
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         model = request.model or self._config.primary_model
@@ -96,7 +102,7 @@ class OpenAILLMProvider(BaseLLMProvider):
     # ── Private ───────────────────────────────────────────────────────────────
 
     @retry(
-        retry=retry_if_exception_type(RateLimitError),
+        retry=retry_if_exception(is_retryable_rate_limit),
         wait=wait_exponential(multiplier=1, min=2, max=60),
         stop=stop_after_attempt(4),
     )

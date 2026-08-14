@@ -31,5 +31,10 @@ out/
 # Runtime data
 data/atlas.db
 
+# Fetched corpora — regenerate with `make fetch-corpus`. Third-party docs,
+# reproducible from the manifest, and not ours to vendor into the repo.
+data/corpus/*/
+
+
 # Scratch
 atlas-summary.html

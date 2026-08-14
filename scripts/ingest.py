@@ -52,7 +52,10 @@ def _build_indexer(settings, chunker_type: str | None):
 def _collect_files(path: Path, glob: str) -> list[Path]:
     if path.is_file():
         return [path]
-    return sorted(path.glob(glob))
+    # Filter to files, matching DocumentIndexer.index_path. The default "**/*"
+    # glob also matches directories, so without this the dry-run preview and
+    # the file count both overstate what actually gets ingested.
+    return sorted(p for p in path.glob(glob) if p.is_file())
 
 
 async def main(args: argparse.Namespace) -> int:
@@ -86,7 +89,12 @@ async def main(args: argparse.Namespace) -> int:
     indexer = _build_indexer(settings, args.chunker)
 
     t0 = time.perf_counter()
-    result = await indexer.index_path(target, glob=args.glob)
+    # index_path loads a single file and takes no glob; directories must go
+    # through index_directory. Passing glob= to index_path raised TypeError.
+    if target.is_file():
+        result = await indexer.index_path(target)
+    else:
+        result = await indexer.index_directory(target, glob=args.glob)
     elapsed = time.perf_counter() - t0
 
     print("─" * 50)
