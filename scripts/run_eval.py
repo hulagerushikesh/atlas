@@ -31,8 +31,6 @@ REPORTS_DIR = Path("eval_data/reports")
 
 
 def _build_pipeline(settings):
-    from atlas.ingestion.chunkers import get_chunker
-    from atlas.ingestion.dense import QdrantDenseIndex
     from atlas.ingestion.embedder import OpenAIEmbedder
     from atlas.ingestion.sparse import BM25SparseIndex
     from atlas.orchestration.decomposer import QueryDecomposer
@@ -76,8 +74,8 @@ def _build_metrics(settings):
     from atlas.evaluation.metrics.context_precision import ContextPrecisionMetric
     from atlas.evaluation.metrics.context_recall import ContextRecallMetric
     from atlas.evaluation.metrics.faithfulness import FaithfulnessMetric
-    from atlas.orchestration.llm import OpenAILLMProvider
     from atlas.ingestion.embedder import OpenAIEmbedder
+    from atlas.orchestration.llm import OpenAILLMProvider
 
     llm = OpenAILLMProvider(settings.openai)
     embedder = OpenAIEmbedder(settings.openai)
@@ -106,7 +104,7 @@ async def main(args: argparse.Namespace) -> int:
         print(f"Error: dataset not found: {dataset_path}", file=sys.stderr)
         return 1
 
-    print(f"Atlas evaluation harness")
+    print("Atlas evaluation harness")
     print(f"Dataset     : {dataset_path}")
     print(f"Run name    : {args.run_name}")
     print(f"Concurrency : {args.concurrency}")
@@ -130,7 +128,7 @@ async def main(args: argparse.Namespace) -> int:
 
     print()
     print_report(result)
-    print(f"\nReport saved:")
+    print("\nReport saved:")
     for p in paths:
         print(f"  {p}")
 
