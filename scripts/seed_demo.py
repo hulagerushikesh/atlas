@@ -267,7 +267,9 @@ async def main(args: argparse.Namespace) -> int:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Seed Atlas with demo docs and run example queries.")
+    parser = argparse.ArgumentParser(
+        description="Seed Atlas with demo docs and run example queries."
+    )
     parser.add_argument(
         "--queries-only",
         action="store_true",

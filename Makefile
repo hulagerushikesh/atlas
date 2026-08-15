@@ -49,8 +49,11 @@ test-cov: ## Run tests and open HTML coverage report
 
 # ── Code quality ───────────────────────────────────────────────────────────────
 
+# scripts/ is included deliberately: it was unlinted while every other
+# directory was checked, and it is where the ingest CLI shipped three bugs
+# (a TypeError, a bad glob, and a missing attribute) that no gate caught.
 lint: ## Run ruff linter
-	.venv/bin/ruff check src tests
+	.venv/bin/ruff check src tests scripts
 
 typecheck: ## Run mypy type checker
 	.venv/bin/mypy src

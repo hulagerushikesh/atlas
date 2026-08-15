@@ -45,7 +45,12 @@ async def check_openai(settings) -> CheckResult:
         )
         ms = (time.perf_counter() - t0) * 1000
         dims = len(resp.data[0].embedding)
-        return CheckResult("OpenAI embeddings", True, ms, f"model={settings.openai.embedding_model} dims={dims}")
+        return CheckResult(
+            "OpenAI embeddings",
+            True,
+            ms,
+            f"model={settings.openai.embedding_model} dims={dims}",
+        )
     except Exception as exc:
         ms = (time.perf_counter() - t0) * 1000
         return CheckResult("OpenAI embeddings", False, ms, str(exc))
