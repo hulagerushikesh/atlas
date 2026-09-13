@@ -38,3 +38,7 @@ data/corpus/*/
 
 # Scratch
 atlas-summary.html
+
+# Console (Vite) — built output is committed to src/atlas/api/static
+console/node_modules/
+console/dist/
