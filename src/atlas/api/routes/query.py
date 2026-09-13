@@ -46,18 +46,61 @@ from atlas.api.dependencies import get_app_state, get_cache, get_registry
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.api.schemas import (
     CitationResponse,
+    EvidenceResponse,
     QueryRequest,
     QueryResponse,
     StageTimings,
     TokenUsage,
 )
-from atlas.orchestration.pipeline import PipelineResult, RAGPipeline
+from atlas.orchestration.pipeline import EvidenceChunk, PipelineResult, RAGPipeline
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+# Enough to recognise the passage; the full chunk is one click away.
+_EXCERPT_CHARS = 320
+
+
+def _evidence_response(
+    evidence: list[EvidenceChunk],
+    citation_by_chunk: dict[str, int],
+) -> list[EvidenceResponse]:
+    out = []
+    for item in evidence:
+        chunk = item.chunk
+        meta = chunk.metadata
+        excerpt = chunk.content.strip()
+        if len(excerpt) > _EXCERPT_CHARS:
+            excerpt = excerpt[:_EXCERPT_CHARS].rstrip() + "…"
+        out.append(EvidenceResponse(
+            chunk_id=chunk.chunk_id,
+            source=meta.source,
+            chunk_index=meta.chunk_index,
+            start_char=meta.start_char,
+            end_char=meta.end_char,
+            page_number=meta.page_number,
+            excerpt=excerpt,
+            scores={k: round(v, 4) for k, v in item.scores.items()},
+            selected=item.selected,
+            citation=citation_by_chunk.get(chunk.chunk_id),
+        ))
+    return out
+
+
+def _stage_timings(stage_ms: dict[str, float], total_ms: float) -> StageTimings:
+    return StageTimings(
+        routing_ms=stage_ms.get("routing"),
+        decompose_ms=stage_ms.get("decompose"),
+        retrieval_ms=stage_ms.get("retrieval"),
+        grading_ms=stage_ms.get("grading"),
+        generation_ms=stage_ms.get("generation"),
+        faithfulness_ms=stage_ms.get("faithfulness"),
+        total_ms=round(total_ms, 1),
+    )
+
 
 def _build_response(
     result: PipelineResult,
@@ -66,6 +109,7 @@ def _build_response(
     cached: bool = False,
 ) -> QueryResponse:
     citations = []
+    citation_by_chunk: dict[str, int] = {}
     if result.generation:
         for num, ref in sorted(result.generation.citations.items()):
             citations.append(CitationResponse(
@@ -74,6 +118,7 @@ def _build_response(
                 source=ref.source,
                 page_number=ref.page_number,
             ))
+            citation_by_chunk[ref.chunk_id] = num
 
     gen = result.generation
     prompt_tokens = gen.prompt_tokens if gen else 0
@@ -104,6 +149,12 @@ def _build_response(
         token_usage=token_usage,
         grader_retries=result.grader_retries,
         cached=cached,
+        sub_queries=list(result.sub_queries),
+        grader_score=result.grader_score,
+        unsupported_claims=(
+            list(result.faithfulness.unsupported_claims) if result.faithfulness else []
+        ),
+        evidence=_evidence_response(result.evidence, citation_by_chunk),
     )
 
 
@@ -159,9 +210,13 @@ async def _stream_query(
     # ── Stage 3: Retrieve ──────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
     t0 = time.perf_counter()
-    chunks = await pipeline._retrieve_all(sub_queries)
+    retrieval = await pipeline._retrieve_all(sub_queries)
+    chunks = retrieval.chunks
+    # Evidence goes out as soon as retrieval finishes so the client can
+    # render the trail while generation is still streaming.
     yield _evt({"type": "stage", "name": "retrieval", "status": "done",
-                "chunks": len(chunks), "ms": round((time.perf_counter() - t0) * 1000)})
+                "chunks": len(chunks), "ms": round((time.perf_counter() - t0) * 1000),
+                "evidence": [e.model_dump() for e in _evidence_response(retrieval.evidence, {})]})
 
     # ── Stage 4: Grade (fast, worth the latency for quality signal) ────────────
     yield _evt({"type": "stage", "name": "grading", "status": "start"})
@@ -187,6 +242,7 @@ async def _stream_query(
             chunk = chunks[idx - 1]
             citations.append({
                 "number": idx,
+                "chunk_id": chunk.chunk_id,
                 "source": chunk.metadata.source,
                 "page_number": chunk.metadata.page_number,
             })
@@ -250,7 +306,7 @@ async def query(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     total_ms = (time.perf_counter() - t_total) * 1000
-    timings = StageTimings(total_ms=round(total_ms, 1))
+    timings = _stage_timings(result.stage_ms, total_ms)
 
     # Retrieve embedding model name for cost estimation
     app_state = get_app_state(request)

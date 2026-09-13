@@ -17,10 +17,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from atlas.interfaces.document import ChunkMetadata, DocumentType
-from atlas.interfaces.retriever import RetrievedChunk
+from atlas.interfaces.retriever import RetrievalResult, RetrievedChunk
 from atlas.orchestration.faithfulness import FaithfulnessResult
 from atlas.orchestration.generator import CitationRef, GeneratorResult
 from atlas.orchestration.pipeline import RAGPipeline
+from atlas.retrieval.hybrid import HybridRetrievalResult
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -195,3 +196,131 @@ class TestRAGPipeline:
         p = _pipeline(router=_mock_router("out_of_scope"))
         result = await p.run("q")
         assert "outside the scope" in result.answer
+
+
+# ── Evidence and timing provenance ────────────────────────────────────────────
+
+def _scored(cid: str, score: float) -> RetrievedChunk:
+    c = _chunk(cid)
+    c.score = score
+    return c
+
+
+def _hybrid_result(
+    dense: list[RetrievedChunk],
+    sparse: list[RetrievedChunk],
+    fused: list[RetrievedChunk],
+    reranked: list[RetrievedChunk],
+) -> HybridRetrievalResult:
+    """A real HybridRetrievalResult, not a mock — the provenance shape is the contract."""
+    return HybridRetrievalResult(
+        query="q",
+        per_retriever=[
+            RetrievalResult(query="q", chunks=dense, retriever_name="qdrant_dense"),
+            RetrievalResult(query="q", chunks=sparse, retriever_name="bm25_sparse"),
+        ],
+        fused=fused,
+        reranked=reranked,
+    )
+
+
+class TestEvidenceProvenance:
+    async def test_evidence_carries_score_per_stage(self) -> None:
+        """
+        Every stage the chunk passed through leaves its score on the trail.
+        The hybrid retriever already computes these and used to discard them.
+        """
+        hybrid = _hybrid_result(
+            dense=[_scored("c1", 0.81)],
+            sparse=[_scored("c1", 12.4)],
+            fused=[_scored("c1", 0.032)],
+            reranked=[_scored("c1", 0.94)],
+        )
+        retriever = MagicMock()
+        retriever.retrieve = AsyncMock(return_value=hybrid)
+
+        result = await _pipeline(retriever=retriever).run("q")
+
+        [ev] = result.evidence
+        assert ev.chunk.chunk_id == "c1"
+        assert ev.selected is True
+        assert ev.scores == {"dense": 0.81, "bm25": 12.4, "rrf": 0.032, "rerank": 0.94}
+        # The chunk handed on is the reranked copy — its score is the final one.
+        assert ev.chunk.score == 0.94
+
+    async def test_rerank_rejects_are_kept_but_not_selected(self) -> None:
+        """A chunk cut by the reranker is still evidence: it explains what was considered."""
+        hybrid = _hybrid_result(
+            dense=[_scored("c1", 0.8), _scored("c2", 0.7)],
+            sparse=[],
+            fused=[_scored("c1", 0.03), _scored("c2", 0.02)],
+            reranked=[_scored("c1", 0.9)],
+        )
+        retriever = MagicMock()
+        retriever.retrieve = AsyncMock(return_value=hybrid)
+
+        result = await _pipeline(retriever=retriever).run("q")
+
+        assert [c.chunk_id for c in result.retrieved_chunks] == ["c1"]
+        assert [(e.chunk.chunk_id, e.selected) for e in result.evidence] == [
+            ("c1", True),
+            ("c2", False),
+        ]
+        assert "rerank" not in result.evidence[1].scores
+
+    async def test_evidence_across_sub_queries_keeps_best_score(self) -> None:
+        """The same chunk found by two sub-queries is one trail with its best scores."""
+        first = _hybrid_result(
+            dense=[_scored("c1", 0.5)], sparse=[], fused=[_scored("c1", 0.01)],
+            reranked=[_scored("c1", 0.6)],
+        )
+        second = _hybrid_result(
+            dense=[_scored("c1", 0.9)], sparse=[], fused=[_scored("c1", 0.03)],
+            reranked=[_scored("c1", 0.95)],
+        )
+        retriever = MagicMock()
+        retriever.retrieve = AsyncMock(side_effect=[first, second])
+
+        result = await _pipeline(
+            retriever=retriever,
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["a", "b"]),
+        ).run("q")
+
+        [ev] = result.evidence
+        assert ev.scores["dense"] == 0.9
+        assert ev.scores["rerank"] == 0.95
+
+    async def test_plain_retriever_still_yields_evidence(self) -> None:
+        """A non-hybrid retriever has one score and no stages; evidence degrades, not breaks."""
+        result = await _pipeline(chunks=[_scored("c1", 0.77)]).run("q")
+        [ev] = result.evidence
+        assert ev.selected is True
+        assert ev.scores == {"score": 0.77}
+
+    async def test_stage_timings_recorded(self) -> None:
+        result = await _pipeline().run("q")
+        assert set(result.stage_ms) == {
+            "routing", "retrieval", "grading", "generation", "faithfulness",
+        }
+        assert all(v >= 0 for v in result.stage_ms.values())
+
+    async def test_decompose_timed_only_on_complex(self) -> None:
+        simple = await _pipeline(router=_mock_router("simple")).run("q")
+        complex_ = await _pipeline(router=_mock_router("complex")).run("q")
+        assert "decompose" not in simple.stage_ms
+        assert "decompose" in complex_.stage_ms
+
+    async def test_retry_accumulates_retrieval_time(self) -> None:
+        """Two retrieval passes must both count; the trace shows the retry's cost."""
+        grader = _mock_grader([(False, 0.2, "reformulated"), (True, 0.9, "q")])
+        retriever = _mock_retriever([_chunk("c1")])
+        result = await _pipeline(retriever=retriever, grader=grader).run("q")
+        assert result.grader_retries == 1
+        assert retriever.retrieve.await_count == 2
+        assert "retrieval" in result.stage_ms
+
+    async def test_out_of_scope_has_routing_time_only(self) -> None:
+        result = await _pipeline(router=_mock_router("out_of_scope")).run("q")
+        assert set(result.stage_ms) == {"routing"}
+        assert result.evidence == []
