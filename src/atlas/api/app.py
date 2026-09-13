@@ -135,12 +135,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Landing page at /
     import pathlib as _pl
-    _web_index = _pl.Path(__file__).parent / "web" / "index.html"
+    # Built by the console's Vite multi-page build; see console/landing.html.
+    _web_index = _pl.Path(__file__).parent / "static" / "landing.html"
     if _web_index.exists():
         _landing_html = _web_index.read_text()
 
         async def _landing() -> HTMLResponse:
-            return HTMLResponse(content=_landing_html)
+            # The page references content-hashed assets; a cached copy of
+            # this HTML after a rebuild would point at files that no longer
+            # exist. Revalidate every time — the body is tiny.
+            return HTMLResponse(content=_landing_html, headers={"Cache-Control": "no-cache"})
 
         app.add_api_route("/", _landing, include_in_schema=False, response_class=HTMLResponse)
 

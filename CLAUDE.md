@@ -8,8 +8,9 @@ components, copy rules, and a do-not-ship list. Stylesheets that disagree
 with it are bugs.
 
 ## Console
-`console/` is a Vite + React + Tailwind + shadcn + Motion app. `make console-build`
-writes to `src/atlas/api/static/`, which FastAPI serves at `/app`. The built
+`console/` is a Vite + React + Tailwind + shadcn + Motion app with two pages:
+`index.html` (the console, served at `/app`) and `landing.html` (served at `/`).
+`make console-build` writes both to `src/atlas/api/static/`. The built
 output is committed so the Python package and Docker image need no Node.
 Rebuild and commit `static/` whenever `console/src` changes.
 
