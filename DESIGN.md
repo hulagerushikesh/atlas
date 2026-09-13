@@ -154,16 +154,21 @@ Rules:
 --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;
 --s-5: 24px; --s-6: 32px; --s-7: 48px;  --s-8: 64px;
 
---r-0: 0;    /* panes, tables, trace bar, stage segments */
---r-1: 2px;  /* chips, badges, inputs, evidence cards */
---r-2: 4px;  /* code blocks, popovers */
+--radius: 6px;         /* base; shadcn derives sm/md/lg from it */
+--r-chip: 3px;         /* citation chips, badges, stage markers */
+--r-0: 0;              /* panes, tables, trace bar, stage segments */
 ```
 
-- Radius is **2px by default**. Nothing on the page exceeds 4px. Map sheets
-  have square corners.
+- Radius is **6px on interactive surfaces** (cards, inputs, popovers,
+  dialogs) and 3px on chips and badges. Structural regions — panes, the
+  survey bar, its segments, table rows — stay square. The sheet is square;
+  the instruments on it are not.
 - Layout spacing via `gap` on flex/grid. No per-element margins between siblings.
 - Elevation is expressed by **ground → paper** surface change and a 1px
-  `--rule` border. Shadows are reserved for popovers (`0 1px 2px rgba(0,0,0,.06)`).
+  `--rule` border. Shadows are reserved for floating surfaces — popovers,
+  hover-cards, dialogs, the evidence drawer — and stay soft. A dialog scrim
+  is `foreground/20` with a light backdrop blur; nothing on the sheet itself
+  casts a shadow.
 - Not everything is a card. Panes are regions separated by rules. Evidence
   references are cards. Answer text is not a card. Stats are not cards.
 
@@ -343,16 +348,46 @@ The key exists so no colour has to be explained twice.
 
 ## 7. Motion
 
-- Default: none. Motion earns its place by conveying **sequence** or **cause**.
-- Allowed: survey segments appending as stages complete (sequence); citation
-  chip → evidence card border flash (cause); answer text streaming in.
-- Durations: 150ms for state, 300ms for cause-effect flashes. `ease-out`.
-- `prefers-reduced-motion: reduce` disables the pulse and the flash; the
-  survey bar simply appears complete.
-- No page-load choreography. No hover lifts. No parallax. No skeleton shimmer
-  — use `--ink-3` placeholder text instead.
+Motion earns its place by conveying **sequence, cause, or state** — and by
+making the interface feel like it heard you. Decorative motion is banned;
+responsive motion is required.
 
----
+Curves and durations (from `tokens`):
+
+```css
+--ease-out-strong:    cubic-bezier(0.23, 1, 0.32, 1);   /* enter, feedback */
+--ease-in-out-strong: cubic-bezier(0.77, 0, 0.175, 1);  /* on-screen movement */
+--ease-drawer:        cubic-bezier(0.32, 0.72, 0, 1);   /* the evidence drawer */
+```
+
+| What                              | How                                             | Time   |
+|-----------------------------------|-------------------------------------------------|--------|
+| Any pressable thing               | `scale(0.97)` on `:active`                      | 160ms  |
+| Tooltips                          | fade + scale from 0.97, origin at trigger; instant after the first | 125ms |
+| Hover-cards, popovers, selects    | fade + scale from 0.96, origin at trigger       | 180ms  |
+| Dialogs, settings                 | fade + scale from 0.96, centred                 | 200ms  |
+| Evidence drawer (< xl)            | translateX, `--ease-drawer`                     | 300ms  |
+| Corpus pane collapse              | width, `--ease-out-strong`                      | 260ms  |
+| Survey table expand / collapse    | height auto, opacity                            | 260ms  |
+| Evidence cards on arrival         | rise 8px + fade, staggered 40ms, max 8 deep     | 260ms  |
+| Score bars                        | width from 0, after the card lands              | 500ms  |
+| Survey segments                   | flex-grow to final width as each stage lands    | 300ms  |
+| Running stage / health check      | opacity pulse 0.55 → 1                           | 1.2s   |
+| Citation chips                    | scale from 0.85 + fade, after the doc crossfades | 180ms |
+| Streamed answer → parsed document | crossfade with 2px blur                          | 280ms  |
+| Chip → card flash                 | ring in `--blue-soft`, once                      | 200ms  |
+| Source list on sheet change       | rise 4px + fade, staggered 25ms                  | 220ms  |
+
+Rules:
+
+- **Nothing keyboard-triggered animates.** The ⌘K palette opens instantly.
+- Enter faster than exit is wrong here: enters ≤ 300ms, exits shorter still.
+- Never `scale(0)`. Never `ease-in`. Never `transition: all`.
+- `prefers-reduced-motion: reduce` collapses every duration to ~0; opacity
+  changes remain so state is still legible.
+- Hover lifts are 1px and gated behind `(hover: hover) and (pointer: fine)`.
+- Skeletons are allowed while a pane waits on the network; they pulse, they
+  do not shimmer.
 
 ## 8. Copy
 
@@ -383,7 +418,7 @@ Any one of these reads as generated and undoes the rest.
 - Contour lines, compasses, globes, parchment, pins — the metaphor is not decoration
 - Big-number stat tiles as a landing view
 - Chat bubbles, avatars, "typing…" indicators
-- Skeleton shimmer
+- Skeleton *shimmer* (a pulse is fine)
 - Any word from the copy ban list in §8
 
 ---

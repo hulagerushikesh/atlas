@@ -47,6 +47,17 @@ test-cov: ## Run tests and open HTML coverage report
 	$(PYTEST) --cov-report=html
 	open htmlcov/index.html
 
+# ── Console (React) ────────────────────────────────────────────────────────────
+
+console-install: ## Install console dependencies
+	cd console && npm ci
+
+console-dev: ## Run the console with HMR (proxies API to :8010)
+	cd console && npm run dev
+
+console-build: ## Build the console into src/atlas/api/static (commit the result)
+	cd console && npm run build
+
 # ── Code quality ───────────────────────────────────────────────────────────────
 
 # scripts/ is included deliberately: it was unlinted while every other
