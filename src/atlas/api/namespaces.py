@@ -75,9 +75,16 @@ class SharedComponents:
 class NamespaceComponents:
     """Per-namespace pipeline and indexer."""
 
-    def __init__(self, pipeline: RAGPipeline, indexer: DocumentIndexer) -> None:
+    def __init__(
+        self,
+        pipeline: RAGPipeline,
+        indexer: DocumentIndexer,
+        sparse_index: BM25SparseIndex | None = None,
+    ) -> None:
         self.pipeline = pipeline
         self.indexer = indexer
+        # Kept so the API can inventory a namespace without a Qdrant scroll.
+        self.sparse_index = sparse_index
 
 
 class NamespaceRegistry:
@@ -136,7 +143,7 @@ class NamespaceRegistry:
             sparse_index=sparse,
         )
 
-        return NamespaceComponents(pipeline=pipeline, indexer=indexer)
+        return NamespaceComponents(pipeline=pipeline, indexer=indexer, sparse_index=sparse)
 
     async def list_namespaces(self) -> list[str]:
         """Return namespaces that have an Atlas-managed Qdrant collection."""
