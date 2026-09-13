@@ -113,3 +113,35 @@ class TestBM25SparseIndex:
         assert len(idx2._corpus) == 1
         results = idx2.search("hello", top_k=1)
         assert results[0][0]["chunk_id"] == "c1"
+
+
+class TestSources:
+    async def test_groups_chunks_by_source_in_first_seen_order(
+        self, index: BM25SparseIndex
+    ) -> None:
+        a1 = _make_chunk("a1", "alpha one")
+        a1.metadata.source = "guide/a.md"
+        a2 = _make_chunk("a2", "alpha two")
+        a2.metadata.source = "guide/a.md"
+        b1 = _make_chunk("b1", "beta one")
+        b1.metadata.source = "ref/b.md"
+        b1.metadata.doc_type = DocumentType.MARKDOWN
+
+        await index.upsert([a1, b1, a2])
+
+        assert index.sources() == [
+            {"source": "guide/a.md", "doc_type": "text", "chunks": 2},
+            {"source": "ref/b.md", "doc_type": "markdown", "chunks": 1},
+        ]
+
+    def test_empty_index_has_no_sources(self, index: BM25SparseIndex) -> None:
+        assert index.sources() == []
+
+    async def test_survives_reload_from_disk(self, tmp_path: Path) -> None:
+        """The console reads this after a restart; it must come from the persisted corpus."""
+        path = tmp_path / "bm25.json"
+        first = BM25SparseIndex(persist_path=path)
+        await first.upsert([_make_chunk("c1", "persisted")])
+
+        reloaded = BM25SparseIndex(persist_path=path)
+        assert reloaded.sources() == [{"source": "test.md", "doc_type": "text", "chunks": 1}]

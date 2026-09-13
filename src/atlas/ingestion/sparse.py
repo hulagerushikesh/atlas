@@ -98,6 +98,25 @@ class BM25SparseIndex(BaseIndex):
             await asyncio.to_thread(self._save_to_disk)
         return removed
 
+    def sources(self) -> list[dict[str, Any]]:
+        """
+        Chunk counts grouped by source document, in first-seen order.
+
+        The BM25 corpus already holds every chunk's metadata in memory, so
+        this is the cheapest complete inventory of a namespace — no Qdrant
+        scroll needed. Used by the console's corpus pane.
+        """
+        counts: dict[str, dict[str, Any]] = {}
+        for entry in self._corpus:
+            meta = entry["metadata"]
+            src = meta["source"]
+            row = counts.get(src)
+            if row is None:
+                row = {"source": src, "doc_type": meta["doc_type"], "chunks": 0}
+                counts[src] = row
+            row["chunks"] += 1
+        return list(counts.values())
+
     async def stats(self) -> IndexStats:
         return IndexStats(
             total_chunks=len(self._corpus),

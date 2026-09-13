@@ -143,6 +143,19 @@ class NamespaceListResponse(BaseModel):
     total: int
 
 
+class SourceInfo(BaseModel):
+    source: str
+    doc_type: str
+    chunks: int
+
+
+class SourceListResponse(BaseModel):
+    namespace: str
+    sources: list[SourceInfo]
+    total_sources: int
+    total_chunks: int
+
+
 # ── /keys + /usage ────────────────────────────────────────────────────────────
 
 class KeyCreateRequest(BaseModel):

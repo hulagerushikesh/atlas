@@ -65,7 +65,7 @@ def client() -> TestClient:
     from fastapi import FastAPI
 
     from atlas.api.middleware.tracing import TracingMiddleware
-    from atlas.api.routes import health, ingest, metrics_route, query
+    from atlas.api.routes import health, ingest, metrics_route, namespaces, query
 
     app = FastAPI()
     app.add_middleware(TracingMiddleware)
@@ -73,6 +73,7 @@ def client() -> TestClient:
     app.include_router(ingest.router)
     app.include_router(query.router)
     app.include_router(metrics_route.router)
+    app.include_router(namespaces.router)
 
     # Mock pipeline
     mock_pipeline = MagicMock()
@@ -96,6 +97,11 @@ def client() -> TestClient:
     mock_ns = MagicMock(spec=NamespaceComponents)
     mock_ns.pipeline = mock_pipeline
     mock_ns.indexer = mock_indexer
+    mock_ns.sparse_index = MagicMock()
+    mock_ns.sparse_index.sources.return_value = [
+        {"source": "tutorial/first-steps.md", "doc_type": "markdown", "chunks": 12},
+        {"source": "reference/depends.md", "doc_type": "markdown", "chunks": 7},
+    ]
 
     from atlas.api.namespaces import NamespaceRegistry
     mock_registry = MagicMock(spec=NamespaceRegistry)
@@ -308,3 +314,21 @@ class TestMetricsRoute:
     def test_metrics_content_type(self, client: TestClient) -> None:
         resp = client.get("/metrics")
         assert "text/plain" in resp.headers["content-type"]
+
+
+# ── /namespaces/{ns}/sources ──────────────────────────────────────────────────
+
+class TestSourcesRoute:
+    def test_lists_sources_with_totals(self, client: TestClient) -> None:
+        body = client.get("/namespaces/fastapi/sources").json()
+        assert body["namespace"] == "fastapi"
+        assert [s["source"] for s in body["sources"]] == [
+            "tutorial/first-steps.md", "reference/depends.md",
+        ]
+        assert body["total_sources"] == 2
+        assert body["total_chunks"] == 19
+
+    def test_namespace_without_sparse_index_is_empty(self, client: TestClient) -> None:
+        client.app.state.atlas.registry.get.return_value.sparse_index = None
+        body = client.get("/namespaces/bare/sources").json()
+        assert body["sources"] == [] and body["total_chunks"] == 0
