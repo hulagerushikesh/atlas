@@ -11,6 +11,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "../src/atlas/api/static"),
     emptyOutDir: true,
+    // Two pages: the console (index.html → /app) and the landing page
+    // (landing.html, which FastAPI reads and serves at /).
+    rollupOptions: {
+      input: {
+        console: path.resolve(__dirname, "index.html"),
+        landing: path.resolve(__dirname, "landing.html"),
+      },
+    },
   },
   server: {
     port: 5173,
