@@ -1,0 +1,110 @@
+/*
+ * Atlas design tokens — the single source of truth. See DESIGN.md.
+ * Every page imports this file; no page redefines a token.
+ *
+ * Light-first. Dark is a full second theme, not an inversion. Three viewer
+ * states: explicit data-theme="light" / "dark" on <html>, or nothing
+ * (system) — the media query serves that third state and is guarded so an
+ * explicit light choice beats a dark OS.
+ */
+
+:root {
+  /* Ground */
+  --ground:      #F2F4F1;
+  --paper:       #FAFBF9;
+  --well:        #E8ECE8;
+
+  /* Ink */
+  --ink:         #1B2027;
+  --ink-2:       #4A5560;
+  --ink-3:       #7E8891;
+
+  /* Rules */
+  --rule:        #CBD2CD;
+  --rule-soft:   #E0E5E1;
+
+  /* Accents — blue is retrieval, ochre is the language model. Never swapped. */
+  --blue:        #1F5F8B;
+  --blue-soft:   rgba(31, 95, 139, .10);
+  --ochre:       #A87C3A;
+  --ochre-soft:  rgba(168, 124, 58, .12);
+
+  /* Semantic — state only, never an accent */
+  --good:        #2F7D4F;
+  --warn:        #B07A1C;
+  --bad:         #A83A2B;
+  --good-soft:   rgba(47, 125, 79, .12);
+  --warn-soft:   rgba(176, 122, 28, .12);
+  --bad-soft:    rgba(168, 58, 43, .12);
+
+  /* Type */
+  --display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+  --mono:    "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  /* Space */
+  --s-1: 4px;  --s-2: 8px;  --s-3: 12px;  --s-4: 16px;
+  --s-5: 24px; --s-6: 32px; --s-7: 48px;  --s-8: 64px;
+
+  /* Radius — map sheets have square corners */
+  --r-0: 0;
+  --r-1: 2px;
+  --r-2: 4px;
+
+  /* Elevation — reserved for popovers */
+  --shadow-pop: 0 1px 2px rgba(0, 0, 0, .06);
+
+  /* Motion */
+  --t-state: 150ms;
+  --t-cause: 300ms;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:      #141A1F;
+    --paper:       #1B2228;
+    --well:        #0F1418;
+    --ink:         #E4E8E6;
+    --ink-2:       #AEB7B3;
+    --ink-3:       #7C8781;
+    --rule:        #33404A;
+    --rule-soft:   #26313A;
+    --blue:        #6FB3DC;
+    --blue-soft:   rgba(111, 179, 220, .12);
+    --ochre:       #C9A063;
+    --ochre-soft:  rgba(201, 160, 99, .14);
+    --good:        #5DBA84;
+    --warn:        #D9A441;
+    --bad:         #E07A6B;
+    --good-soft:   rgba(93, 186, 132, .14);
+    --warn-soft:   rgba(217, 164, 65, .14);
+    --bad-soft:    rgba(224, 122, 107, .14);
+    --shadow-pop:  0 1px 2px rgba(0, 0, 0, .4);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --ground:      #141A1F;
+  --paper:       #1B2228;
+  --well:        #0F1418;
+  --ink:         #E4E8E6;
+  --ink-2:       #AEB7B3;
+  --ink-3:       #7C8781;
+  --rule:        #33404A;
+  --rule-soft:   #26313A;
+  --blue:        #6FB3DC;
+  --blue-soft:   rgba(111, 179, 220, .12);
+  --ochre:       #C9A063;
+  --ochre-soft:  rgba(201, 160, 99, .14);
+  --good:        #5DBA84;
+  --warn:        #D9A441;
+  --bad:         #E07A6B;
+  --good-soft:   rgba(93, 186, 132, .14);
+  --warn-soft:   rgba(217, 164, 65, .14);
+  --bad-soft:    rgba(224, 122, 107, .14);
+  --shadow-pop:  0 1px 2px rgba(0, 0, 0, .4);
+  color-scheme: dark;
+}

@@ -245,6 +245,7 @@ One per answer, directly under the answer text.
 | WEAK        | not faithful, score ≥ 0.3                          | `--warn`|
 | UNSUPPORTED | not faithful, score < 0.3, or no chunks passed grader | `--bad` |
 | OUT OF SCOPE| `classification == "out_of_scope"`                 | `--ink-3`|
+| UNCHECKED   | streamed answer — faithfulness is skipped on the streaming path | `--ink-3`|
 
 Rendered: mono 11px uppercase, label + `· 0.94`, `--x-soft` fill, 1px `--x`
 border, `--r-1`. Label first, number second. The label is the signal; the
