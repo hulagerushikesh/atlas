@@ -17,9 +17,11 @@ from fastapi.testclient import TestClient
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
 from atlas.api.schemas import QueryResponse
+from atlas.interfaces.document import ChunkMetadata, DocumentType
+from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.faithfulness import FaithfulnessResult
 from atlas.orchestration.generator import CitationRef, GeneratorResult
-from atlas.orchestration.pipeline import PipelineResult
+from atlas.orchestration.pipeline import PipelineResult, RetrievalPass
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -42,7 +44,19 @@ def _make_pipeline_result(answer: str = "The answer [1].", faithful: bool = True
     )
     result.answer = answer
     result.is_faithful = faithful
+    result.evidence = []
+    result.stage_ms = {"routing": 12.0, "retrieval": 80.0, "generation": 400.0}
     return result
+
+
+def _evidence_chunk(cid: str, content: str) -> RetrievedChunk:
+    return RetrievedChunk(
+        chunk_id=cid, content=content, score=0.0,
+        metadata=ChunkMetadata(
+            doc_id="d1", source="doc.md", doc_type=DocumentType.MARKDOWN,
+            chunk_index=3, start_char=0, end_char=10,
+        ),
+    )
 
 
 @pytest.fixture
@@ -66,7 +80,7 @@ def client() -> TestClient:
     mock_pipeline._router = MagicMock()
     mock_pipeline._router.classify = AsyncMock(return_value="simple")
     mock_pipeline._decomposer = MagicMock()
-    mock_pipeline._retrieve_all = AsyncMock(return_value=[])
+    mock_pipeline._retrieve_all = AsyncMock(return_value=RetrievalPass(chunks=[], evidence=[]))
     mock_pipeline._generator = MagicMock()
 
     async def _gen_stream(*args, **kwargs):  # type: ignore[return]
@@ -156,6 +170,87 @@ class TestQueryRoute:
         resp = client.post("/query", json={"query": "stream this", "stream": True})
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers["content-type"]
+
+    def test_stage_timings_populated(self, client: TestClient) -> None:
+        """Per-stage ms used to be dropped; only total_ms reached the client."""
+        body = client.post("/query", json={"query": "What is Atlas?"}).json()
+        t = body["timings"]
+        assert t["routing_ms"] == 12.0
+        assert t["retrieval_ms"] == 80.0
+        assert t["generation_ms"] == 400.0
+        assert t["decompose_ms"] is None
+        assert "total_ms" in t
+
+    def test_evidence_serialised_with_citation_link(self, client: TestClient) -> None:
+        """
+        Evidence carries each chunk's score trail and, when the generator
+        cited it, its citation number — the join the console needs to
+        deep-link a chip to its card.
+        """
+        from atlas.orchestration.pipeline import EvidenceChunk
+
+        result = _make_pipeline_result()
+        result.evidence = [
+            EvidenceChunk(
+                chunk=_evidence_chunk("c1", "x" * 500),
+                scores={"dense": 0.81, "bm25": 12.4, "rrf": 0.0321, "rerank": 0.94},
+                selected=True,
+            ),
+            EvidenceChunk(
+                chunk=_evidence_chunk("c9", "cut by reranker"),
+                scores={"dense": 0.4, "rrf": 0.01},
+                selected=False,
+            ),
+        ]
+        client.app.state.atlas.registry.get.return_value.pipeline.run = AsyncMock(
+            return_value=result
+        )
+
+        body = client.post("/query", json={"query": "evidence please"}).json()
+
+        cited, cut = body["evidence"]
+        assert cited["chunk_id"] == "c1"
+        assert cited["citation"] == 1          # generation cites chunk c1 as [1]
+        assert cited["selected"] is True
+        assert cited["scores"] == {"dense": 0.81, "bm25": 12.4, "rrf": 0.0321, "rerank": 0.94}
+        assert cited["start_char"] == 0 and cited["end_char"] == 10
+        assert len(cited["excerpt"]) < 500 and cited["excerpt"].endswith("…")
+        assert cut["citation"] is None
+        assert cut["selected"] is False
+        assert "rerank" not in cut["scores"]
+
+    def test_streaming_retrieval_event_carries_evidence(self, client: TestClient) -> None:
+        """Evidence must arrive with the retrieval stage, before generation streams."""
+        import json
+
+        from atlas.orchestration.pipeline import EvidenceChunk
+
+        pipeline = client.app.state.atlas.registry.get.return_value.pipeline
+        pipeline._retrieve_all = AsyncMock(return_value=RetrievalPass(
+            chunks=[_evidence_chunk("c1", "streamed chunk")],
+            evidence=[EvidenceChunk(
+                chunk=_evidence_chunk("c1", "streamed chunk"),
+                scores={"dense": 0.7, "rerank": 0.9},
+            )],
+        ))
+
+        resp = client.post("/query", json={"query": "stream", "stream": True})
+        events = [
+            json.loads(line[5:])
+            for line in resp.text.splitlines()
+            if line.startswith("data:") and line != "data: [DONE]"
+        ]
+
+        retrieval_done = next(
+            e for e in events if e["type"] == "stage"
+            and e["name"] == "retrieval" and e["status"] == "done"
+        )
+        [ev] = retrieval_done["evidence"]
+        assert ev["chunk_id"] == "c1"
+        assert ev["scores"] == {"dense": 0.7, "rerank": 0.9}
+        assert ev["selected"] is True
+        # Generation has not run yet at this point, so no citation number.
+        assert ev["citation"] is None
 
 
 # ── /ingest ───────────────────────────────────────────────────────────────────

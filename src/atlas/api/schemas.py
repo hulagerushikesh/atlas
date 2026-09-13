@@ -40,8 +40,33 @@ class CitationResponse(BaseModel):
     page_number: int | None = None
 
 
+class EvidenceResponse(BaseModel):
+    """
+    One retrieved chunk with its full score trail.
+
+    This is what lets a client show *why* an answer cites what it cites:
+    where each chunk came from, how every retrieval stage scored it, and
+    whether it reached the generator at all. `scores` keys are stage labels
+    (dense, bm25, rrf, rerank); a stage the chunk never reached is absent.
+    """
+
+    chunk_id: str
+    source: str
+    chunk_index: int
+    start_char: int
+    end_char: int
+    page_number: int | None = None
+    excerpt: str
+    scores: dict[str, float]
+    # Survived the rerank cut and was passed to the generator.
+    selected: bool
+    # Citation number in the answer, when the generator cited it.
+    citation: int | None = None
+
+
 class StageTimings(BaseModel):
     routing_ms: float | None = None
+    decompose_ms: float | None = None
     retrieval_ms: float | None = None
     grading_ms: float | None = None
     generation_ms: float | None = None
@@ -61,6 +86,10 @@ class QueryResponse(BaseModel):
     token_usage: TokenUsage
     grader_retries: int = 0
     cached: bool = False
+    sub_queries: list[str] = []
+    grader_score: float | None = None
+    unsupported_claims: list[str] = []
+    evidence: list[EvidenceResponse] = []
 
 
 class TokenUsage(BaseModel):
