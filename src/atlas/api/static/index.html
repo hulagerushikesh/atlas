@@ -3,686 +3,766 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Atlas — RAG Console</title>
+<title>Atlas Console</title>
+<meta name="description" content="Ask a sheet of sources and see the survey that found the answer: every reference, every score, every stage.">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="tokens.css">
 <style>
-  :root {
-    --bg: #0e1116;
-    --panel: #161b22;
-    --panel-2: #1c232c;
-    --line: #2a323d;
-    --line-bright: #3a4553;
-    --ink: #e6edf3;
-    --ink-dim: #9aa7b4;
-    --ink-faint: #66727e;
-    --signal: #4ec9b0;      /* teal — active / good */
-    --signal-dim: #2d6b5e;
-    --amber: #e3b341;       /* attention / grading */
-    --violet: #a78bfa;      /* agentic stages */
-    --coral: #f0776c;       /* failure / refusal */
-    --blue: #58a6ff;        /* retrieval */
-    --radius: 8px;
-    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg); color: var(--ink);
-    font-family: var(--sans); line-height: 1.6;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+/* ── Base ─────────────────────────────────────────────────────────────────── */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.55;font-optical-sizing:auto;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;background:none;border:1px solid var(--rule);border-radius:var(--r-1);padding:var(--s-1) var(--s-3);font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;transition:border-color var(--t-state)}
+button:hover{border-color:var(--ink-3)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.cite:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+button.primary{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+button.primary:hover{border-color:var(--ink);opacity:.9}
+button[disabled]{opacity:.5;cursor:default}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pane-h{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);font-weight:500}
+[hidden]{display:none!important}
 
-  /* Header */
-  header {
-    border-bottom: 1px solid var(--line);
-    padding: 18px 0;
-    position: sticky; top: 0; background: rgba(14,17,22,0.9);
-    backdrop-filter: blur(8px); z-index: 10;
-  }
-  .header-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-  .brand { display: flex; align-items: baseline; gap: 12px; }
-  .brand h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
-  .brand .tag { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); }
-  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-faint); display: inline-block; margin-right: 6px; }
-  .status-dot.live { background: var(--signal); box-shadow: 0 0 8px var(--signal); }
-  .status { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); }
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.top{height:40px;display:flex;align-items:center;gap:var(--s-4);padding:0 var(--s-4);border-bottom:1px solid var(--rule);background:var(--paper);flex:none}
+.brand{font-family:var(--display);font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase}
+.sheet-line{font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sheet-line b{color:var(--ink);font-weight:500}
+.top-right{margin-left:auto;display:flex;align-items:center;gap:var(--s-2)}
+.health{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px;color:var(--ink-3)}
+.health i{width:8px;height:8px;background:var(--ink-3);display:inline-block}
+.health.ok i{background:var(--good)}.health.degraded i{background:var(--warn)}.health.down i{background:var(--bad)}
 
-  nav { display: flex; gap: 4px; margin-top: 16px; }
-  nav button {
-    background: none; border: none; color: var(--ink-dim);
-    font-family: var(--mono); font-size: 13px; padding: 8px 14px;
-    cursor: pointer; border-radius: 6px; transition: all 0.15s;
-  }
-  nav button:hover { color: var(--ink); background: var(--panel); }
-  nav button.active { color: var(--signal); background: var(--panel); }
+/* ── Key strip ────────────────────────────────────────────────────────────── */
+.keystrip{display:flex;gap:var(--s-5);padding:var(--s-2) var(--s-4);border-bottom:1px solid var(--rule);background:var(--paper);font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2);flex:none;flex-wrap:wrap}
+.keystrip span{display:inline-flex;align-items:center;gap:6px}
+.keystrip i{width:10px;height:10px;display:inline-block}
 
-  main { padding: 28px 0 80px; }
-  .view { display: none; }
-  .view.active { display: block; }
+/* ── Console grid ─────────────────────────────────────────────────────────── */
+.console{flex:1;display:grid;grid-template-columns:240px minmax(0,1fr) 300px;min-height:0}
+.corpus,.evidence{background:var(--ground);overflow-y:auto;padding:var(--s-4)}
+.corpus{border-right:1px solid var(--rule)}
+.evidence{border-left:1px solid var(--rule)}
+.answer{background:var(--paper);display:flex;flex-direction:column;min-width:0}
 
-  /* Ask view */
-  .ask-grid { display: grid; grid-template-columns: 1fr 380px; gap: 24px; }
-  @media (max-width: 900px) { .ask-grid { grid-template-columns: 1fr; } }
+/* ── Corpus ───────────────────────────────────────────────────────────────── */
+.field{display:flex;flex-direction:column;gap:var(--s-1);margin:var(--s-3) 0}
+.field label{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+select,input[type=text],textarea{background:var(--well);border:1px solid var(--rule);border-radius:var(--r-1);padding:var(--s-2) var(--s-3);font-family:var(--mono);font-size:13px;width:100%}
+select:focus,input:focus,textarea:focus{border-color:var(--blue);outline:none}
+.sources{list-style:none;margin:var(--s-3) 0 0;padding:0;display:flex;flex-direction:column}
+.sources li{display:grid;grid-template-columns:1fr auto;gap:var(--s-2);padding:6px 0;border-bottom:1px solid var(--rule-soft);font-family:var(--mono);font-size:12px;color:var(--ink-2)}
+.sources li .n{color:var(--ink-3);font-variant-numeric:tabular-nums}
+.sources li .s{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.empty{font-family:var(--mono);font-size:12px;color:var(--ink-3);line-height:1.5;margin:var(--s-3) 0}
+.empty code{background:var(--well);border:1px solid var(--rule-soft);padding:1px 5px;border-radius:var(--r-1);font-size:11px}
+.ingest{margin-top:var(--s-5);padding-top:var(--s-4);border-top:1px solid var(--rule)}
+.ingest .row{display:flex;gap:var(--s-2);margin-top:var(--s-2)}
+.ingest .row input{flex:1}
+.progress{height:4px;background:var(--well);margin-top:var(--s-3);position:relative;overflow:hidden}
+.progress i{position:absolute;inset:0;background:var(--good);transform:scaleX(0);transform-origin:left;transition:transform var(--t-cause)}
+.progress.running i{transform:scaleX(.35);animation:sweep 1.2s ease-in-out infinite alternate}
+.progress.done i{transform:scaleX(1)}
+.progress.failed i{transform:scaleX(1);background:var(--bad)}
+@keyframes sweep{to{transform:translateX(190%) scaleX(.35)}}
+.ingest .result{font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-top:var(--s-2);line-height:1.5}
 
-  .ask-input-row { display: flex; gap: 10px; margin-bottom: 20px; }
-  .ask-input-row input {
-    flex: 1; background: var(--panel); border: 1px solid var(--line-bright);
-    color: var(--ink); padding: 13px 16px; border-radius: var(--radius);
-    font-size: 15px; font-family: var(--sans);
-  }
-  .ask-input-row input:focus { outline: none; border-color: var(--signal); }
-  .ask-input-row select {
-    background: var(--panel); border: 1px solid var(--line-bright);
-    color: var(--ink-dim); padding: 0 12px; border-radius: var(--radius);
-    font-size: 13px; font-family: var(--mono); cursor: pointer;
-    min-width: 120px; max-width: 180px;
-  }
-  .ask-input-row select:focus { outline: none; border-color: var(--signal); }
-  .ask-input-row button {
-    background: var(--signal); color: #06231d; border: none;
-    padding: 0 22px; border-radius: var(--radius); font-weight: 600;
-    font-size: 14px; cursor: pointer; transition: opacity 0.15s;
-  }
-  .ask-input-row button:hover { opacity: 0.88; }
-  .ask-input-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+/* ── Answer ───────────────────────────────────────────────────────────────── */
+.answer-scroll{flex:1;overflow-y:auto;padding:var(--s-4) var(--s-6) var(--s-4)}
+.answer-body{max-width:68ch;font-size:18px;line-height:1.6}
+.answer-body p{margin:0 0 1em}
+.answer-body p:last-child{margin-bottom:0}
+.answer-body .q{font-family:var(--display);font-size:22px;font-weight:600;line-height:1.15;margin:0 0 var(--s-4);text-wrap:balance}
+.answer-body .q small{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);font-weight:400;margin-bottom:6px}
+.unsourced{color:var(--ink-2);text-decoration:underline dashed var(--ink-3);text-underline-offset:3px;text-decoration-thickness:1px}
+.cite{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;padding:0 3px;margin-left:2px;background:var(--blue);color:var(--paper);border:0;border-radius:var(--r-1);font-family:var(--mono);font-size:10px;font-weight:500;vertical-align:super;line-height:1;cursor:pointer;position:relative;top:-1px}
+.cite:hover{opacity:.85}
+.strength{display:inline-flex;align-items:center;gap:6px;margin-top:var(--s-4);padding:3px 8px;border:1px solid;border-radius:var(--r-1);font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:500}
+.strength.good{color:var(--good);border-color:var(--good);background:var(--good-soft)}
+.strength.warn{color:var(--warn);border-color:var(--warn);background:var(--warn-soft)}
+.strength.bad{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
+.strength.none{color:var(--ink-3);border-color:var(--rule);background:transparent}
+.strength .n{opacity:.8}
+.claims{margin-top:var(--s-3);font-size:14px;color:var(--ink-2)}
+.claims .pane-h{display:block;margin-bottom:4px}
+.claims li{margin:2px 0}
+.refusal h3{font-family:var(--display);font-size:22px;font-weight:600;margin:0 0 var(--s-2)}
+.refusal p{color:var(--ink-2)}
+.error{font-family:var(--mono);font-size:13px;line-height:1.6;background:var(--bad-soft);border-left:3px solid var(--bad);padding:var(--s-3) var(--s-4);color:var(--ink);max-width:68ch}
+.error b{display:block;color:var(--bad);font-weight:500}
+.error span{display:block;color:var(--ink-2)}
+.answer-empty{color:var(--ink-3);font-family:var(--mono);font-size:13px;max-width:52ch;line-height:1.6}
+.streaming-caret::after{content:"▍";color:var(--ochre);animation:blink 1s steps(2) infinite}
+@keyframes blink{to{opacity:0}}
 
-  .samples { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-  .samples span { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); align-self: center; }
-  .chip {
-    background: var(--panel); border: 1px solid var(--line); color: var(--ink-dim);
-    padding: 5px 11px; border-radius: 20px; font-size: 12px; cursor: pointer;
-    transition: all 0.15s;
-  }
-  .chip:hover { border-color: var(--signal-dim); color: var(--ink); }
+/* ── Ask ──────────────────────────────────────────────────────────────────── */
+.ask{border-top:1px solid var(--rule);padding:var(--s-3) var(--s-6) var(--s-3);background:var(--paper);flex:none}
+.ask textarea{font-family:var(--body);font-size:17px;padding:var(--s-3) var(--s-4);resize:none;min-height:56px;line-height:1.45}
+.ask-opts{display:flex;align-items:center;gap:var(--s-4);margin-top:var(--s-2);font-family:var(--mono);font-size:12px;color:var(--ink-3);letter-spacing:.04em}
+.ask-opts label{display:inline-flex;align-items:center;gap:6px}
+.ask-opts input[type=number]{width:52px;padding:2px 6px;font-size:12px}
+.ask-opts input[type=checkbox]{accent-color:var(--blue);margin:0}
+.ask-opts .spacer{flex:1}
 
-  .answer-card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 22px; min-height: 160px;
-  }
-  .answer-card .placeholder { color: var(--ink-faint); font-family: var(--mono); font-size: 13px; }
-  .answer-text { font-size: 15px; }
-  .answer-text sup {
-    color: var(--signal); font-family: var(--mono); font-size: 11px;
-    cursor: pointer; padding: 0 1px;
-  }
-  .answer-text sup:hover { text-decoration: underline; }
+/* ── Evidence ─────────────────────────────────────────────────────────────── */
+.ev-list{display:flex;flex-direction:column;gap:var(--s-2);margin-top:var(--s-3)}
+.ref{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r-1);padding:var(--s-3);display:grid;gap:5px;transition:border-color var(--t-cause);scroll-margin:var(--s-4)}
+.ref.cited{border-color:var(--blue)}
+.ref.cut{opacity:.6}
+.ref.flash{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-soft)}
+.ref .h{display:flex;align-items:center;gap:var(--s-2);font-family:var(--mono);font-size:12px;color:var(--ink);min-width:0}
+.ref .h .src{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.ref .h .idx{color:var(--ink-3);white-space:nowrap}
+.ref .cite{vertical-align:baseline;top:0;margin:0}
+.ref .grid{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ref .ex{font-family:var(--body);font-size:14px;color:var(--ink-2);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ref.open .ex{display:block}
+.ref .sc{font-family:var(--mono);font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums;display:flex;gap:var(--s-2) var(--s-3);flex-wrap:wrap}
+.ref .sc b{color:var(--ink-2);font-weight:500}
+.ref .bar{height:4px;background:var(--well);position:relative}
+.ref .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--blue)}
+.ref.cut .bar i{background:var(--ink-3)}
+.ref .cutnote{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 
-  .verdict {
-    display: inline-flex; align-items: center; gap: 7px;
-    font-family: var(--mono); font-size: 12px; padding: 5px 11px;
-    border-radius: 20px; margin-top: 18px;
-  }
-  .verdict.pass { background: rgba(78,201,176,0.12); color: var(--signal); }
-  .verdict.flag { background: rgba(240,119,108,0.12); color: var(--coral); }
+/* ── Survey ───────────────────────────────────────────────────────────────── */
+.survey{flex:none;border-top:1px solid var(--rule);background:var(--paper)}
+.survey-line{display:flex;align-items:center;gap:var(--s-4);padding:var(--s-2) var(--s-4);height:28px}
+.survey-figs{font-family:var(--mono);font-size:12px;color:var(--ink-2);letter-spacing:.06em;text-transform:uppercase;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.survey-line button{margin-left:auto;padding:1px 8px;font-size:11px}
+.survey-bar{display:flex;height:12px;margin:0 var(--s-4) var(--s-2);gap:2px}
+.survey-bar .seg{height:100%;position:relative;min-width:2px;display:flex;align-items:center;overflow:hidden;font-family:var(--mono);font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:var(--paper);padding:0 4px;white-space:nowrap}
+.seg.llm{background:var(--ochre)}.seg.ret{background:var(--blue)}
+.seg.alt{opacity:.8}
+.seg.running{animation:pulse 1.2s ease-in-out infinite alternate}
+.seg.ghost{background:transparent;border:1px dashed var(--rule);color:var(--ink-3);flex:1}
+.seg.skipped{background:transparent;border:1px solid var(--ink-3);color:var(--ink-3);text-decoration:line-through}
+.seg.failed{background:var(--bad)}
+@keyframes pulse{from{opacity:.6}to{opacity:1}}
+.survey-table{border-top:1px solid var(--rule-soft);padding:var(--s-2) var(--s-4) var(--s-3);overflow:auto;max-height:38vh}
+.survey-table table{border-collapse:collapse;width:100%;font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.survey-table th{text-align:left;font-weight:500;color:var(--ink-3);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:4px 10px 4px 0;border-bottom:1px solid var(--rule)}
+.survey-table td{padding:5px 10px 5px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top;color:var(--ink-2)}
+.survey-table td:first-child{color:var(--ink);white-space:nowrap}
+.survey-table .mk{display:inline-block;width:9px;height:9px;margin-right:8px;vertical-align:-1px}
+.mk.llm{background:var(--ochre)}.mk.ret{background:var(--blue)}.mk.skipped{border:1px solid var(--ink-3)}.mk.failed{background:var(--bad)}.mk.running{background:var(--ochre);animation:pulse 1.2s infinite alternate}
+.survey-table .retry{color:var(--warn)}
 
-  .citations { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
-  .citations h4 { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
-  .cite { font-size: 13px; color: var(--ink-dim); padding: 6px 0; display: flex; gap: 10px; }
-  .cite .num { color: var(--signal); font-family: var(--mono); }
+/* ── Settings popover ─────────────────────────────────────────────────────── */
+.pop{position:fixed;top:44px;right:var(--s-4);width:320px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r-2);box-shadow:var(--shadow-pop);padding:var(--s-4);z-index:20}
+.pop .field{margin:0 0 var(--s-3)}
+.pop .hint{font-family:var(--mono);font-size:11px;color:var(--ink-3);line-height:1.5}
 
-  /* Pipeline trace */
-  .trace {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 20px;
-  }
-  .trace h3 { font-family: var(--mono); font-size: 12px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
-  .trace .total { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); margin-bottom: 18px; }
-  .stage {
-    display: flex; align-items: flex-start; gap: 12px; padding: 11px 0;
-    position: relative; opacity: 0.35; transition: opacity 0.3s;
-  }
-  .stage.done, .stage.active { opacity: 1; }
-  .stage:not(:last-child)::before {
-    content: ''; position: absolute; left: 5px; top: 26px; bottom: -11px;
-    width: 1px; background: var(--line-bright);
-  }
-  .stage .marker {
-    width: 11px; height: 11px; border-radius: 50%; margin-top: 4px;
-    border: 2px solid var(--line-bright); background: var(--bg); flex-shrink: 0;
-    transition: all 0.3s;
-  }
-  .stage.done .marker { border-color: var(--signal); background: var(--signal); }
-  .stage.active .marker { border-color: var(--amber); background: var(--amber); animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(227,179,65,0.5); } 50% { box-shadow: 0 0 0 5px rgba(227,179,65,0); } }
-  .stage .body { flex: 1; }
-  .stage .name { font-size: 13px; font-weight: 500; }
-  .stage .detail { font-family: var(--mono); font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
-  .stage .ms { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
-  .stage .badge { font-family: var(--mono); font-size: 10px; padding: 1px 6px; border-radius: 4px; margin-left: 6px; }
-  .badge.route { background: rgba(167,139,250,0.15); color: var(--violet); }
-  .badge.grade-ok { background: rgba(78,201,176,0.15); color: var(--signal); }
-  .badge.retry { background: rgba(227,179,65,0.15); color: var(--amber); }
-
-  /* Eval dashboard */
-  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
-  @media (max-width: 760px) { .metrics-grid { grid-template-columns: repeat(2, 1fr); } }
-  .metric-card {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 18px;
-  }
-  .metric-card .label { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.05em; }
-  .metric-card .val { font-size: 32px; font-weight: 600; margin-top: 8px; letter-spacing: -0.02em; }
-  .metric-card .bar { height: 4px; background: var(--line); border-radius: 2px; margin-top: 12px; overflow: hidden; }
-  .metric-card .bar span { display: block; height: 100%; background: var(--signal); border-radius: 2px; }
-
-  .section-title { font-size: 15px; font-weight: 600; margin: 8px 0 16px; }
-  .ab-panel, .cat-panel {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: var(--radius); padding: 22px; margin-bottom: 24px;
-  }
-  .ab-row { display: flex; align-items: center; gap: 16px; margin: 14px 0; }
-  .ab-row .ab-label { width: 220px; font-size: 13px; color: var(--ink-dim); }
-  .ab-track { flex: 1; height: 26px; background: var(--panel-2); border-radius: 5px; position: relative; overflow: hidden; }
-  .ab-fill { height: 100%; border-radius: 5px; display: flex; align-items: center; justify-content: flex-end; padding-right: 10px; font-family: var(--mono); font-size: 12px; color: #06231d; font-weight: 600; }
-  .ab-fill.base { background: var(--line-bright); color: var(--ink); }
-  .ab-fill.improved { background: var(--signal); }
-  .delta-note { font-family: var(--mono); font-size: 12px; color: var(--signal); margin-top: 14px; }
-
-  table.cat { width: 100%; border-collapse: collapse; }
-  table.cat th { text-align: left; font-family: var(--mono); font-size: 11px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 12px; border-bottom: 1px solid var(--line); }
-  table.cat td { padding: 11px 12px; font-size: 13px; border-bottom: 1px solid var(--line); }
-  table.cat td.score { font-family: var(--mono); }
-  .mini-bar { display: inline-block; width: 60px; height: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; margin-left: 10px; overflow: hidden; }
-  .mini-bar span { display: block; height: 100%; background: var(--signal); }
-
-  .header-right { display: flex; align-items: center; gap: 20px; }
-  .api-key-wrap { display: flex; align-items: center; gap: 6px; }
-  .key-icon { font-size: 13px; }
-  .api-key-wrap input {
-    background: var(--panel); border: 1px solid var(--line-bright); color: var(--ink);
-    padding: 5px 10px; border-radius: 6px; font-size: 12px; font-family: var(--mono);
-    width: 180px;
-  }
-  .api-key-wrap input:focus { outline: none; border-color: var(--signal); }
-  .api-key-wrap button {
-    background: transparent; border: 1px solid var(--line); color: var(--ink-dim);
-    padding: 5px 10px; border-radius: 6px; font-size: 12px; cursor: pointer;
-  }
-  .api-key-wrap button:hover { border-color: var(--signal); color: var(--signal); }
-  .api-key-wrap.has-key input { border-color: rgba(78,201,176,0.4); }
-
-  .disclaimer { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); margin-top: 20px; line-height: 1.7; }
-  .note-live { font-family: var(--mono); font-size: 11px; color: var(--amber); margin-bottom: 20px; padding: 10px 14px; background: rgba(227,179,65,0.06); border: 1px solid rgba(227,179,65,0.2); border-radius: 6px; }
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width:1100px){
+  .console{grid-template-columns:220px minmax(0,1fr)}
+  .evidence{position:fixed;top:40px;right:0;bottom:0;width:320px;z-index:10;transform:translateX(100%);transition:transform var(--t-cause);box-shadow:var(--shadow-pop)}
+  .evidence.open{transform:none}
+  .strength{cursor:pointer}
+}
+@media (max-width:760px){
+  .console{grid-template-columns:minmax(0,1fr)}
+  .corpus{display:none}
+  .answer-scroll,.ask{padding-left:var(--s-4);padding-right:var(--s-4)}
+  .sheet-line{display:none}
+  .survey-bar{display:none}
+}
+@media (prefers-reduced-motion:reduce){
+  .seg.running,.mk.running,.progress.running i,.streaming-caret::after{animation:none}
+  .ref,.evidence{transition:none}
+}
 </style>
 </head>
 <body>
-<header>
-  <div class="wrap">
-    <div class="header-row">
-      <div class="brand">
-        <h1>Atlas</h1>
-        <span class="tag">agentic rag · pipeline console</span>
-      </div>
-      <div class="header-right">
-        <div class="api-key-wrap" id="apiKeyWrap" title="API key (stored in browser, never sent to server logs)">
-          <span class="key-icon">🔑</span>
-          <input id="apiKeyInput" type="password" placeholder="API key (optional)" autocomplete="off">
-          <button id="keySaveBtn">Save</button>
-        </div>
-        <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText">checking…</span></div>
-      </div>
-    </div>
-    <nav>
-      <button class="active" data-view="ask">/ ask</button>
-      <button data-view="eval">/ eval</button>
-    </nav>
+
+<header class="top">
+  <div class="brand">Atlas</div>
+  <div class="sheet-line">Sheet <b id="hdr-sheet">—</b> · <b id="hdr-sources">—</b> sources · <b id="hdr-refs">—</b> refs</div>
+  <div class="top-right">
+    <span class="health" id="health"><i></i><span>checking</span></span>
+    <button id="btn-key" aria-pressed="false">Key</button>
+    <button id="btn-settings" aria-expanded="false">Settings</button>
   </div>
 </header>
 
-<main class="wrap">
-  <!-- ASK VIEW -->
-  <section class="view active" id="view-ask">
-    <div class="ask-input-row">
-      <select id="nsSelect" title="Select corpus namespace"></select>
-      <input id="q" type="text" placeholder="Ask the knowledge base a question…" autocomplete="off">
-      <button id="askBtn">Ask</button>
-    </div>
-    <div class="samples">
-      <span>try:</span>
-      <button class="chip">How do you declare a path parameter in FastAPI?</button>
-      <button class="chip">How does dependency injection work with database sessions?</button>
-      <button class="chip">What is the best way to deploy a Django app on Kubernetes?</button>
-    </div>
+<div class="keystrip" id="keystrip" hidden>
+  <span><i style="background:var(--blue)"></i>retrieval</span>
+  <span><i style="background:var(--ochre)"></i>language model</span>
+  <span><i style="background:var(--good)"></i>supported</span>
+  <span><i style="background:var(--warn)"></i>mixed / weak</span>
+  <span><i style="background:var(--bad)"></i>unsupported</span>
+  <span><i style="border:1px dashed var(--ink-3)"></i>not reached</span>
+</div>
 
-    <div class="ask-grid">
-      <div class="answer-card" id="answerCard">
-        <div class="placeholder">// answer, citations, and faithfulness verdict appear here</div>
+<main class="console">
+  <aside class="corpus">
+    <div class="pane-h">Corpus</div>
+    <div class="field">
+      <label for="sheet">Sheet</label>
+      <select id="sheet"></select>
+    </div>
+    <ul class="sources" id="sources"></ul>
+    <div class="empty" id="sources-empty" hidden>No sources on this sheet.<br><code>make ingest</code></div>
+
+    <div class="ingest">
+      <div class="pane-h">Ingest</div>
+      <form id="ingest">
+        <div class="row">
+          <input type="text" id="ingest-path" placeholder="data/corpus/fastapi" aria-label="Path to ingest">
+          <button type="submit" id="ingest-btn">Ingest</button>
+        </div>
+        <div class="progress" id="ingest-progress"><i></i></div>
+        <div class="result" id="ingest-result"></div>
+      </form>
+    </div>
+  </aside>
+
+  <section class="answer">
+    <div class="answer-scroll" id="answer-scroll">
+      <div class="pane-h">Answer</div>
+      <div class="answer-body" id="answer-body" style="margin-top:12px">
+        <div class="answer-empty">Ask the sheet. The answer appears here as a document with a reference on every claim; the references themselves appear on the right.</div>
       </div>
-
-      <aside class="trace" id="tracePanel">
-        <h3>Pipeline trace</h3>
-        <div class="total" id="traceTotal">idle</div>
-        <div id="stages"></div>
-      </aside>
+      <div id="strength-wrap"></div>
+      <div id="claims-wrap"></div>
     </div>
+    <form class="ask" id="ask">
+      <textarea id="q" placeholder="Ask the sheet…" rows="2" aria-label="Question"></textarea>
+      <div class="ask-opts">
+        <label>top_k <input type="number" id="topk" value="5" min="1" max="50"></label>
+        <label><input type="checkbox" id="stream" checked> stream</label>
+        <span class="spacer"></span>
+        <button type="submit" class="primary" id="ask-btn">Ask</button>
+      </div>
+    </form>
   </section>
 
-  <!-- EVAL VIEW -->
-  <section class="view" id="view-eval">
-    <div class="note-live">These are illustrative placeholder numbers. Run <b>scripts/run_eval.py</b> against a live index, then wire this dashboard to <b>out/eval_report.json</b> to show your real measured scores.</div>
-
-    <div class="metrics-grid" id="metricsGrid"></div>
-
-    <div class="ab-panel">
-      <div class="section-title">Impact of cross-encoder reranking</div>
-      <div class="ab-row">
-        <div class="ab-label">Hybrid retrieval, no reranker</div>
-        <div class="ab-track"><div class="ab-fill base" style="width:62%">0.62</div></div>
-      </div>
-      <div class="ab-row">
-        <div class="ab-label">Hybrid + cross-encoder reranker</div>
-        <div class="ab-track"><div class="ab-fill improved" style="width:84%">0.84</div></div>
-      </div>
-      <div class="delta-note">↑ context precision +0.22 from reranking alone (isolated by disabling only the reranker)</div>
-    </div>
-
-    <div class="cat-panel">
-      <div class="section-title">Faithfulness by question category</div>
-      <table class="cat">
-        <thead><tr><th>Category</th><th>Faithfulness</th><th>What it stresses</th></tr></thead>
-        <tbody id="catBody"></tbody>
-      </table>
-    </div>
-
-    <div class="disclaimer">
-      // measured over 30 questions · directional signal, not confidence intervals<br>
-      // judge audit: hand-labeled sample compared to LLM-as-judge verdicts before trusting scores<br>
-      // reproduce: docker-compose up qdrant redis -d && python scripts/run_eval.py --report out/eval_report.md
-    </div>
-  </section>
+  <aside class="evidence" id="evidence">
+    <div class="pane-h">Evidence · <span id="ev-count">0 refs</span></div>
+    <div class="ev-list" id="ev-list"><div class="empty">References appear here as they are found.</div></div>
+  </aside>
 </main>
 
+<footer class="survey" id="survey">
+  <div class="survey-line">
+    <span class="pane-h">Survey</span>
+    <span class="survey-figs" id="survey-figs">no query yet</span>
+    <button id="survey-toggle" aria-expanded="false">Expand</button>
+  </div>
+  <div class="survey-bar" id="survey-bar"></div>
+  <div class="survey-table" id="survey-table" hidden>
+    <table>
+      <thead><tr><th>Stage</th><th>ms</th><th>Detail</th></tr></thead>
+      <tbody id="survey-rows"></tbody>
+    </table>
+  </div>
+</footer>
+
+<div class="pop" id="settings" hidden>
+  <div class="field">
+    <label for="api-key">API key</label>
+    <input type="text" id="api-key" placeholder="atlas_…" autocomplete="off" spellcheck="false">
+    <div class="hint">Stored in this browser only. Needed for /query and /ingest.</div>
+  </div>
+  <div class="field">
+    <label for="api-base">API base</label>
+    <input type="text" id="api-base" placeholder="same origin">
+  </div>
+  <div class="field">
+    <label for="theme">Theme</label>
+    <select id="theme"><option value="">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+  </div>
+  <button id="settings-save" class="primary">Save</button>
+</div>
+
 <script>
-  // ---- config ----
-  const API_BASE = ""; // same-origin if served behind FastAPI; else "http://localhost:8010"
+(function () {
+  'use strict';
 
-  // ---- API key management ----
-  const API_KEY_STORAGE = 'atlas_api_key';
-  const apiKeyInput = document.getElementById('apiKeyInput');
-  const keySaveBtn  = document.getElementById('keySaveBtn');
-  const apiKeyWrap  = document.getElementById('apiKeyWrap');
+  // ── Config ───────────────────────────────────────────────────────────────
+  const KEY_STORE  = 'atlas_api_key';
+  const BASE_STORE = 'atlas_api_base';
+  const THEME_STORE = 'atlas_theme';
+  const SHEET_STORE = 'atlas_sheet';
 
-  function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || ''; }
+  // Stage order and colour class. Blue = retrieval, ochre = language model.
+  const STAGES = [
+    ['routing',      'llm', 'route'],
+    ['decompose',    'llm', 'decompose'],
+    ['retrieval',    'ret', 'retrieve'],
+    ['grading',      'llm', 'grade'],
+    ['generation',   'llm', 'generate'],
+    ['faithfulness', 'llm', 'check'],
+  ];
+  const SCORE_ORDER = ['dense', 'bm25', 'rrf', 'rerank', 'score'];
 
-  function applyStoredKey() {
-    const k = getApiKey();
-    if (k) {
-      apiKeyInput.value = k;
-      apiKeyWrap.classList.add('has-key');
-      keySaveBtn.textContent = 'Clear';
-    } else {
-      apiKeyInput.value = '';
-      apiKeyWrap.classList.remove('has-key');
-      keySaveBtn.textContent = 'Save';
-    }
-  }
-
-  keySaveBtn.onclick = () => {
-    if (getApiKey()) {
-      localStorage.removeItem(API_KEY_STORAGE);
-    } else {
-      const v = apiKeyInput.value.trim();
-      if (v) localStorage.setItem(API_KEY_STORAGE, v);
-    }
-    applyStoredKey();
+  const $ = (id) => document.getElementById(id);
+  const store = {
+    get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+    set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} },
   };
 
-  apiKeyInput.onkeydown = e => { if (e.key === 'Enter') keySaveBtn.click(); };
-  applyStoredKey();
+  const state = {
+    sheet: '',
+    stages: {},          // name -> {status, ms, detail}
+    evidence: [],
+    citationByChunk: {}, // chunk_id -> number
+    numberToChunk: {},   // number -> chunk_id
+    startedAt: 0,
+  };
 
-  // Wrap fetch to inject Authorization header when a key is present
-  function apiFetch(url, opts = {}) {
-    const key = getApiKey();
-    if (key) {
-      opts.headers = { ...(opts.headers || {}), 'Authorization': 'Bearer ' + key };
-    }
-    return fetch(url, opts);
+  // ── Fetch ────────────────────────────────────────────────────────────────
+  function base() { return store.get(BASE_STORE).replace(/\/$/, ''); }
+  function api(path, opts = {}) {
+    const key = store.get(KEY_STORE);
+    opts.headers = { ...(opts.headers || {}) };
+    if (key) opts.headers['Authorization'] = 'Bearer ' + key;
+    return fetch(base() + path, opts);
   }
 
-  // ---- nav ----
-  document.querySelectorAll('nav button').forEach(b => {
-    b.onclick = () => {
-      document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
-      document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
-      b.classList.add('active');
-      document.getElementById('view-' + b.dataset.view).classList.add('active');
-    };
+  // ── Theme ────────────────────────────────────────────────────────────────
+  function applyTheme(v) {
+    if (v) document.documentElement.setAttribute('data-theme', v);
+    else document.documentElement.removeAttribute('data-theme');
+  }
+  applyTheme(store.get(THEME_STORE));
+
+  // ── Header / health ──────────────────────────────────────────────────────
+  async function health() {
+    const el = $('health');
+    try {
+      const r = await api('/health', { signal: AbortSignal.timeout(3000) });
+      const j = await r.json();
+      el.className = 'health ' + (j.status || 'down');
+      el.lastElementChild.textContent = j.status || 'down';
+    } catch {
+      el.className = 'health down';
+      el.lastElementChild.textContent = 'unreachable';
+    }
+  }
+
+  // ── Corpus ───────────────────────────────────────────────────────────────
+  async function loadSheets() {
+    const sel = $('sheet');
+    let names = [];
+    try {
+      const r = await api('/namespaces', { signal: AbortSignal.timeout(3000) });
+      const j = await r.json();
+      names = (j.namespaces || []).map((n) => n.name);
+    } catch {}
+    if (!names.length) names = ['default'];
+    const wanted = store.get(SHEET_STORE) || names[0];
+    if (!names.includes(wanted)) names.unshift(wanted);
+    sel.innerHTML = names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    sel.value = wanted;
+    state.sheet = wanted;
+    $('hdr-sheet').textContent = wanted;
+    loadSources();
+  }
+
+  async function loadSources() {
+    const list = $('sources'), empty = $('sources-empty');
+    list.innerHTML = '';
+    try {
+      const r = await api(`/namespaces/${encodeURIComponent(state.sheet)}/sources`, { signal: AbortSignal.timeout(4000) });
+      const j = await r.json();
+      $('hdr-sources').textContent = fmt(j.total_sources);
+      $('hdr-refs').textContent = fmt(j.total_chunks);
+      if (!j.sources.length) { empty.hidden = false; return; }
+      empty.hidden = true;
+      list.innerHTML = j.sources.map((s) =>
+        `<li title="${esc(s.source)}"><span class="s">${esc(s.source)}</span><span class="n">${fmt(s.chunks)}</span></li>`
+      ).join('');
+    } catch {
+      $('hdr-sources').textContent = '—'; $('hdr-refs').textContent = '—';
+      empty.hidden = false;
+    }
+  }
+
+  $('sheet').addEventListener('change', (e) => {
+    state.sheet = e.target.value;
+    store.set(SHEET_STORE, state.sheet);
+    $('hdr-sheet').textContent = state.sheet;
+    loadSources();
   });
 
-  // ---- health probe ----
-  async function checkHealth() {
-    const dot = document.getElementById('statusDot');
-    const txt = document.getElementById('statusText');
+  // ── Ingest ───────────────────────────────────────────────────────────────
+  $('ingest').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const path = $('ingest-path').value.trim();
+    if (!path) return;
+    const prog = $('ingest-progress'), out = $('ingest-result'), btn = $('ingest-btn');
+    prog.className = 'progress running'; out.textContent = 'Indexing ' + path + '…'; btn.disabled = true;
     try {
-      const r = await apiFetch(API_BASE +'/health', { signal: AbortSignal.timeout(3000) });
-      if (r.ok) { dot.classList.add('live'); txt.textContent = 'qdrant + redis connected'; }
-      else { txt.textContent = 'degraded (503)'; }
-    } catch {
-      txt.textContent = 'api offline — demo mode';
-    }
-  }
-  checkHealth();
+      const r = await api('/ingest', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, namespace: state.sheet }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      prog.className = 'progress done';
+      out.textContent = `Indexed ${fmt(j.documents_processed)} sources, ${fmt(j.chunks_indexed)} refs, ${fmt(j.documents_skipped)} unchanged · ${j.duration_seconds.toFixed(1)} s`;
+      loadSources();
+    } catch (err) {
+      prog.className = 'progress failed';
+      out.textContent = 'Ingest failed. ' + err.message;
+    } finally { btn.disabled = false; }
+  });
 
-  // ---- pipeline stages (definition drives the trace UI) ----
-  const STAGES = [
-    { key: 'route',    name: 'Query router',        detail: 'classify simple / complex / out-of-scope' },
-    { key: 'decompose',name: 'Decomposer',          detail: 'split complex query into sub-questions' },
-    { key: 'retrieve', name: 'Hybrid retrieval',    detail: 'dense (Qdrant) + sparse (BM25)' },
-    { key: 'rerank',   name: 'Cross-encoder rerank',detail: 'reorder top 20 → keep top 5' },
-    { key: 'grade',    name: 'Retrieval grader',    detail: 'is the context sufficient?' },
-    { key: 'generate', name: 'Answer generator',    detail: 'write answer with inline citations' },
-    { key: 'faithful', name: 'Faithfulness check',  detail: 'verify each claim against sources' },
-  ];
-
-  function renderStages() {
-    document.getElementById('stages').innerHTML = STAGES.map(s => `
-      <div class="stage" data-key="${s.key}">
-        <div class="marker"></div>
-        <div class="body">
-          <div class="name">${s.name}<span class="badge" data-badge="${s.key}"></span></div>
-          <div class="detail">${s.detail}</div>
-        </div>
-        <div class="ms" data-ms="${s.key}"></div>
-      </div>`).join('');
-  }
-  renderStages();
-
-  function resetTrace() {
-    document.querySelectorAll('.stage').forEach(s => { s.classList.remove('done','active'); });
-    document.querySelectorAll('[data-ms]').forEach(e => e.textContent = '');
-    document.querySelectorAll('[data-badge]').forEach(e => { e.textContent = ''; e.className = 'badge'; });
-    document.getElementById('traceTotal').textContent = 'running…';
-  }
-
-  // ---- namespace picker ----
-  const nsSelect = document.getElementById('nsSelect');
-
-  async function loadNamespaces() {
-    try {
-      const r = await apiFetch(API_BASE +'/namespaces', { signal: AbortSignal.timeout(3000) });
-      if (!r.ok) throw new Error('failed');
-      const data = await r.json();
-      nsSelect.innerHTML = '';
-      const list = data.namespaces || [];
-      if (!list.length) {
-        // No namespaces yet — show default as placeholder
-        const opt = document.createElement('option');
-        opt.value = 'default'; opt.textContent = 'default';
-        nsSelect.appendChild(opt);
-      } else {
-        list.forEach(ns => {
-          const opt = document.createElement('option');
-          opt.value = ns.name; opt.textContent = ns.name;
-          nsSelect.appendChild(opt);
-        });
-      }
-    } catch {
-      // Offline or Qdrant unavailable — show static default
-      nsSelect.innerHTML = '<option value="default">default</option>';
-    }
-  }
-  loadNamespaces();
-
-  // ---- ask flow ----
-  const qInput = document.getElementById('q');
-  const askBtn = document.getElementById('askBtn');
-  document.querySelectorAll('.chip').forEach(c => c.onclick = () => { qInput.value = c.textContent; ask(); });
-  askBtn.onclick = ask;
-  qInput.onkeydown = e => { if (e.key === 'Enter') ask(); };
-
-  // Map SSE stage names → trace keys used in the DOM
-  const STAGE_NAME_MAP = {
-    routing: 'route', decompose: 'decompose',
-    retrieval: 'retrieve', grading: 'grade', generation: 'generate',
-  };
+  // ── Ask ──────────────────────────────────────────────────────────────────
+  $('ask').addEventListener('submit', (e) => { e.preventDefault(); ask(); });
+  $('q').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); }
+  });
 
   async function ask() {
-    const question = qInput.value.trim();
-    if (!question) return;
-    askBtn.disabled = true;
-    resetTrace();
-    // Hide rerank + faithful — streaming path skips those
-    ['rerank', 'faithful'].forEach(k => {
-      const el = document.querySelector(`.stage[data-key="${k}"]`);
-      if (el) el.style.display = 'none';
-    });
-    document.getElementById('answerCard').innerHTML =
-      '<div class="placeholder">// connecting to pipeline…</div>';
-
-    let streamed = false;
+    const q = $('q').value.trim();
+    if (!q) return;
+    const streaming = $('stream').checked;
+    const top_k = Math.max(1, Math.min(50, parseInt($('topk').value, 10) || 5));
+    resetRun(q);
+    $('ask-btn').disabled = true;
     try {
-      const r = await apiFetch(API_BASE +'/query', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: question, stream: true, namespace: nsSelect.value || 'default' }),
-        signal: AbortSignal.timeout(60000),
-      });
-      if (r.ok && r.body) {
-        await consumeStream(r.body);
-        streamed = true;
-      }
-    } catch { /* fall through */ }
-
-    if (!streamed) await animateSimulated(question);
-    askBtn.disabled = false;
+      if (streaming) await askStream(q, top_k); else await askJson(q, top_k);
+    } catch (err) {
+      renderError(err);
+    } finally {
+      $('ask-btn').disabled = false;
+      renderSurvey();
+    }
   }
 
-  // ---- real streaming consumer ----
-  async function consumeStream(body) {
-    const reader = body.getReader();
-    const decoder = new TextDecoder();
-    let buf = '';
-    let answerHtml = '';
-    let answerEl = null;
-    let totalMs = 0;
-    let finalEvt = null;
+  function resetRun(q) {
+    state.stages = {}; state.evidence = []; state.citationByChunk = {}; state.numberToChunk = {};
+    state.startedAt = performance.now();
+    $('answer-body').innerHTML = `<div class="q"><small>Question</small>${esc(q)}</div><p class="streaming-caret"></p>`;
+    $('strength-wrap').innerHTML = ''; $('claims-wrap').innerHTML = '';
+    $('ev-list').innerHTML = '<div class="empty">Surveying…</div>'; $('ev-count').textContent = '0 refs';
+    for (const [name] of STAGES) state.stages[name] = { status: 'pending' };
+    $('survey-figs').textContent = 'running';
+    renderSurvey();
+  }
 
-    // Prepare answer box for streaming
-    document.getElementById('answerCard').innerHTML =
-      '<div class="answer-text" id="streamAnswer" style="white-space:pre-wrap"></div>';
-    answerEl = document.getElementById('streamAnswer');
+  async function askJson(q, top_k) {
+    const r = await api('/query', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, namespace: state.sheet, top_k, stream: false }),
+    });
+    if (!r.ok) throw await httpError(r);
+    const j = await r.json();
+
+    const t = j.timings || {};
+    setStage('routing', 'done', t.routing_ms, j.classification);
+    if (j.classification === 'out_of_scope') {
+      markUnreached(['decompose', 'retrieval', 'grading', 'generation', 'faithfulness']);
+      renderRefusal();
+      finishFigs(j);
+      return;
+    }
+    if (t.decompose_ms != null) setStage('decompose', 'done', t.decompose_ms, `${(j.sub_queries || []).length} sub-queries`);
+    else setStage('decompose', 'skipped');
+    setStage('retrieval', 'done', t.retrieval_ms, `${(j.evidence || []).filter((e) => e.selected).length} selected of ${(j.evidence || []).length}`);
+    setStage('grading', 'done', t.grading_ms, gradeDetail(j.grader_score, j.grader_retries));
+    setStage('generation', 'done', t.generation_ms, tokDetail(j.token_usage));
+    setStage('faithfulness', 'done', t.faithfulness_ms, j.faithfulness_score != null ? `score ${j.faithfulness_score.toFixed(2)}` : '');
+
+    for (const c of j.citations || []) { state.citationByChunk[c.chunk_id] = c.number; state.numberToChunk[c.number] = c.chunk_id; }
+    state.evidence = j.evidence || [];
+    renderEvidence();
+    renderAnswer(j.answer);
+    renderStrength(strengthFrom(j));
+    renderClaims(j.unsupported_claims);
+    finishFigs(j);
+  }
+
+  async function askStream(q, top_k) {
+    const r = await api('/query', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, namespace: state.sheet, top_k, stream: true }),
+    });
+    if (!r.ok) throw await httpError(r);
+
+    const reader = r.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '', answer = '', genStart = 0;
+    const p = $('answer-body').querySelector('p');
 
     while (true) {
-      const { done, value } = await reader.read();
+      const { value, done } = await reader.read();
       if (done) break;
-      buf += decoder.decode(value, { stream: true });
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf('\n\n')) >= 0) {
+        const raw = buf.slice(0, nl).trim(); buf = buf.slice(nl + 2);
+        if (!raw.startsWith('data:')) continue;
+        const data = raw.slice(5).trim();
+        if (data === '[DONE]') continue;
+        let ev; try { ev = JSON.parse(data); } catch { continue; }
 
-      // SSE messages are separated by double newlines
-      const parts = buf.split('\n\n');
-      buf = parts.pop();
-
-      for (const part of parts) {
-        const line = part.trim();
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (payload === '[DONE]') break;
-
-        let evt;
-        try { evt = JSON.parse(payload); } catch { continue; }
-
-        if (evt.type === 'stage') {
-          const key = STAGE_NAME_MAP[evt.name] || evt.name;
-          const el = document.querySelector(`.stage[data-key="${key}"]`);
-          if (!el) continue;
-
-          if (evt.status === 'start') {
-            el.style.display = '';
-            el.classList.add('active');
-          } else if (evt.status === 'done') {
-            el.classList.remove('active');
-            el.classList.add('done');
-            if (evt.ms) {
-              totalMs += evt.ms;
-              document.querySelector(`[data-ms="${key}"]`).textContent = evt.ms + 'ms';
-            }
-            // Update stage badges
-            const b = document.querySelector(`[data-badge="${key}"]`);
-            if (!b) continue;
-            if (key === 'route' && evt.classification) {
-              b.textContent = evt.classification; b.className = 'badge route';
-            } else if (key === 'retrieve' && evt.chunks !== undefined) {
-              b.textContent = evt.chunks + ' chunks'; b.className = 'badge';
-            } else if (key === 'grade' && evt.score !== undefined) {
-              b.textContent = evt.sufficient ? 'ok' : 're-queried';
-              b.className = 'badge ' + (evt.sufficient ? 'grade-ok' : 'retry');
-            } else if (key === 'decompose' && evt.sub_queries !== undefined) {
-              b.textContent = evt.sub_queries + ' sub-qs'; b.className = 'badge';
-            }
+        if (ev.type === 'stage') {
+          if (ev.status === 'start') {
+            setStage(ev.name, 'running');
+            if (ev.name === 'generation') genStart = performance.now();
+            if (ev.name === 'retrieval' && !state.stages.decompose.ms) setStage('decompose', state.stages.decompose.status === 'running' ? 'running' : 'skipped');
+          } else {
+            const detail = ev.name === 'routing' ? ev.classification
+              : ev.name === 'decompose' ? `${ev.sub_queries} sub-queries`
+              : ev.name === 'retrieval' ? `${(ev.evidence || []).filter((e) => e.selected).length} selected of ${(ev.evidence || []).length}`
+              : ev.name === 'grading' ? gradeDetail(ev.score, 0, ev.sufficient)
+              : '';
+            setStage(ev.name, 'done', ev.ms, detail);
+            if (ev.name === 'retrieval') { state.evidence = ev.evidence || []; renderEvidence(); }
           }
-        } else if (evt.type === 'delta') {
-          answerHtml += evt.text;
-          if (answerEl) answerEl.textContent = answerHtml;
-        } else if (evt.type === 'done') {
-          finalEvt = evt;
+          renderSurvey();
+        } else if (ev.type === 'delta') {
+          answer += ev.text;
+          p.textContent = answer;
+          $('answer-scroll').scrollTop = $('answer-scroll').scrollHeight;
+        } else if (ev.type === 'done') {
+          if (ev.classification === 'out_of_scope') {
+            markUnreached(['decompose', 'retrieval', 'grading', 'generation', 'faithfulness']);
+            renderRefusal();
+          } else {
+            setStage('generation', 'done', genStart ? Math.round(performance.now() - genStart) : undefined, tokDetail(null));
+            setStage('faithfulness', 'skipped', undefined, 'skipped while streaming');
+            for (const c of ev.citations || []) { state.citationByChunk[c.chunk_id] = c.number; state.numberToChunk[c.number] = c.chunk_id; }
+            for (const e of state.evidence) e.citation = state.citationByChunk[e.chunk_id] ?? null;
+            renderEvidence();
+            renderAnswer(answer);
+            renderStrength({ label: 'Unchecked', cls: 'none', n: 'streamed' });
+          }
+          finishFigs(null);
         }
       }
     }
-
-    document.getElementById('traceTotal').textContent =
-      totalMs ? `completed in ${totalMs}ms` : 'completed';
-
-    if (finalEvt) {
-      const cites = (finalEvt.citations || []).map(c => ({
-        n: c.number, src: c.source, loc: c.page_number ? 'p.' + c.page_number : '',
-      }));
-      if (finalEvt.classification === 'out_of_scope') {
-        renderRefusal();
-      } else {
-        // Convert plain text with [N] markers to HTML superscripts
-        const html = answerHtml.replace(/\[(\d+)\]/g, '<sup>[$1]</sup>');
-        renderAnswer(html, cites, finalEvt.is_faithful !== false, finalEvt.classification || 'simple');
-      }
-    }
   }
 
-  // ---- simulated fallback (API offline) ----
-  async function runTrace(activeKeys, timings, badges) {
-    let total = 0;
-    for (const s of STAGES) {
-      const el = document.querySelector(`.stage[data-key="${s.key}"]`);
-      if (!activeKeys.includes(s.key)) { el.style.display = 'none'; continue; }
-      el.style.display = '';
-      el.classList.add('active');
-      await sleep(160 + Math.random() * 200);
-      el.classList.remove('active'); el.classList.add('done');
-      const ms = timings[s.key] || Math.round(40 + Math.random() * 300);
-      total += ms;
-      document.querySelector(`[data-ms="${s.key}"]`).textContent = ms + 'ms';
-      if (badges[s.key]) {
-        const b = document.querySelector(`[data-badge="${s.key}"]`);
-        b.textContent = badges[s.key].text; b.className = 'badge ' + badges[s.key].cls;
-      }
-    }
-    document.getElementById('traceTotal').textContent = 'completed in ' + total + 'ms';
+  async function httpError(r) {
+    let detail = r.statusText;
+    try { const j = await r.json(); detail = j.detail || detail; } catch {}
+    const e = new Error(detail); e.status = r.status; return e;
   }
 
-  // Simulated fallback — recognises the three sample questions, otherwise generic.
-  async function animateSimulated(question) {
-    const q = question.toLowerCase();
-    if (q.includes('swallow') || q.includes('velocity')) {
-      await runTrace(['route','retrieve','rerank','grade'],
-        { route: 88, retrieve: 140, rerank: 210, grade: 120 },
-        { route: { text: 'out_of_scope', cls: 'route' } });
-      renderRefusal();
-      return;
-    }
-    const complex = q.includes('billing') || q.includes('escalation') || q.includes('page');
-    const active = ['route'];
-    if (complex) active.push('decompose');
-    active.push('retrieve','rerank','grade','generate','faithful');
-    await runTrace(active, {},
-      { route: { text: complex ? 'complex' : 'simple', cls: 'route' },
-        grade: { text: 'ok', cls: 'grade-ok' } });
-
-    if (q.includes('vacation')) {
-      renderAnswer(
-        'Full-time employees receive 20 vacation days per year, accruing monthly.<sup title="hr-policy §7">[1]</sup>',
-        [{ n: 1, src: 'hr-policy.md', loc: '§7 · Time off' }], true, 'simple');
-    } else if (complex) {
-      renderAnswer(
-        'The billing service is owned by the Payments team, who are first on-call.<sup>[1]</sup> Their escalation window is 15 minutes before the secondary (Platform) on-call is paged.<sup>[2]</sup>',
-        [{ n: 1, src: 'arch-overview.md', loc: '§4 · Service ownership' },
-         { n: 2, src: 'oncall-policy.md', loc: '§8 · Escalation' }], true, 'complex');
-    } else {
-      renderAnswer(
-        'This is a demo fallback — the live API isn\'t reachable, so this answer is illustrative. Start the API and this panel shows the real pipeline output.<sup>[1]</sup>',
-        [{ n: 1, src: 'demo', loc: 'simulated response' }], true, 'simple');
-    }
+  // ── Stage bookkeeping ────────────────────────────────────────────────────
+  function setStage(name, status, ms, detail) {
+    const s = state.stages[name] || (state.stages[name] = {});
+    s.status = status;
+    if (ms != null) s.ms = ms;
+    if (detail != null) s.detail = detail;
+  }
+  function markUnreached(names) { for (const n of names) setStage(n, 'skipped'); }
+  function gradeDetail(score, retries, sufficient) {
+    let d = score != null ? `score ${Number(score).toFixed(2)}` : '';
+    if (sufficient === false) d += ' · insufficient';
+    if (retries) d += ` · ↻ ${retries}`;
+    return d;
+  }
+  function tokDetail(tu) {
+    if (!tu) return 'tokens not tracked on stream';
+    return `${fmt(tu.prompt_tokens)} in · ${fmt(tu.completion_tokens)} out`;
+  }
+  function finishFigs(j) {
+    const total = j?.timings?.total_ms ?? Math.round(performance.now() - state.startedAt);
+    const n = Object.values(state.stages).filter((s) => s.status === 'done').length;
+    let figs = `${n} stage${n === 1 ? '' : 's'} · ${fmt(Math.round(total))} ms`;
+    if (j?.token_usage) figs += ` · ${fmt(j.token_usage.total_tokens)} tok · $${j.token_usage.estimated_cost_usd.toFixed(4)}`;
+    if (j?.cached) figs += ' · cached';
+    $('survey-figs').textContent = figs;
   }
 
-  function renderAnswer(html, cites, faithful, route) {
-    const verdict = faithful
-      ? '<div class="verdict pass">✓ faithful — every claim grounded in sources</div>'
-      : '<div class="verdict flag">⚠ flagged — one or more claims not fully supported</div>';
-    const citeHtml = cites.length ? `
-      <div class="citations"><h4>Sources</h4>
-        ${cites.map(c => `<div class="cite"><span class="num">[${c.n}]</span><span>${c.src}${c.loc ? ' · ' + c.loc : ''}</span></div>`).join('')}
-      </div>` : '';
-    document.getElementById('answerCard').innerHTML =
-      `<div class="answer-text">${html}</div>${verdict}${citeHtml}`;
+  // ── Renderers ────────────────────────────────────────────────────────────
+  function renderAnswer(text) {
+    const body = $('answer-body');
+    const q = body.querySelector('.q');
+    const paras = String(text || '').trim().split(/\n{2,}/);
+    const html = paras.map((para) => {
+      const sentences = para.split(/(?<=[.!?])\s+(?=[A-Z0-9\[(])/);
+      return '<p>' + sentences.map((sent) => {
+        const hasCite = /\[\d+\]/.test(sent);
+        let s = esc(sent).replace(/\n/g, '<br>');
+        s = s.replace(/\[(\d+)\]/g, (_, n) =>
+          state.numberToChunk[n]
+            ? `<button class="cite" data-n="${n}" title="Reference ${n}">${n}</button>`
+            : `<span class="cite" style="background:var(--ink-3)" title="Reference ${n} not in evidence">${n}</span>`);
+        return hasCite ? s : `<span class="unsourced" title="No reference supports this sentence.">${s}</span>`;
+      }).join(' ') + '</p>';
+    }).join('');
+    body.innerHTML = '';
+    if (q) body.appendChild(q);
+    body.insertAdjacentHTML('beforeend', html);
   }
 
   function renderRefusal() {
-    document.getElementById('answerCard').innerHTML = `
-      <div class="answer-text">I couldn't find anything in the knowledge base that answers this. Rather than guess, I'm declining to answer.</div>
-      <div class="verdict pass">✓ correct refusal — no hallucination on out-of-scope query</div>`;
+    const body = $('answer-body');
+    const q = body.querySelector('.q');
+    body.innerHTML = '';
+    if (q) body.appendChild(q);
+    body.insertAdjacentHTML('beforeend',
+      `<div class="refusal"><h3>Not on this sheet.</h3><p>The <b>${esc(state.sheet)}</b> sheet has no references covering this. Try another sheet, or ingest the source that does.</p></div>`);
+    renderStrength({ label: 'Out of scope', cls: 'none', n: '' });
+    $('ev-list').innerHTML = '<div class="empty">Nothing was retrieved — the router stopped before the survey.</div>';
   }
 
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-  // ---- eval dashboard ----
-  // Tries to load out/eval_report.json served via /out/eval_report.json (add a
-  // StaticFiles mount for /out if you want live data); falls back to placeholder.
-  const PLACEHOLDER_METRICS = [
-    { label: 'Context precision', val: 0.84 },
-    { label: 'Context recall', val: 0.79 },
-    { label: 'Faithfulness', val: 0.91 },
-    { label: 'Answer relevance', val: 0.86 },
-  ];
-  const PLACEHOLDER_CATS = [
-    { name: 'Simple factual', score: 0.96, note: 'single-source lookups' },
-    { name: 'Multi-hop', score: 0.83, note: 'requires decomposition' },
-    { name: 'Negation / constraint', score: 0.74, note: 'precision-sensitive, naive RAG fails here' },
-    { name: 'Out-of-scope', score: 0.93, note: 'measures refusal / hallucination resistance' },
-  ];
-
-  function renderEvalDashboard(metrics, cats, isReal) {
-    const note = document.querySelector('.note-live');
-    if (note) note.style.display = isReal ? 'none' : '';
-    document.getElementById('metricsGrid').innerHTML = metrics.map(m => `
-      <div class="metric-card">
-        <div class="label">${m.label}</div>
-        <div class="val">${typeof m.val === 'number' ? m.val.toFixed(2) : m.val}</div>
-        <div class="bar"><span style="width:${(parseFloat(m.val)||0)*100}%"></span></div>
-      </div>`).join('');
-    document.getElementById('catBody').innerHTML = cats.map(c => `
-      <tr>
-        <td>${c.name}</td>
-        <td class="score">${typeof c.score === 'number' ? c.score.toFixed(2) : c.score}<span class="mini-bar"><span style="width:${(parseFloat(c.score)||0)*100}%"></span></span></td>
-        <td style="color:var(--ink-dim)">${c.note}</td>
-      </tr>`).join('');
-  }
-
-  async function loadEvalData() {
-    try {
-      const r = await apiFetch(API_BASE +'/out/eval_report.json', { signal: AbortSignal.timeout(2000) });
-      if (!r.ok) throw new Error('not found');
-      const data = await r.json();
-      // eval_report.json shape: { metrics: {context_precision, context_recall, faithfulness, answer_relevance}, by_category: [...] }
-      const metrics = [
-        { label: 'Context precision', val: data.metrics?.context_precision ?? 0 },
-        { label: 'Context recall', val: data.metrics?.context_recall ?? 0 },
-        { label: 'Faithfulness', val: data.metrics?.faithfulness ?? 0 },
-        { label: 'Answer relevance', val: data.metrics?.answer_relevance ?? 0 },
-      ];
-      const cats = (data.by_category || []).map(c => ({
-        name: c.category, score: c.faithfulness, note: c.note || ''
-      }));
-      renderEvalDashboard(metrics, cats.length ? cats : PLACEHOLDER_CATS, true);
-    } catch {
-      renderEvalDashboard(PLACEHOLDER_METRICS, PLACEHOLDER_CATS, false);
+  function renderError(err) {
+    const body = $('answer-body');
+    const q = body.querySelector('.q');
+    body.innerHTML = '';
+    if (q) body.appendChild(q);
+    let what = 'Query failed.', why = err.message || 'Unknown error.', next = 'Try again.';
+    if (err.status === 401 || err.status === 403) {
+      what = 'Not authorised.'; why = 'The sheet requires an API key and none was accepted.'; next = 'Add a key under Settings.';
+    } else if (err.status === 429) {
+      what = 'Rate limited.'; why = 'This key has used its requests-per-minute budget.'; next = 'Wait a minute, or use a key with a higher limit.';
+    } else if (err.status >= 500) {
+      what = 'Atlas could not complete the survey.'; next = 'Check `make health`; if Qdrant or OpenAI is down the survey cannot run.';
+    } else if (!err.status) {
+      what = 'Could not reach Atlas.'; next = 'Check the API base under Settings, and that the server is running.';
     }
+    body.insertAdjacentHTML('beforeend', `<div class="error"><b>${esc(what)}</b><span>${esc(why)}</span><span>${esc(next)}</span></div>`);
+    for (const [name] of STAGES) if (state.stages[name]?.status === 'running') setStage(name, 'failed');
+    $('survey-figs').textContent = 'failed';
+    $('ev-list').innerHTML = '<div class="empty">References appear here as they are found.</div>';
   }
-  loadEvalData();
+
+  function strengthFrom(j) {
+    const s = j.faithfulness_score;
+    if (j.classification === 'out_of_scope') return { label: 'Out of scope', cls: 'none', n: '' };
+    if (!j.evidence?.some((e) => e.selected)) return { label: 'Unsupported', cls: 'bad', n: 'no references' };
+    if (s == null) return { label: 'Unchecked', cls: 'none', n: '' };
+    const n = s.toFixed(2);
+    if (j.is_faithful && s >= 0.8 && !j.grader_retries) return { label: 'Supported', cls: 'good', n };
+    if (j.is_faithful && (s >= 0.5 || j.grader_retries)) return { label: 'Mixed', cls: 'warn', n };
+    if (s >= 0.3) return { label: 'Weak', cls: 'warn', n };
+    return { label: 'Unsupported', cls: 'bad', n };
+  }
+  function renderStrength(st) {
+    $('strength-wrap').innerHTML = `<span class="strength ${st.cls}" id="strength" role="status">${esc(st.label)}${st.n ? ` <span class="n">· ${esc(String(st.n))}</span>` : ''}</span>`;
+    $('strength').addEventListener('click', () => $('evidence').classList.toggle('open'));
+  }
+  function renderClaims(claims) {
+    if (!claims || !claims.length) { $('claims-wrap').innerHTML = ''; return; }
+    $('claims-wrap').innerHTML = `<div class="claims"><span class="pane-h">Unsupported claims</span><ul>${claims.map((c) => `<li>${esc(c)}</li>`).join('')}</ul></div>`;
+  }
+
+  function renderEvidence() {
+    const list = $('ev-list');
+    const ev = state.evidence;
+    $('ev-count').textContent = `${ev.length} ref${ev.length === 1 ? '' : 's'}`;
+    if (!ev.length) { list.innerHTML = '<div class="empty">Nothing retrieved.</div>'; return; }
+    const maxRerank = Math.max(...ev.map((e) => e.scores.rerank ?? e.scores.rrf ?? e.scores.score ?? 0), 1e-9);
+    list.innerHTML = ev.map((e) => {
+      const n = e.citation ?? state.citationByChunk[e.chunk_id];
+      const top = e.scores.rerank ?? e.scores.rrf ?? e.scores.score ?? 0;
+      const pct = Math.max(2, Math.round(100 * top / maxRerank));
+      const scores = SCORE_ORDER.filter((k) => e.scores[k] != null)
+        .map((k) => `<span><b>${k}</b> ${fmtScore(k, e.scores[k])}</span>`).join('');
+      const grid = `chars ${fmt(e.start_char)}–${fmt(e.end_char)}${e.page_number != null ? ` · p.${e.page_number}` : ''}`;
+      return `<article class="ref ${n ? 'cited' : ''} ${e.selected ? '' : 'cut'}" id="ref-${esc(e.chunk_id)}" data-chunk="${esc(e.chunk_id)}">
+        <div class="h">${n ? `<span class="cite">${n}</span>` : ''}<span class="src" title="${esc(e.source)}">${esc(e.source)}</span><span class="idx">ref ${e.chunk_index}</span></div>
+        <div class="grid">${grid}</div>
+        <div class="ex">${esc(e.excerpt)}</div>
+        <div class="sc">${scores}</div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        ${e.selected ? '' : '<div class="cutnote">cut at rerank · not sent to the generator</div>'}
+      </article>`;
+    }).join('');
+  }
+
+  function renderSurvey() {
+    const bar = $('survey-bar'), rows = $('survey-rows');
+    const known = STAGES.map(([name, cls, label]) => ({ name, cls, label, ...(state.stages[name] || { status: 'pending' }) }));
+    const total = known.reduce((a, s) => a + (s.status === 'done' && s.ms ? s.ms : 0), 0);
+    const anyRun = known.some((s) => s.status !== 'pending');
+
+    if (!anyRun) {
+      bar.innerHTML = known.map((s) => `<div class="seg ghost">${s.label}</div>`).join('');
+      rows.innerHTML = '';
+      return;
+    }
+    let lastCls = '';
+    bar.innerHTML = known.map((s) => {
+      if (s.status === 'pending') return '';
+      if (s.status === 'skipped') return `<div class="seg skipped" style="flex:0 0 auto" title="${s.label}: skipped">${s.label}</div>`;
+      if (s.status === 'failed') return `<div class="seg failed" style="flex:1" title="${s.label}: failed">${s.label}</div>`;
+      if (s.status === 'running') return `<div class="seg ${s.cls} running" style="flex:1" title="${s.label}: running">${s.label}</div>`;
+      // Grow in proportion to time so segments plus any skipped markers
+      // always fit the bar; a floor keeps a 40 ms route from vanishing.
+      const grow = Math.max(s.ms || 0, total * 0.015);
+      const alt = s.cls === lastCls ? 'alt' : ''; lastCls = alt ? '' : s.cls;
+      return `<div class="seg ${s.cls} ${alt}" style="flex:${grow} 1 0%" title="${s.label}: ${fmt(Math.round(s.ms || 0))} ms">${s.label}</div>`;
+    }).join('');
+
+    rows.innerHTML = known.filter((s) => s.status !== 'pending').map((s) => {
+      const mk = s.status === 'skipped' ? 'skipped' : s.status === 'failed' ? 'failed' : s.status === 'running' ? 'running' : s.cls;
+      const ms = s.ms != null ? fmt(Math.round(s.ms)) : (s.status === 'skipped' ? '—' : '…');
+      const detail = esc(s.detail || (s.status === 'skipped' ? 'not reached' : ''))
+        .replace(/↻ (\d+)/, '<span class="retry">↻ $1</span>');
+      const label = s.status === 'skipped' ? `<s>${s.label}</s>` : s.label;
+      return `<tr><td><i class="mk ${mk}"></i>${label}</td><td>${ms}</td><td>${detail}</td></tr>`;
+    }).join('');
+  }
+
+  // ── Interactions ─────────────────────────────────────────────────────────
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.cite[data-n]');
+    if (chip) {
+      const id = state.numberToChunk[chip.dataset.n];
+      const card = id && document.getElementById('ref-' + id);
+      if (!card) return;
+      $('evidence').classList.add('open');
+      card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      card.classList.add('flash');
+      setTimeout(() => card.classList.remove('flash'), 300);
+      return;
+    }
+    const card = e.target.closest('.ref');
+    if (card) card.classList.toggle('open');
+  });
+
+  $('survey-toggle').addEventListener('click', (e) => {
+    const t = $('survey-table');
+    t.hidden = !t.hidden;
+    e.target.textContent = t.hidden ? 'Expand' : 'Collapse';
+    e.target.setAttribute('aria-expanded', String(!t.hidden));
+  });
+
+  $('btn-key').addEventListener('click', (e) => {
+    const k = $('keystrip');
+    k.hidden = !k.hidden;
+    e.target.setAttribute('aria-pressed', String(!k.hidden));
+  });
+
+  $('btn-settings').addEventListener('click', (e) => {
+    const p = $('settings');
+    p.hidden = !p.hidden;
+    e.target.setAttribute('aria-expanded', String(!p.hidden));
+    if (!p.hidden) {
+      $('api-key').value = store.get(KEY_STORE);
+      $('api-base').value = store.get(BASE_STORE);
+      $('theme').value = store.get(THEME_STORE);
+      $('api-key').focus();
+    }
+  });
+  $('settings-save').addEventListener('click', () => {
+    store.set(KEY_STORE, $('api-key').value.trim());
+    store.set(BASE_STORE, $('api-base').value.trim());
+    store.set(THEME_STORE, $('theme').value);
+    applyTheme($('theme').value);
+    $('settings').hidden = true;
+    $('btn-settings').setAttribute('aria-expanded', 'false');
+    health(); loadSheets();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { $('settings').hidden = true; $('evidence').classList.remove('open'); }
+  });
+
+  // ── Utils ────────────────────────────────────────────────────────────────
+  function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+  function fmt(n) { return n == null ? '—' : Number(n).toLocaleString('en-US'); }
+  function fmtScore(k, v) { return k === 'bm25' ? Number(v).toFixed(1) : k === 'rrf' ? Number(v).toFixed(3) : Number(v).toFixed(2); }
+
+  // ── Boot ─────────────────────────────────────────────────────────────────
+  health(); loadSheets(); renderSurvey();
+})();
 </script>
 </body>
 </html>
