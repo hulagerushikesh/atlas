@@ -7,6 +7,12 @@ Read `DESIGN.md` first. It is the visual contract — tokens, type, layout,
 components, copy rules, and a do-not-ship list. Stylesheets that disagree
 with it are bugs.
 
+## Planning and learning
+`planning/STATUS.md` is where the project stands; read it at session start
+and update it when a milestone moves. `planning/ROADMAP.md` holds the
+milestones. `learning/` is study material for the user — keep it accurate
+when the code it references changes.
+
 ## Console
 `console/` is a Vite + React + Tailwind + shadcn + Motion app with two pages:
 `index.html` (the console, served at `/app`) and `landing.html` (served at `/`).
