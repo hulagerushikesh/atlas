@@ -37,7 +37,7 @@ data/corpus/*/
 
 
 # Scratch
-atlas-summary.html
+planning/archive/atlas-summary-2026-07.html
 
 # Console (Vite) — built output is committed to src/atlas/api/static
 console/node_modules/

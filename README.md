@@ -119,6 +119,8 @@ atlas/
 │   └── integration/      # Tests against real Qdrant/Redis (docker-compose up first)
 ├── eval_data/            # Evaluation datasets (JSON) and reports
 ├── docs/                 # Per-module design docs
+├── learning/             # Study path: basics → research, mapped to the code
+├── planning/             # Status, roadmap, milestones, backlog, decisions
 ├── docker-compose.yml    # Qdrant + Redis + Atlas API
 ├── Dockerfile
 └── pyproject.toml
@@ -178,6 +180,7 @@ docker-compose up --build
 | C — Agentic Orchestration | ✅ | [docs/orchestration.md](docs/orchestration.md) |
 | D — Evaluation Harness | ✅ | [docs/evaluation.md](docs/evaluation.md) |
 | E — API & Observability | ✅ | [docs/api.md](docs/api.md) |
+| Deployment | ✅ | [docs/deploy.md](docs/deploy.md) |
 | Shared Interfaces | ✅ | This file |
 
 ---
