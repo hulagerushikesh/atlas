@@ -11,6 +11,8 @@ Usage:
     python scripts/run_eval.py --dataset eval_data/sample_dataset.json
     python scripts/run_eval.py --run-name my_experiment --concurrency 2
     python scripts/run_eval.py --compare eval_data/reports/baseline.json
+    python scripts/run_eval.py --set reranker.enabled=false --run-name no-rerank
+    python scripts/run_eval.py --set reranker.top_k=10 --set retrieval.top_k=30
 
 Exit code 0 = run completed (even if scores are low).
 Exit code 1 = setup error (missing file, infra unreachable).
@@ -61,7 +63,7 @@ def _build_pipeline(settings, namespace: str = "default"):
             BM25Retriever(sparse_index),
         ],
         config=settings.retrieval,
-        reranker=CrossEncoderReranker(settings.reranker),
+        reranker=CrossEncoderReranker(settings.reranker) if settings.reranker.enabled else None,
         reranker_top_k=settings.reranker.top_k,
     )
 
@@ -105,6 +107,15 @@ async def main(args: argparse.Namespace) -> int:
     configure_logging(level="WARNING", json=False)
     settings = get_settings()
 
+    from atlas.evaluation.overrides import apply_overrides, parse_override
+
+    overrides = dict(parse_override(spec) for spec in args.set)
+    try:
+        settings = apply_overrides(settings, overrides)
+    except ValueError as exc:
+        print(f"Error: bad --set: {exc}", file=sys.stderr)
+        return 1
+
     dataset_path = Path(args.dataset)
     if not dataset_path.exists():
         print(f"Error: dataset not found: {dataset_path}", file=sys.stderr)
@@ -114,6 +125,8 @@ async def main(args: argparse.Namespace) -> int:
     print(f"Dataset     : {dataset_path}")
     print(f"Run name    : {args.run_name}")
     print(f"Concurrency : {args.concurrency}")
+    if overrides:
+        print(f"Overrides   : {overrides}")
     print("─" * 55)
 
     with open(dataset_path) as f:
@@ -133,11 +146,14 @@ async def main(args: argparse.Namespace) -> int:
         name=args.run_name,
         description=(
             f"chat={o.primary_model} embed={o.embedding_model}@{o.embedding_dimensions} "
-            f"retrieval.top_k={settings.retrieval.top_k} reranker.top_k={settings.reranker.top_k} "
+            f"retrieval.top_k={settings.retrieval.top_k} "
+            f"reranker={'on' if settings.reranker.enabled else 'off'}"
+            f"/top_k={settings.reranker.top_k} "
             f"chunk={settings.chunking.strategy}/{settings.chunking.size}"
             f"/{settings.chunking.overlap} "
             f"namespace={args.namespace}"
         ),
+        overrides=overrides,
     )
 
     print(f"\nRunning {len(dataset.samples)} samples…")
@@ -199,5 +215,13 @@ if __name__ == "__main__":
         "--compare",
         metavar="BASELINE_JSON",
         help="Path to a previous run's JSON report for A/B comparison.",
+    )
+    parser.add_argument(
+        "--set",
+        action="append",
+        default=[],
+        metavar="SECTION.FIELD=VALUE",
+        help="Override a setting for this run, e.g. reranker.enabled=false or "
+             "retrieval.top_k=30. Repeatable. Recorded in the report.",
     )
     sys.exit(asyncio.run(main(parser.parse_args())))

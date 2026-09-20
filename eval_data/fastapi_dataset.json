@@ -17,9 +17,9 @@
     {
       "id": "fq-002",
       "question": "What Python version does FastAPI require?",
-      "ground_truth_answer": "FastAPI requires Python 3.8 or later. It is compatible with Python 3.8, 3.9, 3.10, 3.11, and 3.12.",
+      "ground_truth_answer": "FastAPI currently requires Python 3.10 or later. The release notes record dropping Python 3.7 (require 3.8+), then dropping 3.8, and most recently dropping Python 3.9, so 3.10 is the minimum supported version.",
       "relevant_doc_ids": [
-        "index"
+        "release-notes"
       ],
       "metadata": {
         "category": "simple_factual",
@@ -92,7 +92,9 @@
       "question": "How do you stream a large file download through FastAPI without loading it all into memory?",
       "ground_truth_answer": "Use StreamingResponse with a generator function. Define an async generator that yields chunks of the file, wrap it in StreamingResponse(generator(), media_type='application/octet-stream'), and FastAPI will stream the response without buffering the entire content in memory.",
       "relevant_doc_ids": [
-        "advanced/custom-response"
+        "advanced/stream-data",
+        "advanced/custom-response",
+        "tutorial/stream-json-lines"
       ],
       "metadata": {
         "category": "multi_hop",
@@ -138,7 +140,7 @@
     {
       "id": "fq-012",
       "question": "Does FastAPI require you to use Pydantic for input validation, or can you skip it entirely?",
-      "ground_truth_answer": "Pydantic is optional per endpoint. You can declare parameters without Pydantic models \u2014 plain Python type hints (int, str, float) and Query()/Path()/Body() with basic constraints are supported. Pydantic models are required only for complex nested request bodies.",
+      "ground_truth_answer": "Pydantic is optional per endpoint. You can declare parameters without Pydantic models — plain Python type hints (int, str, float) and Query()/Path()/Body() with basic constraints are supported. Pydantic models are required only for complex nested request bodies.",
       "relevant_doc_ids": [
         "tutorial/query-params-str-validations"
       ],
