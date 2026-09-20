@@ -18,7 +18,7 @@ import pytest
 
 from atlas.ingestion.chunkers import FixedSizeChunker
 from atlas.ingestion.indexer import DocumentIndexer
-from atlas.interfaces.document import Document, DocumentType
+from atlas.interfaces.document import Chunk, Document, DocumentType
 from atlas.interfaces.embedder import EmbeddingResult
 from atlas.interfaces.index import IndexStats
 
@@ -55,6 +55,7 @@ def mock_embedder() -> MagicMock:
 def mock_dense() -> MagicMock:
     idx = MagicMock()
     idx.upsert = AsyncMock(return_value=3)
+    idx.unchanged_ids = AsyncMock(return_value=set())
     idx.stats = AsyncMock(
         return_value=IndexStats(total_chunks=3, collection_name="test", index_type="dense")
     )
@@ -115,6 +116,7 @@ class TestDocumentIndexer:
     ) -> None:
         dense = MagicMock()
         dense.upsert = AsyncMock(return_value=0)
+        dense.unchanged_ids = AsyncMock(return_value=set())
         sparse = MagicMock()
         sparse.upsert = AsyncMock(return_value=0)
 
@@ -172,3 +174,45 @@ class TestDocumentIndexer:
         (tmp_path / "a.txt").write_text("content alpha " * 20)
         result = await indexer.index_directory(tmp_path)
         assert result.errors == []
+
+
+class TestIdempotency:
+    """Found on the first live run: every ingest duplicated the corpus."""
+
+    def test_document_and_chunk_ids_are_deterministic(self) -> None:
+        from atlas.interfaces.document import ChunkMetadata
+        a = Document(source="docs/x.md", doc_type=DocumentType.MARKDOWN, content="hi")
+        b = Document(source="docs/x.md", doc_type=DocumentType.MARKDOWN, content="hi")
+        assert a.id == b.id
+        meta = ChunkMetadata(
+            doc_id=a.id, source=a.source, doc_type=a.doc_type,
+            chunk_index=2, start_char=0, end_char=2,
+        )
+        assert Chunk(content="hi", metadata=meta).id == Chunk(content="hi", metadata=meta).id
+        assert Chunk(content="hi", metadata=meta).id != Chunk(
+            content="hi", metadata=meta.model_copy(update={"chunk_index": 3})
+        ).id
+
+    @pytest.mark.asyncio
+    async def test_unchanged_chunks_are_not_embedded(
+        self, mock_embedder: MagicMock, mock_dense: MagicMock, mock_sparse: MagicMock
+    ) -> None:
+        # Dense index reports every chunk as already present and unchanged
+        async def _all_unchanged(chunks):  # type: ignore[no-untyped-def]
+            return {c.id for c in chunks}
+        mock_dense.unchanged_ids = AsyncMock(side_effect=_all_unchanged)
+        mock_dense.upsert = AsyncMock(return_value=0)
+        mock_sparse.upsert = AsyncMock(return_value=0)
+
+        indexer = DocumentIndexer(
+            chunker=FixedSizeChunker(size=100, overlap=10),
+            embedder=mock_embedder,
+            dense_index=mock_dense,
+            sparse_index=mock_sparse,
+        )
+        result = await indexer.index_documents([_make_doc()])
+
+        mock_embedder.embed_texts.assert_not_called()
+        assert result.documents_skipped == 1
+        assert result.documents_processed == 0
+        assert result.total_tokens == 0

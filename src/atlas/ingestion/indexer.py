@@ -105,8 +105,10 @@ class DocumentIndexer:
             # hand back a CancelledError, which would otherwise fall through
             # and blow up on the attribute access below.
             if isinstance(result, BaseException):
-                logger.warning("indexing_file_failed", path=str(path), error=str(result))
-                combined.errors.append(f"{path}: {result}")
+                # str() of TimeoutError and friends is empty; repr names the type.
+                msg = str(result) or repr(result)
+                logger.warning("indexing_file_failed", path=str(path), error=msg)
+                combined.errors.append(f"{path}: {msg}")
                 continue
             combined.documents_processed += result.documents_processed
             combined.documents_skipped += result.documents_skipped
@@ -135,16 +137,24 @@ class DocumentIndexer:
                 log.warning("no_chunks_produced")
                 return
 
-            # Embed all chunks in a single batched call
-            embed_result = await self._embedder.embed_texts([c.content for c in chunks])
-            # strict: a short vector list would otherwise silently leave the
-            # trailing chunks unembedded and still index them.
-            for chunk, vector in zip(chunks, embed_result.vectors, strict=True):
-                chunk.embedding = vector
+            # Ask the dense index which chunks it already holds unchanged, so
+            # a re-ingest of an unchanged corpus makes zero embedding calls.
+            unchanged = await self._dense.unchanged_ids(chunks)
+            to_embed = [c for c in chunks if c.id not in unchanged]
 
-            # Upsert to both indexes concurrently
+            total_tokens = 0
+            if to_embed:
+                embed_result = await self._embedder.embed_texts([c.content for c in to_embed])
+                total_tokens = embed_result.total_tokens
+                # strict: a short vector list would otherwise silently leave
+                # the trailing chunks unembedded and still index them.
+                for chunk, vector in zip(to_embed, embed_result.vectors, strict=True):
+                    chunk.embedding = vector
+
+            # Upsert to both indexes concurrently. Sparse gets every chunk
+            # (it dedupes on its own) so BM25 can catch up if it fell behind.
             dense_written, sparse_written = await asyncio.gather(
-                self._dense.upsert(chunks),
+                self._dense.upsert(to_embed),
                 self._sparse.upsert(chunks),
             )
 
@@ -154,12 +164,12 @@ class DocumentIndexer:
             else:
                 result.documents_processed += 1
                 result.chunks_indexed += dense_written
-                result.total_tokens += embed_result.total_tokens
+                result.total_tokens += total_tokens
 
             log.info(
                 "document_indexed",
                 chunks=len(chunks),
                 dense_written=dense_written,
                 sparse_written=sparse_written,
-                tokens=embed_result.total_tokens,
+                tokens=total_tokens,
             )

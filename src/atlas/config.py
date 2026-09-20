@@ -51,6 +51,8 @@ class OpenAIConfig(BaseSettings):
     fallback_model: str = "gpt-3.5-turbo"
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 1536
+    # Inputs per embeddings request. OpenAI allows 2048; Gemini caps at 100.
+    embedding_batch_size: int = 100
 
 
 class ChunkingConfig(BaseSettings):

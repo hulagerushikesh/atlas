@@ -36,6 +36,13 @@ class BaseIndex(ABC):
         (skipped chunks with unchanged content_hash are not counted).
         """
 
+    async def unchanged_ids(self, chunks: list[Chunk]) -> set[str]:
+        """
+        Ids of chunks already stored with the same content_hash. Lets the
+        indexer skip embedding unchanged chunks. Default: nothing is known.
+        """
+        return set()
+
     @abstractmethod
     async def delete(self, chunk_ids: list[str]) -> int:
         """Delete chunks by id. Returns count deleted."""

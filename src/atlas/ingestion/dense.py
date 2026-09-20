@@ -24,8 +24,11 @@ Design rationale:
 
 from __future__ import annotations
 
+import asyncio
+
 import structlog
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
     Distance,
     PointStruct,
@@ -49,43 +52,62 @@ class QdrantDenseIndex(BaseIndex):
         self._dimensions = dimensions
         api_key = config.api_key.get_secret_value() if config.api_key else None
         self._client = AsyncQdrantClient(url=config.url, api_key=api_key)
+        self._ensure_lock = asyncio.Lock()
+        self._collection_ready = False
 
     async def ensure_collection(self) -> None:
-        """Create the collection if it doesn't exist. Idempotent."""
-        collections = await self._client.get_collections()
-        names = {c.name for c in collections.collections}
-        if self._config.collection_name not in names:
-            await self._client.create_collection(
-                collection_name=self._config.collection_name,
-                vectors_config=VectorParams(
-                    size=self._dimensions,
-                    distance=Distance.COSINE,
-                ),
-            )
-            logger.info(
-                "qdrant_collection_created",
-                collection=self._config.collection_name,
-                dimensions=self._dimensions,
-            )
+        """Create the collection if it doesn't exist. Idempotent and safe
+        under concurrency: the indexer runs several documents at once and on
+        a fresh database they all race to create the collection (409)."""
+        if self._collection_ready:
+            return
+        async with self._ensure_lock:
+            if self._collection_ready:
+                return
+            collections = await self._client.get_collections()
+            names = {c.name for c in collections.collections}
+            if self._config.collection_name not in names:
+                try:
+                    await self._client.create_collection(
+                        collection_name=self._config.collection_name,
+                        vectors_config=VectorParams(
+                            size=self._dimensions,
+                            distance=Distance.COSINE,
+                        ),
+                    )
+                except UnexpectedResponse as e:
+                    if e.status_code != 409:  # created by another process
+                        raise
+                logger.info(
+                    "qdrant_collection_created",
+                    collection=self._config.collection_name,
+                    dimensions=self._dimensions,
+                )
+            self._collection_ready = True
 
-    async def upsert(self, chunks: list[Chunk]) -> int:
+    async def unchanged_ids(self, chunks: list[Chunk]) -> set[str]:
         await self.ensure_collection()
-
+        if not chunks:
+            return set()
         # Fetch existing content hashes for all incoming chunk IDs in one call
-        existing_ids = [c.id for c in chunks]
         existing = await self._client.retrieve(
             collection_name=self._config.collection_name,
-            ids=existing_ids,
+            ids=[c.id for c in chunks],
             with_payload=["content_hash"],
         )
         existing_hashes: dict[str, str] = {
             str(p.id): (p.payload or {}).get("content_hash", "") for p in existing
         }
+        return {
+            c.id for c in chunks
+            if existing_hashes.get(c.id, "") == c.metadata.content_hash
+        }
 
-        to_write = [
-            c for c in chunks
-            if existing_hashes.get(c.id, "") != c.metadata.content_hash
-        ]
+    async def upsert(self, chunks: list[Chunk]) -> int:
+        await self.ensure_collection()
+
+        unchanged = await self.unchanged_ids(chunks)
+        to_write = [c for c in chunks if c.id not in unchanged]
         skipped = len(chunks) - len(to_write)
 
         if skipped:
