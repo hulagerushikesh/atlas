@@ -186,7 +186,7 @@ def _build_components(settings):
 
     pipeline = RAGPipeline(
         retriever=hybrid,
-        router=QueryRouter(llm),
+        router=QueryRouter(llm, settings.router),
         decomposer=QueryDecomposer(llm),
         grader=RetrievalGrader(llm),
         generator=AnswerGenerator(llm),

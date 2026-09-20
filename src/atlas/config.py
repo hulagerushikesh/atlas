@@ -69,6 +69,15 @@ class RetrievalConfig(BaseSettings):
     top_k: int = 20  # candidates from each retriever before fusion
 
 
+class RouterConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="ROUTER_", env_file=_ENV_FILE, extra="ignore")
+
+    # What the knowledge base covers, in one sentence. The router uses it to
+    # decide what is out of scope; without it a generic prompt rejected every
+    # FastAPI question as "general coding help" on the first live run.
+    domain: str = "the documents that have been ingested into this knowledge base"
+
+
 class RerankerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RERANKER_", env_file=_ENV_FILE, extra="ignore")
 
@@ -104,6 +113,7 @@ class Settings(BaseSettings):
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)
+    router: RouterConfig = Field(default_factory=RouterConfig)
     api: APIConfig = Field(default_factory=APIConfig)
 
 

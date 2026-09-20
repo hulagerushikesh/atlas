@@ -66,7 +66,7 @@ def _build_pipeline(settings, namespace: str = "default"):
 
     return RAGPipeline(
         retriever=hybrid,
-        router=QueryRouter(llm),
+        router=QueryRouter(llm, settings.router),
         decomposer=QueryDecomposer(llm),
         grader=RetrievalGrader(llm),
         generator=AnswerGenerator(llm),
