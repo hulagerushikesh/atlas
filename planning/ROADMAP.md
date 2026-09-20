@@ -4,22 +4,22 @@ Four milestones. Each has exit criteria; a milestone is not done until every
 one is ticked. Order is fixed — M2 without M1's numbers would deploy something
 unmeasured.
 
-## M1 — First live run  ◄ current
+## M1 — First live run  ✅ done 2026-09-20 (v0.1.0)
 
 **Goal:** Atlas answers real questions over the real FastAPI corpus with
-live OpenAI, and we have measured numbers.
+a live LLM (ended up Gemini, not OpenAI), and we have measured numbers.
 
 Exit criteria:
-- [ ] `make ingest` completes on `data/corpus/fastapi/` (120 files), re-run is idempotent (0 re-embeds)
-- [ ] `make eval` produces a report; the four metrics + p50/p95 latency + $/query are recorded in STATUS.md
-- [ ] Console `/app` and landing `/` verified against the live API, not the mock
-- [ ] BM25 per-namespace bug fixed with a test
-- [ ] README placeholders replaced with measured numbers
-- [ ] Resume bullets updated with the same numbers
+- [x] `make ingest` completes on `data/corpus/fastapi/` (155 files, 4,021 chunks), re-run is idempotent (0.3 s, 0 re-embeds) — after fixing uuid4 ids
+- [x] `make eval` produces a report; four metrics recorded in STATUS.md (p50 ≈7 s uncached, ≈₹0.03/query)
+- [x] Console `/app` and landing `/` verified against the live API
+- [x] BM25 per-namespace bug fixed with a test (plus the collection-name mismatch nobody knew about)
+- [x] README placeholders replaced with measured numbers; landing has a Measured section
+- [ ] Resume bullets updated with the same numbers — **user's job**, resume lives in `customise resume/`
 
 Plan: [milestones/M1-first-live-run.md](milestones/M1-first-live-run.md)
 
-## M2 — Cloud deploy (GCP)
+## M2 — Cloud deploy (GCP)  ◄ next
 
 **Goal:** A public URL that stays up, costs a known amount, and holds no
 secrets in code.

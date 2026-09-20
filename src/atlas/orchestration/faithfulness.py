@@ -52,7 +52,7 @@ from the context.
 Respond with valid JSON:
 {
   "claims": [
-    {"claim": "...", "verdict": "supported"|"unsupported"|"unverifiable", "evidence": "..."}
+    {"claim": "...", "verdict": "supported"|"unsupported"|"unverifiable", "evidence": "<= 12 words"}
   ],
   "faithfulness_score": 0.0–1.0,
   "summary": "one-sentence overall assessment"
@@ -116,11 +116,23 @@ class FaithfulnessChecker:
                 ),
             ],
             temperature=0.0,
-            max_tokens=512,
+            # Long answers yield 10+ claims; 512 truncated the JSON mid-list on
+            # the first live eval and the parse failed the whole sample.
+            max_tokens=2048,
             json_mode=True,
         )
         response = await self._llm.generate(request)
-        parsed = parse_json_response(response.content)
+        try:
+            parsed = parse_json_response(response.content)
+        except ValueError as exc:
+            # Flag, don't suppress — and don't fail the query because the
+            # judge stuttered. Score 0 makes it visible in the response.
+            logger.warning("faithfulness_judge_unparseable", error=str(exc))
+            return FaithfulnessResult(
+                score=0.0,
+                is_faithful=False,
+                summary="faithfulness judge output was not valid JSON; answer unverified",
+            )
 
         raw_claims = parsed.get("claims", [])
         claims = [

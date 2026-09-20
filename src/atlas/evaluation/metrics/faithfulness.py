@@ -86,7 +86,9 @@ class FaithfulnessMetric(BaseMetric):
                 ),
             ],
             temperature=0.0,
-            max_tokens=512,
+            # Long answers yield 10+ claims; 512 truncated the JSON mid-list on
+            # the first live eval and the parse failed the whole sample.
+            max_tokens=2048,
             json_mode=True,
         )
         response = await self._llm.generate(request)

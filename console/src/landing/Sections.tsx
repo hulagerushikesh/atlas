@@ -185,12 +185,47 @@ export function FieldNotes() {
   )
 }
 
+/* ── Measured ──────────────────────────────────────────────────────────── */
+
+const MEASURED = [
+  { k: "Context precision", v: "0.31", d: "of the 5 chunks handed to the generator came from a labelled-relevant page" },
+  { k: "Context recall", v: "0.67", d: "of labelled pages had at least one chunk retrieved — 5 of 15 questions missed" },
+  { k: "Faithfulness", v: "1.00", d: "of answer claims grounded in the retrieved references, per the claim-level judge" },
+  { k: "Answer relevance", v: "0.82", d: "question ↔ answer alignment (RAGAS reverse-question), ±0.01 run to run" },
+]
+
+export function Measured() {
+  return (
+    <section id="measured" className="mx-auto max-w-6xl px-5 py-24">
+      <SectionHead eyebrow="Measured · 2026-09-20" title="First live run, numbers included.">
+        Full FastAPI documentation — 155 files, 4,021 references — indexed and queried through the real
+        pipeline. 15 questions, two back-to-back runs; retrieval metrics were identical both times.
+      </SectionHead>
+      <div className="mt-12 grid gap-px overflow-hidden rounded-[3px] border bg-border sm:grid-cols-2 lg:grid-cols-4">
+        {MEASURED.map((m, i) => (
+          <Reveal key={m.k} delay={i * 0.05} className="bg-background p-5">
+            <div className="label">{m.k}</div>
+            <div className="mt-2 font-display text-[40px] font-semibold leading-none tabular">{m.v}</div>
+            <p className="mt-3 text-[14px] leading-relaxed text-ink-2">{m.d}</p>
+          </Reveal>
+        ))}
+      </div>
+      <Reveal delay={0.2} className="mt-6 max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
+        The honest read: faithfulness is real but easy on documentation questions; precision is the number to
+        move. Three of the five recall misses are genuine — adjacent tutorial pages outranked the target — and the
+        planned fixes are a wider rerank window, HyDE, and contextual chunk headers. Full per-question breakdown in
+        the README.
+      </Reveal>
+    </section>
+  )
+}
+
 /* ── Quick start ───────────────────────────────────────────────────────── */
 
 const STEPS = [
-  { t: "Add your OpenAI key", b: <>Copy <code>.env.example</code> to <code>.env</code> and set <code>OPENAI_API_KEY</code>. Everything else has local defaults.</> },
+  { t: "Add your API key", b: <>Copy <code>.env.example</code> to <code>.env</code> and set <code>OPENAI_API_KEY</code> — any OpenAI-compatible endpoint works via <code>OPENAI_BASE_URL</code>; the measured run used Gemini. Everything else has local defaults.</> },
   { t: "Start the infrastructure", b: <>Qdrant and Redis run in Docker; the API runs on your machine.</> },
-  { t: "Fetch and index a corpus", b: <>The bundled script downloads the FastAPI docs (MIT, ~120 files). Ingest fails fast and names the file if anything goes wrong.</> },
+  { t: "Fetch and index a corpus", b: <>The bundled script downloads the FastAPI docs (MIT, 155 files). Ingest fails fast and names the file if anything goes wrong.</> },
   { t: "Serve", b: <>Console at <code>/app</code>, Swagger at <code>/docs</code>, Prometheus at <code>/metrics</code>.</> },
   { t: "Ask", b: <>Use the console, or <code>POST /query</code> and read the evidence straight from the response.</> },
 ]
@@ -198,7 +233,7 @@ const STEPS = [
 const SCRIPT = `cp .env.example .env            # set OPENAI_API_KEY
 make docker-up                    # qdrant + redis
 make install
-make fetch-corpus && make ingest  # ~120 FastAPI docs
+make fetch-corpus && make ingest  # 155 FastAPI docs
 make serve                        # → http://localhost:8010/app`
 
 export function QuickStart() {
@@ -219,7 +254,7 @@ export function QuickStart() {
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-24 lg:grid-cols-2">
         <div>
           <SectionHead eyebrow="Quick start" title="From zero to cited answers in five commands.">
-            Requires Docker, Python 3.11, and an OpenAI key. The whole pipeline — ingestion, retrieval, faithfulness — runs locally.
+            Requires Docker, Python 3.11, and an OpenAI-compatible key (Gemini works). The whole pipeline — ingestion, retrieval, faithfulness — runs locally.
           </SectionHead>
           <ol className="mt-10 space-y-5">
             {STEPS.map((s, i) => (

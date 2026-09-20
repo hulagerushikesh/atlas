@@ -187,55 +187,74 @@ docker-compose up --build
 
 ## Results
 
-Atlas is evaluated on a 30-question set spanning simple factual, multi-hop, negation/constraint, ambiguous, and out-of-scope queries. Metrics are computed by the built-in harness (`scripts/run_eval.py`) against a live index of the sample corpus.
+Measured 2026-09-20 on the first live run: the full FastAPI documentation
+(155 markdown files, 4,021 chunks) indexed into local Qdrant + BM25, queried
+through the real pipeline with Gemini (`gemini-3.1-flash-lite` for every LLM
+stage, `gemini-embedding-001` at 1536 dims). 15-question set,
+`eval_data/fastapi_dataset.json`. Two back-to-back runs; the second is the
+noise floor.
 
 ### Headline numbers
 
-| Metric | Score | What it measures |
-|---|---|---|
-| Context precision | {{CTX_PRECISION}} | Of the chunks retrieved, the fraction that were actually relevant |
-| Context recall | {{CTX_RECALL}} | Of the chunks that should have been retrieved, the fraction that were |
-| Faithfulness | {{FAITHFULNESS}} | Fraction of answer claims grounded in retrieved context (no hallucination) |
-| Answer relevance | {{ANS_RELEVANCE}} | Semantic alignment between the answer and the original question |
+| Metric | Run 1 | Run 2 | What it measures |
+|---|---|---|---|
+| Context precision | 0.309 | 0.309 | Of the 5 chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.667 | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Faithfulness | 1.000 | 1.000 | Fraction of answer claims the judge found grounded in the retrieved context |
+| Answer relevance | 0.815 | 0.826 | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
-*Measured over {{N_SAMPLES}} questions. Scores are directional signal at this sample size, not tight confidence intervals; the eval set is designed to be expanded to several hundred questions for production-grade claims.*
+*15 questions, ~15k tokens and ≈₹1.5 per run, ~55 s wall clock at concurrency 4.
+Retrieval metrics are deterministic run to run; the LLM-judged one moves by
+about 0.01. Directional signal at this sample size, not a confidence interval.*
 
-### The impact of reranking (A/B)
+### The honest read
 
-The single most consequential design choice is the two-stage retriever: fast ANN search followed by a cross-encoder reranker. Running the identical pipeline with the reranker disabled isolates its contribution.
+- **Faithfulness 1.0 is real but cheap here.** Documentation questions with
+  five doc chunks in context rarely tempt the generator to invent. The number
+  says the pipeline does not hallucinate on easy ground; it does not yet say
+  anything about adversarial or negation questions (none in this set).
+- **Recall 0.67 = 5 of 15 questions retrieved nothing from their labelled
+  document.** Reading the misses: two are labelling problems (the answer to
+  "how do you stream a large file" lives in `advanced/stream-data`, not
+  `advanced/custom-response`; "what Python version" is answered on the
+  features page, not `index`); three are genuine retrieval misses
+  (`tutorial/body`, `tutorial/response-model`, `tutorial/security/*`) where
+  chunks from adjacent tutorial pages outranked the target.
+- **Precision 0.31 is the number to move.** With `reranker.top_k = 5` and
+  one relevant document per question, the ceiling is ~0.2–0.6 per sample;
+  the misses above pull it down. First experiments (planned, M3): rerank
+  top-k 10–15, HyDE query expansion, contextual chunk headers.
 
-| Configuration | Context precision | Faithfulness |
-|---|---|---|
-| Hybrid retrieval, **no** reranker | {{PRECISION_NO_RERANK}} | {{FAITH_NO_RERANK}} |
-| Hybrid retrieval **+ cross-encoder reranker** | {{PRECISION_RERANK}} | {{FAITH_RERANK}} |
-| **Delta** | **{{PRECISION_DELTA}}** | **{{FAITH_DELTA}}** |
+### Smoke test, same day
 
-Reranking improved context precision by {{PRECISION_DELTA}} on this eval set. Because the reranker only reorders candidates already retrieved, its gain shows up as precision (better chunks surfaced to the top), which in turn lifts faithfulness (the generator has cleaner context to ground on).
+Five hand-written questions through the HTTP API: four in-scope questions
+answered with 3–5 citations each and faithfulness 1.0; one off-corpus question
+("what does the capital of France have to do with FastAPI") stopped at the
+router with no retrieval. p50 latency ≈7 s uncached, <1 ms on a cache hit;
+the reranker's first call after a cold start adds ~5 s.
 
-### Where it does well, where it doesn't
+### What the first live run found
 
-Broken down by question category:
+Every one of these was invisible to 252 green unit tests:
 
-| Category | Faithfulness | Notes |
-|---|---|---|
-| Simple factual | {{FAITH_SIMPLE}} | Single-source lookups; the easy case |
-| Multi-hop | {{FAITH_MULTIHOP}} | Requires decomposition; the decomposer's contribution shows here |
-| Negation / constraint | {{FAITH_NEGATION}} | The failure mode of naive RAG; precision-sensitive |
-| Out-of-scope | {{FAITH_OOS}} | Correct behavior is refusal; measures hallucination resistance |
-
-The honest read: {{ONE_SENTENCE_ON_WEAKEST_CATEGORY}}. This is the next thing I'd improve, likely by {{PROPOSED_FIX}}.
+| Found | Fix |
+|---|---|
+| Re-ingesting duplicated the whole corpus (ids were `uuid4` per run) | Deterministic `uuid5` ids; re-ingest of an unchanged corpus is 0.3 s and zero API calls |
+| CLI ingested into one Qdrant collection, the API read another; BM25 shared one file across namespaces | Namespace resolves both the collection and `data/index/<ns>/bm25_index.json` |
+| Router rejected every FastAPI question as "general coding help" | `ROUTER_DOMAIN` describes the corpus to the router |
+| Pinned Qdrant image predated the client's `query_points` API (404 on every search) | Image bumped to v1.15.4 |
+| Eval matched dataset doc ids against ingester uuids (could only score 0) | Match on corpus-relative path |
+| Faithfulness judge JSON truncated at 512 tokens on long answers | 2048 tokens, short evidence strings, judge failure flagged not fatal |
 
 ### Reproducing these numbers
 
 ```bash
-docker-compose up qdrant redis -d
-python scripts/ingest.py eval_data/corpus/     # index the sample corpus
-python scripts/run_eval.py --report out/eval_report.md
-python scripts/run_eval.py --ab reranker       # runs the A/B comparison
+make docker-up                         # Qdrant + Redis
+python scripts/fetch_corpus.py --max-files 1000
+make ingest                            # ≈₹3.5 in embeddings the first time, free after
+make eval                              # ≈₹1.5, writes eval_data/reports/<run>_<stamp>.{json,md}
+make eval-compare BASELINE=eval_data/reports/<previous>.json
 ```
 
-Reports (JSON + Markdown) are written to `out/`. The A/B comparator applies a 0.02 significance threshold before reporting a delta as meaningful.
-
-### A note on the judge
-
-Faithfulness and answer relevance use an LLM-as-judge. To sanity-check the judge, I hand-labeled {{N_HAND_LABELED}} responses and compared them to the judge's verdicts; agreement was {{JUDGE_AGREEMENT}}. This is a small audit, not a validation study, but it confirms the judge isn't systematically rubber-stamping.
+The A/B comparator applies a 0.02 significance threshold before reporting a
+delta as meaningful.

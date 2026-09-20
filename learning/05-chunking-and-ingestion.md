@@ -48,8 +48,17 @@ retrieval ("only in `tutorial/`") would use via Qdrant payload filters.
 Content is fingerprinted with xxhash. Re-running ingest on an unchanged file
 skips it; a changed file re-embeds only its chunks. Without this every
 re-index costs the full embedding bill and duplicates points. The
-`Indexer` orchestrates load → chunk → hash-check → embed → upsert dense →
-add sparse, and reports counts.
+`Indexer` orchestrates load → chunk → **ask the dense index which chunk ids
+are unchanged** → embed only the rest → upsert dense → add sparse, and
+reports counts.
+
+The hash check only works if ids are stable. `Document.id` is
+`uuid5(source)` and `Chunk.id` is `uuid5(doc_id:chunk_index)`
+(`interfaces/document.py`). Until 2026-09-20 they were `uuid4()` per run, so
+the hash lookup never found anything and three ingests produced 8,278 points
+for a 3,427-chunk corpus — the tests were green because every test built
+the ids once. Lesson: idempotency is a property of the *key*, not the hash.
+Remaining gap: a document that shrinks leaves its old tail chunks behind.
 
 ## Loaders (`ingestion/loaders/`)
 

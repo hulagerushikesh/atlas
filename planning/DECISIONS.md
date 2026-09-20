@@ -41,3 +41,18 @@ Format: date — decision — alternatives — reason.
   Models: `gemini-3.1-flash-lite` primary (same as sextant), `gemini-3.5-flash-lite`
   fallback, `gemini-embedding-001` at 1536-d. Verified: embeddings, JSON mode,
   streaming. Gemini omits `usage` on embeddings → embedder tolerates `None`.
+- **2026-09-20** — Deterministic ids: `Document.id = uuid5(source)`,
+  `Chunk.id = uuid5(doc_id:chunk_index)`. *Alt:* keep uuid4 and dedupe on
+  content_hash via a payload index. *Why:* the dedupe already keyed on id;
+  stable ids make it work with zero extra queries and keep Qdrant point ids
+  valid. Cost: a shrinking doc leaves tail chunks (backlog).
+- **2026-09-20** — Router gets a one-line domain description
+  (`ROUTER_DOMAIN`) and prefers "simple" when unsure. *Alt:* drop the
+  out-of-scope class. *Why:* refusal is a designed state on the landing page;
+  it just needs to know what "in scope" means. Per-namespace domains later.
+- **2026-09-20** — Eval matches `relevant_doc_ids` on corpus-relative path,
+  not ingester id. *Why:* datasets are written by humans naming pages; ids
+  are an implementation detail that just changed once.
+- **2026-09-20** — Ship v0.1.0 with precision 0.31 on the landing page.
+  *Alt:* tune first, publish later. *Why:* the honest number plus the
+  per-miss diagnosis is the portfolio story; M3 is measured against it.
