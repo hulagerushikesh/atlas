@@ -58,7 +58,9 @@ The hash check only works if ids are stable. `Document.id` is
 the hash lookup never found anything and three ingests produced 8,278 points
 for a 3,427-chunk corpus — the tests were green because every test built
 the ids once. Lesson: idempotency is a property of the *key*, not the hash.
-Remaining gap: a document that shrinks leaves its old tail chunks behind.
+The one gap stable ids open — a document that shrinks leaves its old tail
+chunks behind — is closed by `BaseIndex.prune_document(doc_id, chunk_count)`,
+which the indexer calls after every upsert to delete `chunk_index >= count`.
 
 ## Loaders (`ingestion/loaders/`)
 

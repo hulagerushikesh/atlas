@@ -37,6 +37,9 @@ class LoaderRegistry:
         for ext in loader.supported_extensions:
             self._loaders[ext] = loader
 
+    def supports(self, path: Path) -> bool:
+        return path.suffix.lower() in self._loaders
+
     def get(self, path: Path) -> BaseDocumentLoader:
         ext = path.suffix.lower()
         if ext not in self._loaders:
@@ -54,3 +57,8 @@ _registry = LoaderRegistry()
 def get_loader(path: Path) -> BaseDocumentLoader:
     """Return the registered loader for *path*'s file extension."""
     return _registry.get(path)
+
+
+def is_supported(path: Path) -> bool:
+    """True when some loader handles *path*'s extension."""
+    return _registry.supports(path)

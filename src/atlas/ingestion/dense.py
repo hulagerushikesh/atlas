@@ -150,6 +150,38 @@ class QdrantDenseIndex(BaseIndex):
         )
         return len(chunk_ids)
 
+    async def prune_document(self, doc_id: str, chunk_count: int) -> int:
+        from qdrant_client.models import FieldCondition, Filter, MatchValue, Range
+
+        await self.ensure_collection()
+        stale_filter = Filter(
+            must=[
+                FieldCondition(key="doc_id", match=MatchValue(value=doc_id)),
+                FieldCondition(key="chunk_index", range=Range(gte=chunk_count)),
+            ]
+        )
+        # Scroll first so the caller gets a count; Qdrant's filtered delete
+        # does not report how many points it removed.
+        stale_ids: list[str] = []
+        offset = None
+        while True:
+            points, offset = await self._client.scroll(
+                collection_name=self._config.collection_name,
+                scroll_filter=stale_filter,
+                limit=256,
+                offset=offset,
+                with_payload=False,
+                with_vectors=False,
+            )
+            stale_ids.extend(str(p.id) for p in points)
+            if offset is None:
+                break
+        if not stale_ids:
+            return 0
+        await self.delete(stale_ids)
+        logger.info("dense_index_pruned", doc_id=doc_id, count=len(stale_ids))
+        return len(stale_ids)
+
     async def stats(self) -> IndexStats:
         info = await self._client.get_collection(self._config.collection_name)
         return IndexStats(
