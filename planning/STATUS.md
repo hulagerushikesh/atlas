@@ -24,7 +24,7 @@ anything billable.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live ×3.** P 0.31 · R 0.67 · F 1.00 · AR 0.82 (15 q, retrieval metrics deterministic, AR ±0.01) | `eval_data/reports/fastapi-v1_20260920-11*.json` |
+| Evaluation (D) | **Run live ×4.** Relabelled: P 0.42 · R 0.78 · F 1.00 · AR 0.83 (was 0.31/0.67 with two mislabelled questions; same code, same index) | `eval_data/reports/fastapi-v2-relabel_*.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -57,7 +57,9 @@ daily spend cap, console markdown.
   fq-002 → `release-notes`, fq-008 += `stream-data`; `run_eval.py --set`
   applies `PipelineConfig.overrides` (`reranker.enabled=false` now exists);
   `BUDGET_DAILY_USD` cap (0.60 locally); console renders answer markdown.
-  Eval **not re-run** yet (≈₹2.5, needs a yes).
+  Eval re-run on relabelled set: P 0.31→0.42, R 0.67→0.78, F 1.0, AR 0.83
+  (₹0.3, 156 s). Three genuine misses remain: `tutorial/body`,
+  `tutorial/response-model`, `tutorial/security/*` → M3.
 - 2026-09-20 — **M1 done.** Gemini via `OPENAI_BASE_URL`; fixed ingest
   idempotency (uuid5), namespace collection/BM25 mismatch, router domain,
   Qdrant image, eval doc-id matching, judge truncation. Full corpus, three

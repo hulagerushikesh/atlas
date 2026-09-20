@@ -71,3 +71,7 @@ Format: date — decision — alternatives — reason.
   (bold, code, lists, headings), not a markdown library. *Why:* the chips
   need to own `[n]`; a library would either escape them or need a plugin,
   and the generator prompt never emits more than this subset.
+- **2026-09-20** — Relabelled eval numbers (P 0.42 / R 0.78) replace the
+  first-run ones on README and landing. Same pipeline, same index; the change
+  is two corrected labels. README keeps all three columns so the relabelling
+  is visible rather than a silent bump.
