@@ -116,6 +116,11 @@ class Settings(BaseSettings):
     # Auth (disabled by default — set AUTH_ENABLED=true in .env to require keys)
     auth_enabled: bool = False
     admin_secret: str = ""           # required to call POST /keys when auth is enabled
+    # Where API keys live: "sqlite" (data/atlas.db, one box) or "firestore"
+    # (Cloud Run — the disk is ephemeral). Firestore uses the runtime's
+    # service account; AUTH_FIRESTORE_PROJECT only when it differs from ADC.
+    auth_store: Literal["sqlite", "firestore"] = "sqlite"
+    auth_firestore_project: str = ""
 
     # Sub-configs are instantiated here; in tests you can pass them directly.
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)  # type: ignore[arg-type]

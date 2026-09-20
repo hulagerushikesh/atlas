@@ -72,8 +72,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.warning("sentry_sdk_not_installed", detail="pip install sentry-sdk to enable")
 
     # Initialise auth DB (creates tables if first run)
-    from atlas.api.auth import init_db
-    await init_db()
+    from atlas.api import auth as auth_db
+    auth_db.configure_store(
+        settings.auth_store, firestore_project=settings.auth_firestore_project or None
+    )
+    await auth_db.init_db()
 
     # Build shared (cross-namespace) components once
     shared = SharedComponents(settings)

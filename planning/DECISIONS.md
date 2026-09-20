@@ -75,3 +75,12 @@ Format: date — decision — alternatives — reason.
   first-run ones on README and landing. Same pipeline, same index; the change
   is two corrected labels. README keeps all three columns so the relabelling
   is visible rather than a silent bump.
+- **2026-09-20** — Cloud Run topology for M2: scale-to-zero API, Qdrant
+  Cloud free tier, Firestore for keys, no Redis, BM25 + reranker weights
+  baked into the image. *Alt:* a small VM with docker-compose (sextant's
+  route). *Why:* the demo must cost ≈₹0 idle; a VM is ₹270/mo parked and
+  needs a static IP. Cold start (~15 s) is the price and is stated on the
+  landing page. Redis returns when there is a second instance to share.
+- **2026-09-20** — `sentence-transformers<6`. *Why:* 6.x cannot load the
+  MiniLM cross-encoder tokenizer ("Unrecognized processing class"); the
+  pin keeps the image build deterministic until upstream settles.

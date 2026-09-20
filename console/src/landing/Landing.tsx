@@ -39,7 +39,7 @@ export default function Landing() {
             </Button>
           </div>
           <div style={rise(320)} className="animate-rise label mt-10 flex flex-wrap gap-x-6 gap-y-1 tabular">
-            <span><b className="font-medium text-foreground">295</b> tests</span>
+            <span><b className="font-medium text-foreground">312</b> tests</span>
             <span><b className="font-medium text-foreground">86%</b> coverage</span>
             <span><b className="font-medium text-foreground">6</b> stages</span>
             <span><b className="font-medium text-foreground">&lt;1 ms</b> cache hit</span>

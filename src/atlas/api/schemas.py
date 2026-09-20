@@ -172,7 +172,7 @@ class KeyCreateRequest(BaseModel):
 
 class KeyCreateResponse(BaseModel):
     key: str          # shown once — never retrievable again
-    key_id: int
+    key_id: int | str
     name: str
     rate_limit_rpm: int
 

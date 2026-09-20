@@ -21,7 +21,9 @@ from starlette.types import ASGIApp
 
 from atlas.api import auth as auth_db
 
-_PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json", "/metrics", "/"}
+# /keys is guarded by X-Admin-Secret, not a Bearer key — it has to be reachable
+# before the first key exists.
+_PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json", "/metrics", "/", "/keys"}
 _PUBLIC_PREFIXES = ("/app", "/out", "/namespaces")
 
 
