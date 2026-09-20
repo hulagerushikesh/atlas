@@ -38,6 +38,7 @@ class AppState:
     registry: NamespaceRegistry
     cache: QueryCache
     embedding_model: str   # surfaced for cost estimation in routes
+    chat_model: str = "unknown"
 
 
 def get_app_state(request: Request) -> AppState:

@@ -97,6 +97,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             ttl_seconds=settings.redis.cache_ttl_seconds,
         ),
         embedding_model=shared.settings.openai.embedding_model,
+        chat_model=shared.settings.openai.primary_model,
     )
 
     logger.info("atlas_ready")

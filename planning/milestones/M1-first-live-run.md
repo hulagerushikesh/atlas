@@ -1,28 +1,28 @@
 # M1 — First live run
 
-**Status:** blocked on OpenAI credits. Everything else is ready.
-**Owner:** you (steps 0–1), Claude (steps 2–9).
+**Status:** Step 0 done 2026-09-20 (Gemini, not OpenAI). Steps 1–9 open.
+**Owner:** you (step 0), Claude (steps 1–9).
 
 ## Why this milestone
 
-252 tests are green and every one of them mocks OpenAI. The console was
+252 tests are green and every one of them mocks the LLM. The console was
 verified against a mock API. The README quotes placeholder metrics. Until
 this milestone is done, Atlas is an unverified claim. After it, every number
 on the landing page and resume is real.
 
-## Step 0 — You: keys and credits (~10 min)
+## Step 0 — Keys and credits — DONE 2026-09-20
 
-1. OpenAI dashboard → API keys → **revoke** the compromised key (the one pasted in chat)
-   → create a new one.
-2. Billing → add credits. Budget for M1: **~$2–5** (ingest ~120 files ≈
-   $0.05 in embeddings; 30-sample eval × 5 LLM calls × a few runs ≈ $1–2;
-   margin for retries).
-3. Qdrant Cloud → **revoke** the compromised JWT. Not needed for M1 (local
-   Docker Qdrant).
-4. Put the new key in `atlas/.env` as `OPENAI_API_KEY=` — never in
-   `.env.example`, never in chat.
+Switched provider to Gemini (AI Studio key shared with sextant) via
+`OPENAI_BASE_URL`; see DECISIONS 2026-09-20. `.env` points at local Docker
+Qdrant, no cloud key. Verified live: 1536-d embeddings, JSON chat, streaming.
 
-Tell Claude "credits in" and stop there.
+Budget: ₹50–100/day across atlas + sextant. Estimate for M1 at
+`gemini-3.1-flash-lite` ($0.25/$1.50 per Mtok) + `gemini-embedding-001`
+($0.15/Mtok): ingest 120 files ≈ ₹1; 30-sample eval run ≈ ₹10–20; two runs
++ smoke ≈ ₹30–45 total. State ₹ before each paid step.
+
+Still open (security, not blocking): revoke the compromised OpenAI key and
+Qdrant JWT — tracked in STATUS.
 
 ## Step 1 — Preflight (~5 min)
 
@@ -32,8 +32,8 @@ make lint && make typecheck && make test
 .venv/bin/python scripts/check_health.py
 ```
 
-Expect: 252 passed; health reports Qdrant + Redis reachable; OpenAI key
-accepted (a one-token call).
+Expect: 252 passed; health reports Qdrant + Redis reachable; Gemini key
+accepted (a one-token embedding call, ≈₹0).
 
 ## Step 2 — Ingest (~5–10 min)
 

@@ -34,7 +34,9 @@ between modules.
   boundary: bad JSON never reaches business logic. `model_copy(update=...)`
   is how immutable-ish chunks get new scores attached.
 - `config.py` uses `pydantic-settings`: every knob is an env var with a typed
-  default. `OpenAIConfig.primary_model = "gpt-4o-mini"`,
+  default. `OpenAIConfig.primary_model = "gpt-4o-mini"` (overridden to
+  `gemini-3.1-flash-lite` in `.env` — the client is the OpenAI SDK pointed at
+  Gemini's OpenAI-compatible endpoint via `OPENAI_BASE_URL`),
   `RetrievalConfig.top_k = 20`, `RerankerConfig.top_k = 5`. Read that file
   once; it is the whole tunable surface of the system.
 

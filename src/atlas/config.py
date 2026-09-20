@@ -43,7 +43,10 @@ class RedisConfig(BaseSettings):
 class OpenAIConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="OPENAI_", env_file=_ENV_FILE, extra="ignore")
 
-    api_key: SecretStr = Field(..., description="OpenAI API key")
+    api_key: SecretStr = Field(..., description="API key for the OpenAI-compatible provider")
+    # Any OpenAI-compatible endpoint. None = api.openai.com. Gemini:
+    # https://generativelanguage.googleapis.com/v1beta/openai/
+    base_url: str | None = None
     primary_model: str = "gpt-4o-mini"
     fallback_model: str = "gpt-3.5-turbo"
     embedding_model: str = "text-embedding-3-small"

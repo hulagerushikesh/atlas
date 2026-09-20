@@ -36,7 +36,10 @@ class CheckResult(NamedTuple):
 async def check_openai(settings) -> CheckResult:
     import openai
 
-    client = openai.AsyncOpenAI(api_key=settings.openai.api_key)
+    client = openai.AsyncOpenAI(
+        api_key=settings.openai.api_key.get_secret_value(),
+        base_url=settings.openai.base_url,
+    )
     t0 = time.perf_counter()
     try:
         resp = await client.embeddings.create(

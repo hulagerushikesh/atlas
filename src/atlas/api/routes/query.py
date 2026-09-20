@@ -106,6 +106,7 @@ def _build_response(
     result: PipelineResult,
     timings: StageTimings,
     embedding_model: str,
+    chat_model: str = "unknown",
     cached: bool = False,
 ) -> QueryResponse:
     citations = []
@@ -125,7 +126,7 @@ def _build_response(
     completion_tokens = gen.completion_tokens if gen else 0
 
     cost = estimate_cost(
-        model="gpt-4o-mini",   # read from settings in a full implementation
+        model=chat_model,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         embedding_model=embedding_model,
@@ -310,10 +311,12 @@ async def query(
 
     # Retrieve embedding model name for cost estimation
     app_state = get_app_state(request)
-    response = _build_response(result, timings, app_state.embedding_model)
+    response = _build_response(
+        result, timings, app_state.embedding_model, app_state.chat_model
+    )
 
     # Emit Prometheus metrics
-    TOKEN_USAGE.labels(model="gpt-4o-mini", type="total").inc(
+    TOKEN_USAGE.labels(model=app_state.chat_model, type="total").inc(
         response.token_usage.total_tokens
     )
     COST_USD.inc(response.token_usage.estimated_cost_usd)

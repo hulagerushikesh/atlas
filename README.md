@@ -131,7 +131,7 @@ atlas/
 ## Quick Start
 
 ```bash
-# 1. Copy env and fill in your OpenAI key
+# 1. Copy env and fill in your API key (OpenAI, or Gemini via OPENAI_BASE_URL)
 cp .env.example .env && $EDITOR .env
 
 # 2. Start infrastructure
@@ -162,7 +162,7 @@ docker-compose up --build
 | Config | pydantic-settings |
 | Vector store | Qdrant |
 | Sparse retrieval | rank-bm25 |
-| Embeddings | OpenAI text-embedding-3-small |
+| Embeddings | Any OpenAI-compatible endpoint (`OPENAI_BASE_URL`); default `text-embedding-3-small`, live runs use Gemini `gemini-embedding-001` @ 1536-d |
 | Reranking | sentence-transformers cross-encoder |
 | Caching | Redis |
 | Logging | structlog |

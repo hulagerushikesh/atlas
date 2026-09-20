@@ -1,4 +1,4 @@
-# Status — 2026-09-14
+# Status — 2026-09-20
 
 ## One line
 
@@ -8,11 +8,13 @@ milestone is that run.
 
 ## Blocked on you
 
-- [ ] **Add OpenAI credits.** Nothing below moves without this.
-- [ ] **Revoke the compromised OpenAI key** (the one pasted
-      in an earlier chat). Generate a fresh one, put it in `.env` only.
-- [ ] **Revoke the compromised Qdrant Cloud key** (the JWT pasted
-      earlier). Local Docker Qdrant needs no key; do this before any cloud use.
+- [x] ~~Add OpenAI credits~~ → switched to Gemini (2026-09-20). Same AI Studio
+      key as sextant, in `atlas/.env` only. Daily spend cap: ₹50–100 across
+      both projects — state ₹ before every paid step.
+- [ ] **Revoke the compromised OpenAI key** (the one pasted in an earlier
+      chat). No longer used by Atlas, still live on the OpenAI account.
+- [ ] **Revoke the compromised Qdrant Cloud key** (the JWT pasted earlier).
+      `.env` now points at local Docker Qdrant; do this before any cloud use.
 
 ## Where things stand
 
@@ -28,6 +30,7 @@ milestone is that run.
 | Quality gate | ruff + mypy clean, **252 tests** green | `make lint typecheck test` |
 | Corpus | FastAPI docs fetched: 120 markdown files in `data/corpus/fastapi/` | not yet ingested |
 | Deploy | Docker Compose local; Fly config exists; GCP planned | `docs/deploy.md` |
+| LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
 ## Known defects
 
