@@ -196,16 +196,21 @@ noise floor.
 
 ### Headline numbers
 
-| Metric | Run 1 | Run 2 | What it measures |
-|---|---|---|---|
-| Context precision | 0.309 | 0.309 | Of the 5 chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.667 | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
-| Faithfulness | 1.000 | 1.000 | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.826 | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Metric | Run 1 | Run 2 | Relabelled | What it measures |
+|---|---|---|---|---|
+| Context precision | 0.309 | 0.309 | **0.416** | Of the 5 chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.667 | **0.778** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Faithfulness | 1.000 | 1.000 | 1.000 | Fraction of answer claims the judge found grounded in the retrieved context |
+| Answer relevance | 0.815 | 0.826 | 0.832 | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
-*15 questions, ~15k tokens and ≈₹1.5 per run, ~55 s wall clock at concurrency 4.
-Retrieval metrics are deterministic run to run; the LLM-judged one moves by
-about 0.01. Directional signal at this sample size, not a confidence interval.*
+*15 questions, ~15k tokens and ≈₹0.3 per run, 55–155 s wall clock at
+concurrency 4. Retrieval metrics are deterministic run to run; the LLM-judged
+one moves by about 0.01. Directional signal at this sample size, not a
+confidence interval.*
+
+The "Relabelled" column is the **same pipeline, same index**, re-run after
+reading the two misses that were labelling errors (below) and fixing the
+dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
 
 ### The honest read
 
@@ -213,17 +218,19 @@ about 0.01. Directional signal at this sample size, not a confidence interval.*
   five doc chunks in context rarely tempt the generator to invent. The number
   says the pipeline does not hallucinate on easy ground; it does not yet say
   anything about adversarial or negation questions (none in this set).
-- **Recall 0.67 = 5 of 15 questions retrieved nothing from their labelled
-  document.** Reading the misses: two are labelling problems (the answer to
-  "how do you stream a large file" lives in `advanced/stream-data`, not
-  `advanced/custom-response`; "what Python version" is answered on the
-  features page, not `index`); three are genuine retrieval misses
-  (`tutorial/body`, `tutorial/response-model`, `tutorial/security/*`) where
-  chunks from adjacent tutorial pages outranked the target.
-- **Precision 0.31 is the number to move.** With `reranker.top_k = 5` and
+- **Recall 0.67 → 0.78 by fixing labels, not code.** Of the first run's
+  5 misses, two were labelling problems: "how do you stream a large file" is
+  answered in `advanced/stream-data` and `tutorial/stream-json-lines` as well
+  as `advanced/custom-response`, and the only page that states a Python
+  version floor is `release-notes` (3.10+), not `index`. Relabelled, both
+  hit. The remaining three are genuine retrieval misses (`tutorial/body`,
+  `tutorial/response-model`, `tutorial/security/*`) where chunks from
+  adjacent tutorial pages outranked the target — those are the M3 work.
+- **Precision 0.42 is the number to move.** With `reranker.top_k = 5` and
   one relevant document per question, the ceiling is ~0.2–0.6 per sample;
-  the misses above pull it down. First experiments (planned, M3): rerank
-  top-k 10–15, HyDE query expansion, contextual chunk headers.
+  the three misses above score 0 and pull it down. First experiments
+  (planned, M3): rerank top-k 10–15 (`run_eval.py --set reranker.top_k=10`),
+  HyDE query expansion, contextual chunk headers.
 
 ### Smoke test, same day
 

@@ -188,10 +188,10 @@ export function FieldNotes() {
 /* ── Measured ──────────────────────────────────────────────────────────── */
 
 const MEASURED = [
-  { k: "Context precision", v: "0.31", d: "of the 5 chunks handed to the generator came from a labelled-relevant page" },
-  { k: "Context recall", v: "0.67", d: "of labelled pages had at least one chunk retrieved — 5 of 15 questions missed" },
+  { k: "Context precision", v: "0.42", d: "of the 5 chunks handed to the generator came from a labelled-relevant page" },
+  { k: "Context recall", v: "0.78", d: "of labelled pages had at least one chunk retrieved — 3 of 15 questions missed" },
   { k: "Faithfulness", v: "1.00", d: "of answer claims grounded in the retrieved references, per the claim-level judge" },
-  { k: "Answer relevance", v: "0.82", d: "question ↔ answer alignment (RAGAS reverse-question), ±0.01 run to run" },
+  { k: "Answer relevance", v: "0.83", d: "question ↔ answer alignment (RAGAS reverse-question), ±0.01 run to run" },
 ]
 
 export function Measured() {
@@ -199,7 +199,8 @@ export function Measured() {
     <section id="measured" className="mx-auto max-w-6xl px-5 py-24">
       <SectionHead eyebrow="Measured · 2026-09-20" title="First live run, numbers included.">
         Full FastAPI documentation — 155 files, 4,021 references — indexed and queried through the real
-        pipeline. 15 questions, two back-to-back runs; retrieval metrics were identical both times.
+        pipeline. 15 questions, three runs; retrieval metrics are deterministic run to run. Two of the first
+        run&apos;s five misses were labelling errors — fixed in the dataset, not the code, and re-measured.
       </SectionHead>
       <div className="mt-12 grid gap-px overflow-hidden rounded-[3px] border bg-border sm:grid-cols-2 lg:grid-cols-4">
         {MEASURED.map((m, i) => (
@@ -212,9 +213,9 @@ export function Measured() {
       </div>
       <Reveal delay={0.2} className="mt-6 max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
         The honest read: faithfulness is real but easy on documentation questions; precision is the number to
-        move. Three of the five recall misses are genuine — adjacent tutorial pages outranked the target — and the
-        planned fixes are a wider rerank window, HyDE, and contextual chunk headers. Full per-question breakdown in
-        the README.
+        move. The three remaining recall misses are genuine — adjacent tutorial pages outranked the target — and
+        the planned fixes are a wider rerank window, HyDE, and contextual chunk headers. Full per-question
+        breakdown in the README.
       </Reveal>
     </section>
   )
