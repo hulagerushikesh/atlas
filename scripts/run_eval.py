@@ -22,6 +22,7 @@ import argparse
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, "src")
@@ -125,11 +126,28 @@ async def main(args: argparse.Namespace) -> int:
 
     runner = EvalRunner(pipeline=pipeline, metrics=metrics, concurrency=args.concurrency)
 
-    print(f"\nRunning {len(dataset.samples)} samples…")
-    result = await runner.run(dataset, run_name=args.run_name)
+    from atlas.interfaces.evaluator import PipelineConfig
 
+    o = settings.openai
+    config = PipelineConfig(
+        name=args.run_name,
+        description=(
+            f"chat={o.primary_model} embed={o.embedding_model}@{o.embedding_dimensions} "
+            f"retrieval.top_k={settings.retrieval.top_k} reranker.top_k={settings.reranker.top_k} "
+            f"chunk={settings.chunking.strategy}/{settings.chunking.size}"
+            f"/{settings.chunking.overlap} "
+            f"namespace={args.namespace}"
+        ),
+    )
+
+    print(f"\nRunning {len(dataset.samples)} samples…")
+    result = await runner.run(dataset, config)
+
+    # Timestamped so repeated runs of the same name never overwrite each
+    # other — you need two runs to see the noise floor.
+    stamp = time.strftime("%Y%m%d-%H%M%S")
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    paths = save_report(result, output_dir=REPORTS_DIR, run_name=args.run_name)
+    paths = save_report(result, output_dir=REPORTS_DIR, run_name=f"{args.run_name}_{stamp}")
 
     print()
     print_report(result)

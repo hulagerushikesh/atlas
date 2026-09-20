@@ -1,6 +1,6 @@
 # M1 — First live run
 
-**Status:** Step 0 done 2026-09-20 (Gemini, not OpenAI). Steps 1–9 open.
+**Status:** DONE 2026-09-20, tagged v0.1.0. Only the resume bullets remain (user).
 **Owner:** you (step 0), Claude (steps 1–9).
 
 ## Why this milestone
@@ -115,13 +115,19 @@ baseline config, numbers, and what surprised you. Open M2 in a new chat.
 
 ## Checklist
 
-- [ ] 0 keys revoked, new key in `.env`, credits added
-- [ ] 1 preflight green
-- [ ] 2 ingest done + idempotent re-run
-- [ ] 3 five smoke questions behave
-- [ ] 4 console + landing verified live
-- [ ] 5 eval ×2, noise floor recorded
-- [ ] 6 BM25 tenancy fixed + tested
-- [ ] 7 numbers written everywhere
-- [ ] 8 tagged v0.1.0
-- [ ] 9 ROADMAP ticked, DECISIONS entry
+- [x] 0 Gemini key in `.env`, credits present (old OpenAI/Qdrant keys still to revoke — STATUS)
+- [x] 1 preflight green
+- [x] 2 ingest done + idempotent re-run (needed the uuid5 fix first)
+- [x] 3 five smoke questions behave (needed ROUTER_DOMAIN + Qdrant image bump first)
+- [x] 4 console + landing verified live
+- [x] 5 eval ×2, noise floor recorded (needed doc-id matching + judge token cap first)
+- [x] 6 BM25 tenancy fixed + tested (+ collection mismatch)
+- [x] 7 numbers written: STATUS, README, landing. Resume: user.
+- [x] 8 tagged v0.1.0
+- [x] 9 ROADMAP ticked, DECISIONS entry
+
+## What it actually took — 2026-09-20
+
+Spend: ≈₹25 total (five ingest passes while fixing idempotency ≈₹18; smoke
+₹0.13; three eval runs ≈₹4.5). Six defects found, all fixed and tested,
+see README "What the first live run found". Commits 24ba8ae → v0.1.0.

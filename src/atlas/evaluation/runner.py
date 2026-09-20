@@ -119,13 +119,26 @@ class EvalRunner:
 
                 metric_scores: list[MetricScore] = []
                 for metric in self._metrics:
-                    ms = await metric.score(
-                        question=sample.question,  # type: ignore[attr-defined]
-                        ground_truth_answer=sample.ground_truth_answer,  # type: ignore[attr-defined]
-                        generated_answer=answer,
-                        retrieved_chunks=chunks,
-                        relevant_doc_ids=sample.relevant_doc_ids,  # type: ignore[attr-defined]
-                    )
+                    try:
+                        ms = await metric.score(
+                            question=sample.question,  # type: ignore[attr-defined]
+                            ground_truth_answer=sample.ground_truth_answer,  # type: ignore[attr-defined]
+                            generated_answer=answer,
+                            retrieved_chunks=chunks,
+                            relevant_doc_ids=sample.relevant_doc_ids,  # type: ignore[attr-defined]
+                        )
+                    except Exception as exc:
+                        # One judge failing must not erase the programmatic
+                        # metrics for this sample.
+                        logger.error(
+                            "eval_metric_failed",
+                            sample_id=getattr(sample, "id", "?"),
+                            metric=metric.name,
+                            error=str(exc),
+                        )
+                        ms = MetricScore(
+                            metric_name=metric.name, score=_FAILED_SENTINEL, reasoning=str(exc)
+                        )
                     metric_scores.append(ms)
 
                 sr = SampleResult(
@@ -136,7 +149,10 @@ class EvalRunner:
                     metrics=metric_scores,
                 )
                 # Stash token count as a private attr for aggregation above
-                sr._tokens_used = getattr(result, "total_tokens", 0)  # type: ignore[attr-defined]
+                gen = getattr(result, "generation", None)
+                sr._tokens_used = (  # type: ignore[attr-defined]
+                    (gen.prompt_tokens + gen.completion_tokens) if gen else 0
+                )
                 return sr
 
             except Exception as exc:

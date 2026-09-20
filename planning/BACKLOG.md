@@ -5,15 +5,22 @@ Newest at the bottom of each section.
 
 ## Bugs
 
-- **BM25 index shared across namespaces.** `api/namespaces.py` constructs
-  `BM25SparseIndex()` with the default `bm25_index.json` for every
-  namespace, so all sheets share one sparse index. Breaks tenancy for the
-  lexical half. Fix: per-namespace persist path + integration test.
-  *Scheduled: M1 step 6.*
+- ~~BM25 index shared across namespaces~~ fixed 00a682b (M1).
+- **Stale chunks after a document shrinks.** Ids are `(doc, chunk_index)`;
+  if a re-ingested doc produces fewer chunks, the tail chunks from the old
+  version stay in both indexes. Fix: after upsert, delete ids for that doc
+  with `chunk_index >= len(chunks)`.
+- **Console renders streamed answers as raw markdown** (`**`, backticks
+  visible). Non-streamed path is fine. Render markdown in the stream path.
+- **Eval dataset labels.** fq-008 should point at `advanced/stream-data`;
+  fq-002 at `features` (Python version). Re-label before M3 so recall moves
+  for real reasons.
+- **`manifest.json` in the corpus dir** is reported as an ingest error every
+  run. Ignore non-loader extensions silently, or move the manifest.
 - **Reranker download on first request.** `CrossEncoderReranker` loads the
   model lazily at construction inside lifespan — first cold start pays
   ~90 MB download. Pre-bake into the Docker image.
-- **Eval metrics in README are placeholders.** Never quote until M1 step 7.
+- ~~Eval metrics in README are placeholders~~ replaced with measured numbers (M1).
 
 ## Debts
 
@@ -23,9 +30,14 @@ Newest at the bottom of each section.
 - Fly.io config (`fly.toml`, `docs/deploy.md` §Fly) will be dead after M2.
 - `console/README.md` is the Vite template default — replace with the two
   paragraphs from `CLAUDE.md`.
-- `out/` directory is empty and untracked — delete.
 - PDF loader is `pypdf` text-only; tables and multi-column layouts degrade.
-- Cache is not invalidated on ingest (verify — exercise 08.1).
+- Cache is not invalidated on ingest (verify — exercise 08.1). Also the
+  API loads the BM25 file once at namespace build; CLI ingest after startup
+  is invisible until restart.
+- Eval script cannot apply `PipelineConfig.overrides` yet (reranker off A/B
+  needs it). Wire overrides → Settings before M3.
+- No daily spend cap like sextant's `SEXTANT_DAILY_BUDGET_USD`. Add one
+  before M2 exposes the API publicly.
 - Streaming errors after first byte become events; document the event
   schema in `docs/api.md`.
 

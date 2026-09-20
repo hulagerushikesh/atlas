@@ -1,10 +1,11 @@
-# Status — 2026-09-20
+# Status — 2026-09-20 (v0.1.0)
 
 ## One line
 
-Atlas is feature-complete and UI-complete, verified against mocks and local
-Qdrant only. It has never run end-to-end against live OpenAI. The next
-milestone is that run.
+M1 done 2026-09-20 (v0.1.0): Atlas ran end-to-end on the full FastAPI docs
+with Gemini and has measured numbers. Six real defects surfaced and were
+fixed on the way. Next is M2, the GCP deploy — separate chat, ask before
+anything billable.
 
 ## Blocked on you
 
@@ -20,25 +21,40 @@ milestone is that run.
 
 | Area | State | Evidence |
 |---|---|---|
-| Ingestion (A) | Done | `docs/ingestion.md`; ingest path fixed 7e05e0e |
+| Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | Harness done, **never run live** — no numbers exist | README metrics are placeholders |
+| Evaluation (D) | **Run live ×3.** P 0.31 · R 0.67 · F 1.00 · AR 0.82 (15 q, retrieval metrics deterministic, AR ±0.01) | `eval_data/reports/fastapi-v1_20260920-11*.json` |
 | API & observability (E) | Done | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **252 tests** green | `make lint typecheck test` |
-| Corpus | FastAPI docs fetched: 120 markdown files in `data/corpus/fastapi/` | not yet ingested |
+| Quality gate | ruff + mypy clean, **270 tests** green, 86% cov | `make lint typecheck test` |
+| Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | Docker Compose local; Fly config exists; GCP planned | `docs/deploy.md` |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
+## Measured (2026-09-20, v0.1.0)
+
+| Metric | Value |
+|---|---|
+| Context precision @5 | 0.309 |
+| Context recall | 0.667 (5/15 misses; 2 are dataset labels, 3 genuine) |
+| Faithfulness | 1.000 |
+| Answer relevance | 0.815 / 0.826 (two runs) |
+| Latency | p50 ≈7 s uncached (Gemini flash-lite, 5–7 LLM calls); <1 ms cache hit; reranker cold start +5 s |
+| Cost | ≈₹0.03 per uncached query; ≈₹1.5 per 15-sample eval |
+
 ## Known defects
 
-See [BACKLOG.md](BACKLOG.md). The one that matters before multi-tenant use:
-every namespace shares one `bm25_index.json`.
+See [BACKLOG.md](BACKLOG.md). Nothing blocks M2. Console renders streamed
+answers as raw markdown (cosmetic).
 
 ## Last three sessions
 
+- 2026-09-20 — **M1 done.** Gemini via `OPENAI_BASE_URL`; fixed ingest
+  idempotency (uuid5), namespace collection/BM25 mismatch, router domain,
+  Qdrant image, eval doc-id matching, judge truncation. Full corpus, three
+  eval runs, numbers into README/landing/STATUS. Tagged v0.1.0.
 - 2026-09-13 — DESIGN.md (cartographic), console rebuilt twice (static HTML
   rejected → React/shadcn/Motion), landing rebuilt, API gained
   evidence/timings/sources endpoints.
@@ -49,5 +65,6 @@ every namespace shares one `bm25_index.json`.
 
 ## Next
 
-[M1 — First live run](milestones/M1-first-live-run.md). Start the moment
-credits are in.
+[M2 — Cloud deploy (GCP)](ROADMAP.md#m2--cloud-deploy-gcp). Separate chat.
+Ask before anything billable; budget in INR. Before M2, user updates resume
+bullets with the M1 numbers (`customise resume/`).
