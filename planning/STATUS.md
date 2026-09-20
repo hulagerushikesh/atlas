@@ -12,10 +12,12 @@ anything billable.
 - [x] ~~Add OpenAI credits~~ → switched to Gemini (2026-09-20). Same AI Studio
       key as sextant, in `atlas/.env` only. Daily spend cap: ₹50–100 across
       both projects — state ₹ before every paid step.
-- [ ] **Revoke the compromised OpenAI key** (the one pasted in an earlier
-      chat). No longer used by Atlas, still live on the OpenAI account.
-- [ ] **Revoke the compromised Qdrant Cloud key** (the JWT pasted earlier).
-      `.env` now points at local Docker Qdrant; do this before any cloud use.
+- [x] ~~Revoke the compromised OpenAI key~~ → all keys on the account
+      revoked 2026-09-20.
+- [x] ~~Revoke the compromised Qdrant Cloud key~~ → cluster deleted
+      2026-09-20; key died with it. `.env` uses local Docker Qdrant.
+- [ ] **Resume bullets** with M1 numbers (P 0.42 · R 0.78 · F 1.0, 4,021
+      chunks) — ask for a draft.
 
 ## Where things stand
 
