@@ -125,10 +125,16 @@ class ComponentHealth(BaseModel):
     detail: str = ""
 
 
+class BudgetStatus(BaseModel):
+    daily_usd: float
+    spent_today_usd: float
+
+
 class HealthResponse(BaseModel):
     status: str          # "ok" | "degraded" | "down"
     version: str
     components: dict[str, ComponentHealth]
+    budget: BudgetStatus | None = None   # present only when BUDGET_DAILY_USD > 0
 
 
 # ── /namespaces ───────────────────────────────────────────────────────────────

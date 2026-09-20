@@ -22,10 +22,11 @@ Design rationale:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from fastapi import Request
 
+from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
 from atlas.api.namespaces import NamespaceRegistry
 from atlas.ingestion.indexer import DocumentIndexer
@@ -39,12 +40,17 @@ class AppState:
     cache: QueryCache
     embedding_model: str   # surfaced for cost estimation in routes
     chat_model: str = "unknown"
+    spend: SpendMeter = field(default_factory=SpendMeter)
 
 
 def get_app_state(request: Request) -> AppState:
     """FastAPI dependency: retrieve the typed app state."""
     state: AppState = request.app.state.atlas
     return state
+
+
+def get_spend_meter(request: Request) -> SpendMeter:
+    return get_app_state(request).spend
 
 
 def get_registry(request: Request) -> NamespaceRegistry:
