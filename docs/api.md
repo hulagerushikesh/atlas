@@ -312,8 +312,27 @@ Price table (per 1M tokens, as of the initial implementation):
 | gpt-3.5-turbo | $0.50 | $1.50 |
 | text-embedding-3-small | $0.02 | — |
 | text-embedding-3-large | $0.13 | — |
+| gemini-3.1-flash-lite | $0.25 | $1.50 |
+| gemini-embedding-001 | $0.15 | — |
 
-Update the price table in `cost.py` as OpenAI adjusts pricing — no other changes needed.
+Update the price table in `cost.py` as providers adjust pricing — no other changes needed.
+
+## Daily Spend Cap
+
+[`budget.py`](../src/atlas/api/budget.py)
+
+`BUDGET_DAILY_USD` (default `0` = off) is a hard cap on the estimated spend
+above, accumulated per UTC day. `SpendMeter.check()` runs before any metered
+call in `/query` (both paths) and `/ingest`; `add()` runs after with the
+request's estimate. Past the cap the route returns **429** with a
+`Retry-After` header counting down to midnight UTC. Cache hits never touch
+the meter. With Redis up the counter lives in `atlas:spend:<date>` (48 h TTL)
+so every worker shares one total; without it each process caps itself.
+`GET /health` reports `budget.spent_today_usd` when the cap is on.
+
+Streamed answers carry no usage block, so they are charged at ~4 chars/token
+over the prompt chunks and the emitted text — an estimate, deliberately
+rounded against the budget rather than in its favour.
 
 ---
 

@@ -40,6 +40,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
 from atlas.api.cache import QueryCache
 from atlas.api.cost import estimate_cost
 from atlas.api.dependencies import get_app_state, get_cache, get_registry
@@ -162,6 +163,8 @@ def _build_response(
 async def _stream_query(
     query: str,
     pipeline: RAGPipeline,
+    spend: SpendMeter | None = None,
+    chat_model: str = "unknown",
 ) -> AsyncIterator[str]:
     """
     Streaming path: route → decompose? → retrieve → grade → stream tokens.
@@ -248,8 +251,30 @@ async def _stream_query(
                 "page_number": chunk.metadata.page_number,
             })
 
+    # The stream carries no usage block; approximate at ~4 chars/token so
+    # streamed answers still count against the daily budget.
+    if spend is not None:
+        prompt_chars = len(query) + sum(len(c.content) for c in chunks)
+        await spend.add(estimate_cost(
+            model=chat_model,
+            prompt_tokens=prompt_chars // 4,
+            completion_tokens=len(full_answer) // 4,
+        ))
+
     yield _evt({"type": "done", "classification": classification,
                 "citations": citations, "is_faithful": True})
+
+
+async def _enforce_budget(spend: SpendMeter) -> None:
+    """429 with Retry-After until UTC midnight once the daily cap is hit."""
+    try:
+        await spend.check()
+    except BudgetExceeded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+            headers={"Retry-After": str(seconds_until_utc_midnight())},
+        ) from exc
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -268,12 +293,14 @@ async def query(
     """
     log = logger.bind(query=body.query[:80], namespace=body.namespace)
     pipeline = get_registry(request).get(body.namespace).pipeline
+    app_state = get_app_state(request)
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
+        await _enforce_budget(app_state.spend)
         log.info("query_stream_start")
         return StreamingResponse(
-            _stream_query(body.query, pipeline),
+            _stream_query(body.query, pipeline, app_state.spend, app_state.chat_model),
             media_type="text/event-stream",
             headers={"X-Faithfulness": "skipped-streaming",
                      "X-Namespace": body.namespace},
@@ -297,6 +324,9 @@ async def query(
             ))
         return response
 
+    # Cache hits are free, so the cap is checked only once we know we will
+    # call the model.
+    await _enforce_budget(app_state.spend)
     log.info("query_start")
     t_total = time.perf_counter()
 
@@ -309,8 +339,6 @@ async def query(
     total_ms = (time.perf_counter() - t_total) * 1000
     timings = _stage_timings(result.stage_ms, total_ms)
 
-    # Retrieve embedding model name for cost estimation
-    app_state = get_app_state(request)
     response = _build_response(
         result, timings, app_state.embedding_model, app_state.chat_model
     )
@@ -320,6 +348,7 @@ async def query(
         response.token_usage.total_tokens
     )
     COST_USD.inc(response.token_usage.estimated_cost_usd)
+    await app_state.spend.add(response.token_usage.estimated_cost_usd)
 
     # Fire-and-forget: cache + usage log (never block the response)
     import asyncio

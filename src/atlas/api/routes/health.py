@@ -8,7 +8,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from atlas import __version__
-from atlas.api.schemas import ComponentHealth, HealthResponse
+from atlas.api.schemas import BudgetStatus, ComponentHealth, HealthResponse
 
 router = APIRouter()
 
@@ -59,11 +59,22 @@ async def health(request: Request) -> JSONResponse:
         else "down"
     )
 
+    spend = request.app.state.atlas.spend
+    budget = (
+        BudgetStatus(
+            daily_usd=spend.budget_usd,
+            spent_today_usd=round(await spend.today_usd(), 6),
+        )
+        if spend.enabled
+        else None
+    )
+
     return JSONResponse(
         content=HealthResponse(
             status=overall,
             version=__version__,
             components=components,
+            budget=budget,
         ).model_dump(),
         status_code=200 if overall != "down" else 503,
     )

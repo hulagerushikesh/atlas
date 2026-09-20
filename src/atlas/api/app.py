@@ -35,6 +35,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from atlas import __version__
+from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
 from atlas.api.middleware.auth_mw import APIKeyMiddleware
@@ -98,7 +99,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         ),
         embedding_model=shared.settings.openai.embedding_model,
         chat_model=shared.settings.openai.primary_model,
+        spend=SpendMeter(
+            budget_usd=settings.budget.daily_usd, redis_client=redis_client
+        ),
     )
+    if settings.budget.daily_usd > 0:
+        logger.info("daily_budget_enabled", usd=settings.budget.daily_usd)
 
     logger.info("atlas_ready")
     yield

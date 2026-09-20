@@ -79,8 +79,11 @@ class OpenAIEmbedder(BaseEmbedder):
             input=texts,
             dimensions=self._config.embedding_dimensions,
         )
-        # Some OpenAI-compatible endpoints (Gemini) omit usage on embeddings.
-        tokens = response.usage.total_tokens if response.usage else 0
+        # Some OpenAI-compatible endpoints (Gemini) omit usage on embeddings;
+        # approximate at ~4 chars/token so cost and the daily budget still
+        # see the spend instead of a silent zero.
+        approx = sum(len(t) for t in texts) // 4
+        tokens = response.usage.total_tokens if response.usage else approx
         logger.debug("embedding_batch_complete", count=len(texts), tokens=tokens)
         # Order by the returned index when present; Gemini omits it and
         # returns items in input order, so fall back to position.

@@ -81,8 +81,19 @@ class RouterConfig(BaseSettings):
 class RerankerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RERANKER_", env_file=_ENV_FILE, extra="ignore")
 
+    # False skips the cross-encoder entirely (RRF order is final). Mainly an
+    # eval knob: `--set reranker.enabled=false` for the reranker-off A/B.
+    enabled: bool = True
     top_k: int = 5
     model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+
+
+class BudgetConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="BUDGET_", env_file=_ENV_FILE, extra="ignore")
+
+    # Hard cap on estimated API spend per UTC day, in USD. 0 disables it.
+    # Requests past the cap get 429 until midnight UTC. See atlas.api.budget.
+    daily_usd: float = 0.0
 
 
 class APIConfig(BaseSettings):
@@ -114,6 +125,7 @@ class Settings(BaseSettings):
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)
     router: RouterConfig = Field(default_factory=RouterConfig)
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
     api: APIConfig = Field(default_factory=APIConfig)
 
 

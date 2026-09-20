@@ -8,7 +8,9 @@ from pathlib import Path
 import structlog
 from fastapi import APIRouter, HTTPException, Request
 
-from atlas.api.dependencies import get_registry
+from atlas.api.budget import BudgetExceeded, seconds_until_utc_midnight
+from atlas.api.cost import estimate_cost
+from atlas.api.dependencies import get_app_state, get_registry
 from atlas.api.schemas import IngestRequest, IngestResponse
 
 logger = structlog.get_logger(__name__)
@@ -31,6 +33,16 @@ async def ingest(
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Path not found: {body.path}")
 
+    app_state = get_app_state(request)
+    try:
+        await app_state.spend.check()
+    except BudgetExceeded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=str(exc),
+            headers={"Retry-After": str(seconds_until_utc_midnight())},
+        ) from exc
+
     indexer = get_registry(request).get(body.namespace).indexer
     logger.info("ingest_request", path=body.path, namespace=body.namespace, glob=body.glob)
     start = time.perf_counter()
@@ -45,6 +57,13 @@ async def ingest(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     duration = round(time.perf_counter() - start, 2)
+    await app_state.spend.add(estimate_cost(
+        model="",
+        prompt_tokens=0,
+        completion_tokens=0,
+        embedding_model=app_state.embedding_model,
+        embedding_tokens=result.total_tokens,
+    ))
     logger.info(
         "ingest_complete",
         docs_processed=result.documents_processed,
