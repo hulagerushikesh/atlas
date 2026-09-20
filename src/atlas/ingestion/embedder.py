@@ -30,15 +30,14 @@ from atlas.retry_policy import is_retryable_rate_limit
 
 logger = structlog.get_logger(__name__)
 
-_DEFAULT_BATCH_SIZE = 256
 
 
 class OpenAIEmbedder(BaseEmbedder):
     """Embed texts using the OpenAI Embeddings API."""
 
-    def __init__(self, config: OpenAIConfig, batch_size: int = _DEFAULT_BATCH_SIZE) -> None:
+    def __init__(self, config: OpenAIConfig, batch_size: int | None = None) -> None:
         self._config = config
-        self._batch_size = batch_size
+        self._batch_size = batch_size or config.embedding_batch_size
         # max_retries=0: tenacity owns the retry policy. Leaving the SDK's
         # default of 2 nested a second ladder inside every tenacity attempt,
         # multiplying a failing call into ~15 HTTP requests.
@@ -83,5 +82,11 @@ class OpenAIEmbedder(BaseEmbedder):
         # Some OpenAI-compatible endpoints (Gemini) omit usage on embeddings.
         tokens = response.usage.total_tokens if response.usage else 0
         logger.debug("embedding_batch_complete", count=len(texts), tokens=tokens)
-        vectors = [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+        # Order by the returned index when present; Gemini omits it and
+        # returns items in input order, so fall back to position.
+        ordered = sorted(
+            enumerate(response.data),
+            key=lambda pair: pair[1].index if pair[1].index is not None else pair[0],
+        )
+        vectors = [item.embedding for _, item in ordered]
         return vectors, tokens
