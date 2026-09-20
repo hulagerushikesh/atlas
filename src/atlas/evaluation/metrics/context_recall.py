@@ -27,6 +27,7 @@ Design rationale:
 
 from __future__ import annotations
 
+from atlas.evaluation.doc_match import recalled_ids
 from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.retriever import RetrievedChunk
@@ -54,12 +55,11 @@ class ContextRecallMetric(BaseMetric):
                 reasoning="No relevant documents specified; recall is vacuously 1.0.",
             )
 
-        retrieved_doc_ids = {c.metadata.doc_id for c in retrieved_chunks}
         relevant_set = set(relevant_doc_ids)
-        recalled = relevant_set & retrieved_doc_ids
+        recalled = recalled_ids(retrieved_chunks, relevant_set)
         recall = len(recalled) / len(relevant_set)
 
-        missing = sorted(relevant_set - retrieved_doc_ids)
+        missing = sorted(relevant_set - recalled)
         return MetricScore(
             metric_name=self.name,
             score=round(recall, 4),

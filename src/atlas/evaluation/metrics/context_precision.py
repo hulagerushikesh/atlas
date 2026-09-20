@@ -28,6 +28,7 @@ Design rationale:
 
 from __future__ import annotations
 
+from atlas.evaluation.doc_match import chunk_matches
 from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.retriever import RetrievedChunk
@@ -56,9 +57,7 @@ class ContextPrecisionMetric(BaseMetric):
             )
 
         relevant_set = set(relevant_doc_ids)
-        hits = sum(
-            1 for c in retrieved_chunks if c.metadata.doc_id in relevant_set
-        )
+        hits = sum(1 for c in retrieved_chunks if chunk_matches(c, relevant_set))
         precision = hits / len(retrieved_chunks)
 
         return MetricScore(
