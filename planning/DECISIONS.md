@@ -56,3 +56,18 @@ Format: date — decision — alternatives — reason.
 - **2026-09-20** — Ship v0.1.0 with precision 0.31 on the landing page.
   *Alt:* tune first, publish later. *Why:* the honest number plus the
   per-miss diagnosis is the portfolio story; M3 is measured against it.
+- **2026-09-20** — Daily spend cap in the API (`BUDGET_DAILY_USD`), enforced
+  before each metered call, charged after, shared via Redis. *Alt:* rely on
+  the AI Studio monthly cap. *Why:* that cap is shared with sextant and is
+  monthly; a runaway client could burn a month in an hour. 429 + Retry-After
+  is honest to callers; cache hits stay free. CLI scripts stay unmetered —
+  a human runs them and states ₹ first.
+- **2026-09-20** — Eval overrides are dotted paths into `Settings`
+  (`--set reranker.top_k=10`), applied once, then the pipeline is built the
+  normal way. *Alt:* a second, eval-only builder with kwargs. *Why:* one
+  construction path; a typo fails loudly instead of running the baseline
+  twice.
+- **2026-09-20** — Console answer markdown is a ~40-line subset renderer
+  (bold, code, lists, headings), not a markdown library. *Why:* the chips
+  need to own `[n]`; a library would either escape them or need a plugin,
+  and the generator prompt never emits more than this subset.

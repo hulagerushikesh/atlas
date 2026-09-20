@@ -25,10 +25,10 @@ anything billable.
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
 | Evaluation (D) | **Run live ×3.** P 0.31 · R 0.67 · F 1.00 · AR 0.82 (15 q, retrieval metrics deterministic, AR ±0.01) | `eval_data/reports/fastapi-v1_20260920-11*.json` |
-| API & observability (E) | Done | auth, rate limit, cache, Prometheus, streaming |
+| API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **270 tests** green, 86% cov | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **295 tests** green, 86% cov | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | Docker Compose local; Fly config exists; GCP planned | `docs/deploy.md` |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
@@ -46,11 +46,18 @@ anything billable.
 
 ## Known defects
 
-See [BACKLOG.md](BACKLOG.md). Nothing blocks M2. Console renders streamed
-answers as raw markdown (cosmetic).
+See [BACKLOG.md](BACKLOG.md). Nothing blocks M2. Post-M1 sweep closed six
+items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
+daily spend cap, console markdown.
 
 ## Last three sessions
 
+- 2026-09-20 (later) — **Post-M1 sweep**, ₹0 except two console queries:
+  `prune_document` for shrinking docs; unsupported files skipped at ingest;
+  fq-002 → `release-notes`, fq-008 += `stream-data`; `run_eval.py --set`
+  applies `PipelineConfig.overrides` (`reranker.enabled=false` now exists);
+  `BUDGET_DAILY_USD` cap (0.60 locally); console renders answer markdown.
+  Eval **not re-run** yet (≈₹2.5, needs a yes).
 - 2026-09-20 — **M1 done.** Gemini via `OPENAI_BASE_URL`; fixed ingest
   idempotency (uuid5), namespace collection/BM25 mismatch, router domain,
   Qdrant image, eval doc-id matching, judge truncation. Full corpus, three

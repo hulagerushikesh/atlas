@@ -6,17 +6,12 @@ Newest at the bottom of each section.
 ## Bugs
 
 - ~~BM25 index shared across namespaces~~ fixed 00a682b (M1).
-- **Stale chunks after a document shrinks.** Ids are `(doc, chunk_index)`;
-  if a re-ingested doc produces fewer chunks, the tail chunks from the old
-  version stay in both indexes. Fix: after upsert, delete ids for that doc
-  with `chunk_index >= len(chunks)`.
-- **Console renders streamed answers as raw markdown** (`**`, backticks
-  visible). Non-streamed path is fine. Render markdown in the stream path.
-- **Eval dataset labels.** fq-008 should point at `advanced/stream-data`;
-  fq-002 at `features` (Python version). Re-label before M3 so recall moves
-  for real reasons.
-- **`manifest.json` in the corpus dir** is reported as an ingest error every
-  run. Ignore non-loader extensions silently, or move the manifest.
+- ~~Stale chunks after a document shrinks~~ `prune_document()` after upsert (post-M1).
+- ~~Console renders answers as raw markdown~~ both paths render bold/code/lists (post-M1).
+- ~~Eval dataset labels fq-002 / fq-008~~ re-labelled (post-M1); fq-002 now
+  points at `release-notes` — the only page in the corpus that states a
+  Python floor (`index` only carries a badge). Not yet re-run.
+- ~~`manifest.json` reported as an ingest error~~ unsupported extensions skipped (post-M1).
 - **Reranker download on first request.** `CrossEncoderReranker` loads the
   model lazily at construction inside lifespan — first cold start pays
   ~90 MB download. Pre-bake into the Docker image.
@@ -34,10 +29,8 @@ Newest at the bottom of each section.
 - Cache is not invalidated on ingest (verify — exercise 08.1). Also the
   API loads the BM25 file once at namespace build; CLI ingest after startup
   is invisible until restart.
-- Eval script cannot apply `PipelineConfig.overrides` yet (reranker off A/B
-  needs it). Wire overrides → Settings before M3.
-- No daily spend cap like sextant's `SEXTANT_DAILY_BUDGET_USD`. Add one
-  before M2 exposes the API publicly.
+- ~~Eval script cannot apply `PipelineConfig.overrides`~~ `--set section.field=value` (post-M1).
+- ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
 - Streaming errors after first byte become events; document the event
   schema in `docs/api.md`.
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
 import { ArrowUp, Compass } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -15,6 +15,86 @@ const EASE = [0.23, 1, 0.32, 1] as const
 /* ── Answer document ───────────────────────────────────────────────────── */
 
 const SENTENCE = /(?<=[.!?])\s+(?=[A-Z0-9[(])/
+// The model writes a small markdown subset: **bold**, `code`, bullet and
+// numbered lists, the odd heading. A full markdown library would be more
+// than the answer needs and would fight the citation chips; this covers
+// what the generator prompt actually produces.
+const INLINE = /(\*\*[^*\n]+\*\*|`[^`\n]+`|\[\d+\])/
+const BULLET = /^\s*(?:[-*•]|\d+[.)])\s+/
+const HEADING = /^#{1,6}\s+/
+
+type CiteRenderer = (n: number, key: number) => ReactNode
+
+function Inline({ text, cite }: { text: string; cite: CiteRenderer }) {
+  return (
+    <>
+      {text.split(INLINE).map((part, k) => {
+        if (!part) return null
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return <strong key={k} className="font-semibold text-foreground">{part.slice(2, -2)}</strong>
+        }
+        if (part.startsWith("`") && part.endsWith("`")) {
+          return <code key={k} className="rounded-[3px] border border-border bg-well px-1 py-px font-mono text-[0.86em]">{part.slice(1, -1)}</code>
+        }
+        const m = part.match(/^\[(\d+)\]$/)
+        if (m) return cite(Number(m[1]), k)
+        return <span key={k}>{part}</span>
+      })}
+    </>
+  )
+}
+
+// One paragraph → sentences; sentences without a citation get the dashed
+// "unsourced" underline. Skipped while streaming: the last sentence would
+// flicker between states as tokens arrive.
+function Sentences({ text, cite, streaming }: { text: string; cite: CiteRenderer; streaming: boolean }) {
+  if (streaming) return <Inline text={text} cite={cite} />
+  return (
+    <>
+      {text.split(SENTENCE).map((sent, si) => {
+        const body = <Inline text={sent} cite={cite} />
+        return /\[\d+\]/.test(sent) ? (
+          <span key={si}>{body}{" "}</span>
+        ) : (
+          <span key={si} className="text-ink-2 underline decoration-dashed decoration-ink-3 decoration-1 underline-offset-[3px]" title="No reference supports this sentence.">
+            {body}{" "}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+function Blocks({ text, cite, streaming }: { text: string; cite: CiteRenderer; streaming: boolean }) {
+  const paras = text.trim().split(/\n{2,}/)
+  // The streaming caret sits on the last block so it follows the text.
+  const tail = (pi: number) => streaming && pi === paras.length - 1 ? "caret" : undefined
+  return (
+    <>
+      {paras.map((para, pi) => {
+        const lines = para.split("\n")
+        if (lines.length > 0 && lines.every((l) => BULLET.test(l) || !l.trim())) {
+          const items = lines.filter((l) => l.trim())
+          const ordered = /^\s*\d/.test(items[0] ?? "")
+          const Tag = ordered ? "ol" : "ul"
+          return (
+            <Tag key={pi} className={cn("space-y-1.5 pl-5", ordered ? "list-decimal" : "list-disc marker:text-ink-3")}>
+              {items.map((l, li) => (
+                <li key={li} className={li === items.length - 1 ? tail(pi) : undefined}>
+                  <Sentences text={l.replace(BULLET, "")} cite={cite} streaming={streaming} />
+                </li>
+              ))}
+            </Tag>
+          )
+        }
+        if (HEADING.test(para) && lines.length === 1) {
+          return <p key={pi} className={cn("font-semibold text-foreground", tail(pi))}>{para.replace(HEADING, "")}</p>
+        }
+        return <p key={pi} className={tail(pi)}><Sentences text={para} cite={cite} streaming={streaming} /></p>
+      })}
+    </>
+  )
+}
 
 function AnswerDoc({ text, evidenceByChunk, numberToChunk, streaming }: {
   text: string
@@ -22,13 +102,23 @@ function AnswerDoc({ text, evidenceByChunk, numberToChunk, streaming }: {
   numberToChunk: Record<number, string>
   streaming: boolean
 }) {
-  // While streaming, render raw text with a caret: cheap and steady. Once
-  // complete, crossfade to the parsed document with chips and unsourced
-  // spans. Parsing mid-stream would make sentences jump between states.
+  // While streaming: same block layout so markdown never shows raw, but
+  // citations stay plain text and sentences are not graded — the evidence
+  // map is not final and the last sentence would jump between states.
+  // Once complete, crossfade to the full document with chips.
   if (streaming) {
-    return <p className="caret whitespace-pre-wrap">{text}</p>
+    const plain: CiteRenderer = (n, key) => <span key={key} className="font-mono text-[0.86em] text-ink-3">[{n}]</span>
+    return (
+      <div className="space-y-4">
+        <Blocks text={text} cite={plain} streaming />
+      </div>
+    )
   }
-  const paras = text.trim().split(/\n{2,}/)
+  const chip: CiteRenderer = (n, key) => {
+    const chunkId = numberToChunk[n]
+    const ev = chunkId ? evidenceByChunk[chunkId] : undefined
+    return <CitationChip key={key} n={n} evidence={ev} />
+  }
   return (
     <motion.div
       key="doc"
@@ -36,29 +126,7 @@ function AnswerDoc({ text, evidenceByChunk, numberToChunk, streaming }: {
       transition={{ duration: 0.28, ease: EASE }}
       className="space-y-4"
     >
-      {paras.map((para, pi) => (
-        <p key={pi}>
-          {para.split(SENTENCE).map((sent, si) => {
-            const hasCite = /\[\d+\]/.test(sent)
-            const parts = sent.split(/(\[\d+\])/)
-            const body = parts.map((part, k) => {
-              const m = part.match(/^\[(\d+)\]$/)
-              if (!m) return <span key={k}>{part}</span>
-              const n = Number(m[1])
-              const chunkId = numberToChunk[n]
-              const ev = chunkId ? evidenceByChunk[chunkId] : undefined
-              return <CitationChip key={k} n={n} evidence={ev} />
-            })
-            return hasCite ? (
-              <span key={si}>{body}{" "}</span>
-            ) : (
-              <span key={si} className="text-ink-2 underline decoration-dashed decoration-ink-3 decoration-1 underline-offset-[3px]" title="No reference supports this sentence.">
-                {body}{" "}
-              </span>
-            )
-          })}
-        </p>
-      ))}
+      <Blocks text={text} cite={chip} streaming={false} />
     </motion.div>
   )
 }
