@@ -39,8 +39,10 @@ services:
     container_name: atlas_api
     ports:
       - "${API_PORT:-8000}:8000"
+    # The image defaults to 8010 (Cloud Run sets its own PORT); keep 8000 here.
     env_file: .env
     environment:
+      PORT: "8000"
       QDRANT_URL: http://qdrant:6333
       REDIS_URL: redis://redis:6379
     depends_on:

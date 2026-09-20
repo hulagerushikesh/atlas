@@ -27,10 +27,10 @@ anything billable.
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
 | Evaluation (D) | **Run live ×4.** Relabelled: P 0.42 · R 0.78 · F 1.00 · AR 0.83 (was 0.31/0.67 with two mislabelled questions; same code, same index) | `eval_data/reports/fastapi-v2-relabel_*.json` |
-| API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`) | auth, rate limit, cache, Prometheus, streaming |
+| API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **295 tests** green, 86% cov | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **312 tests** green, 89% cov | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | Docker Compose local; Fly config exists; GCP planned | `docs/deploy.md` |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
@@ -54,6 +54,14 @@ daily spend cap, console markdown.
 
 ## Last three sessions
 
+- 2026-09-20 (M2 prep, ₹0) — `KeyStore` protocol: SQLite + Firestore
+  backends (`AUTH_STORE`), `/keys` reachable before the first key exists
+  (was a chicken-and-egg with auth on — found by the image smoke test);
+  production Dockerfile (CPU torch, reranker weights + BM25 baked in, `PORT`),
+  `scripts/deploy_gcp.sh` + `make deploy-gcp`, Fly config removed,
+  `docs/deploy.md` rewritten for Cloud Run. Auth middleware got its first
+  tests. Image builds and boots locally (2.15 GB arm64). GCP project not
+  yet created — needs a yes.
 - 2026-09-20 (later) — **Post-M1 sweep**, ₹0 except two console queries:
   `prune_document` for shrinking docs; unsupported files skipped at ingest;
   fq-002 → `release-notes`, fq-008 += `stream-data`; `run_eval.py --set`

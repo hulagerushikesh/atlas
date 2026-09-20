@@ -11,7 +11,7 @@ EVAL_DATA  := eval_data/fastapi_dataset.json
 .PHONY: help install serve test test-unit test-integration \
         lint typecheck fetch-corpus ingest eval \
         create-key docker-up docker-down \
-        monitor-up monitor-down deploy-fly clean
+        monitor-up monitor-down deploy-gcp clean
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | \
@@ -104,8 +104,8 @@ monitor-up: ## Start Prometheus + Grafana (requires docker-up first)
 monitor-down: ## Stop Prometheus + Grafana
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml stop prometheus grafana
 
-deploy-fly: ## Deploy to Fly.io (requires fly CLI and fly auth login)
-	fly deploy
+deploy-gcp: ## Build + deploy to Cloud Run (PROJECT=... REGION=asia-south1; see docs/deploy.md)
+	scripts/deploy_gcp.sh
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
 
