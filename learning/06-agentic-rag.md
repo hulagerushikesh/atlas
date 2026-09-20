@@ -50,7 +50,8 @@ suppress it — the caller (and the console's strength badge) decides. Module
 07 goes deeper.
 
 ### OpenAILLMProvider (`llm.py`)
-Primary `gpt-4o-mini`, fallback `gpt-3.5-turbo`, retry with backoff on
+Primary `gpt-4o-mini`, fallback `gpt-3.5-turbo` by default (live: Gemini
+`gemini-3.1-flash-lite` / `gemini-3.5-flash-lite` via `OPENAI_BASE_URL`), retry with backoff on
 rate-limit/quota (`retry_policy.py`). Every call reports tokens for
 `api/cost.py`.
 

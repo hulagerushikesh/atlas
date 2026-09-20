@@ -34,3 +34,10 @@ Format: date — decision — alternatives — reason.
 - **2026-09-14** — `learning/` and `planning/` folders; `SUMMARY.md` archived,
   `DEPLOY.md` → `docs/deploy.md`. *Why:* one place for progress that survives
   context loss; one place for study material separate from reference docs.
+- **2026-09-20** — Gemini via OpenAI-compatible endpoint instead of OpenAI.
+  *Alt:* buy OpenAI credits; write a native Gemini provider. *Why:* credits
+  already exist on the AI Studio account shared with sextant; one config knob
+  (`OPENAI_BASE_URL`) keeps the OpenAI SDK, retry ladder and tests unchanged.
+  Models: `gemini-3.1-flash-lite` primary (same as sextant), `gemini-3.5-flash-lite`
+  fallback, `gemini-embedding-001` at 1536-d. Verified: embeddings, JSON mode,
+  streaming. Gemini omits `usage` on embeddings → embedder tolerates `None`.

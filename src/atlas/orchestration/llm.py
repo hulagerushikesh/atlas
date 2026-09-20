@@ -64,7 +64,9 @@ class OpenAILLMProvider(BaseLLMProvider):
         # default of 2 nested a second ladder inside every tenacity attempt,
         # multiplying a failing call into ~15 HTTP requests.
         self._client = AsyncOpenAI(
-            api_key=config.api_key.get_secret_value(), max_retries=0
+            api_key=config.api_key.get_secret_value(),
+            base_url=config.base_url,
+            max_retries=0,
         )
 
     async def generate(self, request: GenerationRequest) -> GenerationResponse:

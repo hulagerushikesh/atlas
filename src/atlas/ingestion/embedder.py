@@ -43,7 +43,9 @@ class OpenAIEmbedder(BaseEmbedder):
         # default of 2 nested a second ladder inside every tenacity attempt,
         # multiplying a failing call into ~15 HTTP requests.
         self._client = AsyncOpenAI(
-            api_key=config.api_key.get_secret_value(), max_retries=0
+            api_key=config.api_key.get_secret_value(),
+            base_url=config.base_url,
+            max_retries=0,
         )
 
     @property
@@ -78,10 +80,8 @@ class OpenAIEmbedder(BaseEmbedder):
             input=texts,
             dimensions=self._config.embedding_dimensions,
         )
-        logger.debug(
-            "embedding_batch_complete",
-            count=len(texts),
-            tokens=response.usage.total_tokens,
-        )
+        # Some OpenAI-compatible endpoints (Gemini) omit usage on embeddings.
+        tokens = response.usage.total_tokens if response.usage else 0
+        logger.debug("embedding_batch_complete", count=len(texts), tokens=tokens)
         vectors = [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
-        return vectors, response.usage.total_tokens
+        return vectors, tokens

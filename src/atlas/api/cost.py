@@ -23,6 +23,8 @@ _CHAT_PRICES: dict[str, tuple[float, float]] = {
     "gpt-4o-mini":          (0.15,   0.60),
     "gpt-4-turbo":         (10.00,  30.00),
     "gpt-3.5-turbo":        (0.50,   1.50),
+    # Gemini via the OpenAI-compatible endpoint
+    "gemini-3.1-flash-lite": (0.25,  1.50),
 }
 
 # Per 1M tokens (no output for embeddings)
@@ -30,6 +32,7 @@ _EMBEDDING_PRICES: dict[str, float] = {
     "text-embedding-3-small": 0.02,
     "text-embedding-3-large": 0.13,
     "text-embedding-ada-002": 0.10,
+    "gemini-embedding-001": 0.15,
 }
 
 _DEFAULT_CHAT_PRICE = (1.00, 3.00)   # conservative fallback for unknown models

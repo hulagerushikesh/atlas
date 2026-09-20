@@ -1,6 +1,6 @@
 # Atlas
 
-Agentic RAG platform. Python 3.11, FastAPI, Qdrant, OpenAI.
+Agentic RAG platform. Python 3.11, FastAPI, Qdrant, OpenAI-compatible LLM (live runs use Gemini via `OPENAI_BASE_URL`; key shared with sextant, in `.env` only).
 
 ## Before touching any UI
 Read `DESIGN.md` first. It is the visual contract — tokens, type, layout,
