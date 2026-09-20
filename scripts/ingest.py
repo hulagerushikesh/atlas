@@ -23,7 +23,8 @@ from pathlib import Path
 sys.path.insert(0, "src")
 
 
-def _build_indexer(settings, chunker_type: str | None):
+def _build_indexer(settings, chunker_type: str | None, namespace: str):
+    from atlas.api.namespaces import namespace_to_collection, sparse_index_path
     from atlas.ingestion.chunkers import get_chunker
     from atlas.ingestion.dense import QdrantDenseIndex
     from atlas.ingestion.embedder import OpenAIEmbedder
@@ -31,6 +32,11 @@ def _build_indexer(settings, chunker_type: str | None):
     from atlas.ingestion.sparse import BM25SparseIndex
 
     embedder = OpenAIEmbedder(settings.openai)
+    # Same collection + BM25 file the API's namespace registry will read.
+    settings = settings.model_copy(
+        update={"qdrant": settings.qdrant.model_copy(
+            update={"collection_name": namespace_to_collection(namespace)})}
+    )
 
     if chunker_type:
         # Override chunker strategy via env-style monkey-patch on settings
@@ -45,7 +51,7 @@ def _build_indexer(settings, chunker_type: str | None):
         chunker=chunker,
         embedder=embedder,
         dense_index=QdrantDenseIndex(settings.qdrant, embedder.dimensions),
-        sparse_index=BM25SparseIndex(),
+        sparse_index=BM25SparseIndex(persist_path=sparse_index_path(namespace)),
     )
 
 
@@ -83,10 +89,11 @@ async def main(args: argparse.Namespace) -> int:
         return 0
 
     print(f"Chunker : {args.chunker or 'default (from settings)'}")
+    print(f"Namespace: {args.namespace}")
     print(f"Target  : {target}")
     print("─" * 50)
 
-    indexer = _build_indexer(settings, args.chunker)
+    indexer = _build_indexer(settings, args.chunker, args.namespace)
 
     t0 = time.perf_counter()
     # index_path loads a single file and takes no glob; directories must go
@@ -117,6 +124,10 @@ async def main(args: argparse.Namespace) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Index documents into Atlas.")
     parser.add_argument("path", help="File or directory to index.")
+    parser.add_argument(
+        "--namespace", default="default",
+        help="Corpus namespace; must match the namespace queried via the API (default: default).",
+    )
     parser.add_argument(
         "--glob",
         default="**/*",

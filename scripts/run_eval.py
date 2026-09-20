@@ -30,7 +30,8 @@ DEFAULT_DATASET = Path("eval_data/sample_dataset.json")
 REPORTS_DIR = Path("eval_data/reports")
 
 
-def _build_pipeline(settings):
+def _build_pipeline(settings, namespace: str = "default"):
+    from atlas.api.namespaces import namespace_to_collection, sparse_index_path
     from atlas.ingestion.embedder import OpenAIEmbedder
     from atlas.ingestion.sparse import BM25SparseIndex
     from atlas.orchestration.decomposer import QueryDecomposer
@@ -45,9 +46,13 @@ def _build_pipeline(settings):
     from atlas.retrieval.reranker import CrossEncoderReranker
     from atlas.retrieval.sparse import BM25Retriever
 
+    settings = settings.model_copy(
+        update={"qdrant": settings.qdrant.model_copy(
+            update={"collection_name": namespace_to_collection(namespace)})}
+    )
     embedder = OpenAIEmbedder(settings.openai)
     llm = OpenAILLMProvider(settings.openai)
-    sparse_index = BM25SparseIndex()
+    sparse_index = BM25SparseIndex(persist_path=sparse_index_path(namespace))
 
     hybrid = HybridRetriever(
         retrievers=[
@@ -115,7 +120,7 @@ async def main(args: argparse.Namespace) -> int:
     dataset = EvalDataset.model_validate(raw)
     print(f"Samples     : {len(dataset.samples)}")
 
-    pipeline = _build_pipeline(settings)
+    pipeline = _build_pipeline(settings, args.namespace)
     metrics = _build_metrics(settings)
 
     runner = EvalRunner(pipeline=pipeline, metrics=metrics, concurrency=args.concurrency)
@@ -155,6 +160,11 @@ if __name__ == "__main__":
         "--dataset",
         default=str(DEFAULT_DATASET),
         help=f"Path to EvalDataset JSON (default: {DEFAULT_DATASET})",
+    )
+    parser.add_argument(
+        "--namespace",
+        default="default",
+        help="Corpus namespace to evaluate against (default: default).",
     )
     parser.add_argument(
         "--run-name",

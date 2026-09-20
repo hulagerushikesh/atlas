@@ -22,6 +22,9 @@ Design rationale:
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import structlog
 from qdrant_client import AsyncQdrantClient
 
@@ -51,6 +54,16 @@ _COLLECTION_PREFIX = "atlas_"
 def namespace_to_collection(namespace: str) -> str:
     """Map a namespace string to a Qdrant collection name."""
     return f"{_COLLECTION_PREFIX}{namespace}"
+
+
+def sparse_index_path(namespace: str) -> Path:
+    """
+    Per-namespace BM25 persistence file. One shared file would leak chunks
+    across tenants (found on the first live run). ATLAS_INDEX_DIR overrides
+    the root, e.g. a mounted volume in production.
+    """
+    root = Path(os.environ.get("ATLAS_INDEX_DIR", "data/index"))
+    return root / namespace / "bm25_index.json"
 
 
 def collection_to_namespace(collection: str) -> str | None:
@@ -115,7 +128,7 @@ class NamespaceRegistry:
         # Override collection name for this namespace
         qdrant_cfg = cfg.qdrant.model_copy(update={"collection_name": collection})
 
-        sparse = BM25SparseIndex()
+        sparse = BM25SparseIndex(persist_path=sparse_index_path(namespace))
 
         hybrid = HybridRetriever(
             retrievers=[

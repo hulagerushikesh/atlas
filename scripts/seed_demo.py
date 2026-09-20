@@ -167,7 +167,12 @@ def _build_components(settings):
 
     embedder = OpenAIEmbedder(settings.openai)
     llm = OpenAILLMProvider(settings.openai)
-    sparse_index = BM25SparseIndex()
+    from atlas.api.namespaces import namespace_to_collection, sparse_index_path
+    settings = settings.model_copy(
+        update={"qdrant": settings.qdrant.model_copy(
+            update={"collection_name": namespace_to_collection("default")})}
+    )
+    sparse_index = BM25SparseIndex(persist_path=sparse_index_path("default"))
 
     hybrid = HybridRetriever(
         retrievers=[
