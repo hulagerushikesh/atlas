@@ -29,6 +29,7 @@ from typing import Literal
 
 import structlog
 
+from atlas.config import RouterConfig
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.orchestration.llm import parse_json_response
 
@@ -37,25 +38,28 @@ logger = structlog.get_logger(__name__)
 QueryClass = Literal["simple", "complex", "out_of_scope"]
 
 _SYSTEM_PROMPT = """\
-You are a query classifier for an enterprise knowledge base. Classify the user's \
-query into exactly one of three categories and respond with valid JSON only.
+You are a query classifier for a knowledge base about: {domain}
+
+Classify the user's query into exactly one of three categories and respond with \
+valid JSON only.
 
 Categories:
-- "simple": Single factual question answerable from one context passage.
+- "simple": Single factual question answerable from one passage of the knowledge base.
 - "complex": Requires comparing, synthesising, or reasoning across multiple \
-distinct facts or documents.
-- "out_of_scope": Clearly outside the knowledge base domain (e.g. personal advice, \
-general coding help unrelated to the domain).
+distinct facts or documents in the knowledge base.
+- "out_of_scope": Clearly unrelated to the domain above (e.g. personal advice, \
+small talk, or a topic the knowledge base does not cover). When in doubt, prefer \
+"simple" — retrieval will decide whether evidence exists.
 
 Examples:
 User: "What is the retention policy for financial records?"
-Response: {"classification": "simple", "reasoning": "Single policy lookup."}
+Response: {{"classification": "simple", "reasoning": "Single policy lookup."}}
 
 User: "How does our Q3 revenue compare to Q2, and what drove the change?"
-Response: {"classification": "complex", "reasoning": "Requires two data points and causal reasoning."}
+Response: {{"classification": "complex", "reasoning": "Requires two data points and causal reasoning."}}
 
-User: "Can you write me a Python sorting algorithm?"
-Response: {"classification": "out_of_scope", "reasoning": "Unrelated to the knowledge base domain."}
+User: "What is the capital of France?"
+Response: {{"classification": "out_of_scope", "reasoning": "General knowledge, unrelated to the domain."}}
 
 Respond ONLY with JSON containing "classification" and "reasoning" keys."""
 
@@ -63,13 +67,15 @@ Respond ONLY with JSON containing "classification" and "reasoning" keys."""
 class QueryRouter:
     """Classify a query before routing it to the appropriate pipeline branch."""
 
-    def __init__(self, llm: BaseLLMProvider) -> None:
+    def __init__(self, llm: BaseLLMProvider, config: RouterConfig | None = None) -> None:
         self._llm = llm
+        domain = (config or RouterConfig()).domain
+        self._system_prompt = _SYSTEM_PROMPT.format(domain=domain)
 
     async def classify(self, query: str) -> QueryClass:
         request = GenerationRequest(
             messages=[
-                Message(role="system", content=_SYSTEM_PROMPT),
+                Message(role="system", content=self._system_prompt),
                 Message(role="user", content=query),
             ],
             temperature=0.0,

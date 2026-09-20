@@ -142,7 +142,7 @@ class NamespaceRegistry:
 
         pipeline = RAGPipeline(
             retriever=hybrid,
-            router=QueryRouter(s.llm),
+            router=QueryRouter(s.llm, cfg.router),
             decomposer=QueryDecomposer(s.llm),
             grader=RetrievalGrader(s.llm),
             generator=AnswerGenerator(s.llm),
