@@ -145,3 +145,30 @@ class TestSources:
 
         reloaded = BM25SparseIndex(persist_path=path)
         assert reloaded.sources() == [{"source": "test.md", "doc_type": "text", "chunks": 1}]
+
+
+class TestPruneDocument:
+    """A re-ingested document that shrank must not keep its old tail chunks."""
+
+    @pytest.mark.asyncio
+    async def test_prunes_tail_only_for_that_document(self, index: BM25SparseIndex) -> None:
+        chunks = []
+        for i in range(4):
+            c = _make_chunk(f"a{i}", f"doc a chunk {i}", doc_id="doc-a")
+            c.metadata.chunk_index = i
+            chunks.append(c)
+        other = _make_chunk("b3", "doc b chunk 3", doc_id="doc-b")
+        other.metadata.chunk_index = 3
+        await index.upsert([*chunks, other])
+
+        removed = await index.prune_document("doc-a", chunk_count=2)
+
+        assert removed == 2
+        remaining = {e["chunk_id"] for e in index._corpus}
+        assert remaining == {"a0", "a1", "b3"}
+
+    @pytest.mark.asyncio
+    async def test_nothing_to_prune(self, index: BM25SparseIndex) -> None:
+        await index.upsert([_make_chunk("a0", "only chunk", doc_id="doc-a")])
+        assert await index.prune_document("doc-a", chunk_count=1) == 0
+        assert await index.prune_document("doc-missing", chunk_count=0) == 0

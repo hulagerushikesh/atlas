@@ -56,6 +56,7 @@ def mock_dense() -> MagicMock:
     idx = MagicMock()
     idx.upsert = AsyncMock(return_value=3)
     idx.unchanged_ids = AsyncMock(return_value=set())
+    idx.prune_document = AsyncMock(return_value=0)
     idx.stats = AsyncMock(
         return_value=IndexStats(total_chunks=3, collection_name="test", index_type="dense")
     )
@@ -66,6 +67,7 @@ def mock_dense() -> MagicMock:
 def mock_sparse() -> MagicMock:
     idx = MagicMock()
     idx.upsert = AsyncMock(return_value=3)
+    idx.prune_document = AsyncMock(return_value=0)
     idx.stats = AsyncMock(
         return_value=IndexStats(
             total_chunks=3, collection_name="test.json", index_type="sparse"
@@ -117,8 +119,10 @@ class TestDocumentIndexer:
         dense = MagicMock()
         dense.upsert = AsyncMock(return_value=0)
         dense.unchanged_ids = AsyncMock(return_value=set())
+        dense.prune_document = AsyncMock(return_value=0)
         sparse = MagicMock()
         sparse.upsert = AsyncMock(return_value=0)
+        sparse.prune_document = AsyncMock(return_value=0)
 
         indexer = DocumentIndexer(
             chunker=FixedSizeChunker(size=100, overlap=10),
@@ -175,6 +179,16 @@ class TestDocumentIndexer:
         result = await indexer.index_directory(tmp_path)
         assert result.errors == []
 
+    async def test_index_directory_ignores_unsupported_files(
+        self, tmp_path: Path, indexer: DocumentIndexer
+    ) -> None:
+        """A corpus manifest.json used to show up as an ingest error every run."""
+        (tmp_path / "a.txt").write_text("content alpha " * 20)
+        (tmp_path / "manifest.json").write_text('{"files": 1}')
+        result = await indexer.index_directory(tmp_path)
+        assert result.documents_processed == 1
+        assert result.errors == []
+
 
 class TestIdempotency:
     """Found on the first live run: every ingest duplicated the corpus."""
@@ -216,3 +230,46 @@ class TestIdempotency:
         assert result.documents_skipped == 1
         assert result.documents_processed == 0
         assert result.total_tokens == 0
+
+    @pytest.mark.asyncio
+    async def test_shrunken_document_prunes_tail_in_both_indexes(
+        self, mock_embedder: MagicMock, mock_dense: MagicMock, mock_sparse: MagicMock
+    ) -> None:
+        mock_dense.prune_document = AsyncMock(return_value=2)
+        mock_sparse.prune_document = AsyncMock(return_value=2)
+        indexer = DocumentIndexer(
+            chunker=FixedSizeChunker(size=100, overlap=10),
+            embedder=mock_embedder,
+            dense_index=mock_dense,
+            sparse_index=mock_sparse,
+        )
+        doc = _make_doc()
+        await indexer.index_documents([doc])
+
+        chunk_count = mock_dense.prune_document.call_args.args[1]
+        mock_dense.prune_document.assert_awaited_once_with(doc.id, chunk_count)
+        mock_sparse.prune_document.assert_awaited_once_with(doc.id, chunk_count)
+        assert chunk_count >= 1
+
+    @pytest.mark.asyncio
+    async def test_prune_only_still_counts_as_processed(
+        self, mock_embedder: MagicMock, mock_dense: MagicMock, mock_sparse: MagicMock
+    ) -> None:
+        # Unchanged leading chunks, but the old tail is gone: not "skipped".
+        async def _all_unchanged(chunks):  # type: ignore[no-untyped-def]
+            return {c.id for c in chunks}
+        mock_dense.unchanged_ids = AsyncMock(side_effect=_all_unchanged)
+        mock_dense.upsert = AsyncMock(return_value=0)
+        mock_sparse.upsert = AsyncMock(return_value=0)
+        mock_dense.prune_document = AsyncMock(return_value=1)
+        mock_sparse.prune_document = AsyncMock(return_value=1)
+        indexer = DocumentIndexer(
+            chunker=FixedSizeChunker(size=100, overlap=10),
+            embedder=mock_embedder,
+            dense_index=mock_dense,
+            sparse_index=mock_sparse,
+        )
+        result = await indexer.index_documents([_make_doc()])
+        assert result.documents_processed == 1
+        assert result.documents_skipped == 0
+

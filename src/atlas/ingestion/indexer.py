@@ -31,7 +31,7 @@ from pathlib import Path
 
 import structlog
 
-from atlas.ingestion.loaders.registry import get_loader
+from atlas.ingestion.loaders.registry import get_loader, is_supported
 from atlas.interfaces.chunker import BaseChunker
 from atlas.interfaces.document import Document
 from atlas.interfaces.embedder import BaseEmbedder
@@ -92,8 +92,14 @@ class DocumentIndexer:
         glob: str = "**/*",
     ) -> IndexResult:
         """Recursively index all supported files under *directory*."""
-        paths = [p for p in directory.glob(glob) if p.is_file()]
-        logger.info("indexing_directory", path=str(directory), file_count=len(paths))
+        files = [p for p in directory.glob(glob) if p.is_file()]
+        # A corpus dir usually carries a manifest or README sidecar; ignoring
+        # unknown extensions up front keeps them out of the error list.
+        paths = [p for p in files if is_supported(p)]
+        ignored = len(files) - len(paths)
+        logger.info(
+            "indexing_directory", path=str(directory), file_count=len(paths), ignored=ignored
+        )
 
         tasks = [self.index_path(p) for p in paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -158,7 +164,16 @@ class DocumentIndexer:
                 self._sparse.upsert(chunks),
             )
 
-            if dense_written == 0 and sparse_written == 0:
+            # A document that shrank leaves its old tail chunks behind (ids
+            # are (doc, chunk_index)); drop anything past the new count.
+            pruned = sum(
+                await asyncio.gather(
+                    self._dense.prune_document(document.id, len(chunks)),
+                    self._sparse.prune_document(document.id, len(chunks)),
+                )
+            )
+
+            if dense_written == 0 and sparse_written == 0 and pruned == 0:
                 log.debug("document_skipped_unchanged")
                 result.documents_skipped += 1
             else:
@@ -171,5 +186,6 @@ class DocumentIndexer:
                 chunks=len(chunks),
                 dense_written=dense_written,
                 sparse_written=sparse_written,
+                pruned=pruned,
                 tokens=total_tokens,
             )

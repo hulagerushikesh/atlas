@@ -47,6 +47,15 @@ class BaseIndex(ABC):
     async def delete(self, chunk_ids: list[str]) -> int:
         """Delete chunks by id. Returns count deleted."""
 
+    async def prune_document(self, doc_id: str, chunk_count: int) -> int:
+        """
+        Delete chunks of *doc_id* whose chunk_index >= *chunk_count*. Ids are
+        (doc_id, chunk_index), so when a re-ingested document produces fewer
+        chunks than before the tail of the old version would otherwise stay
+        behind. Returns count deleted. Default: nothing to prune.
+        """
+        return 0
+
     @abstractmethod
     async def stats(self) -> IndexStats:
         """Return current collection statistics."""

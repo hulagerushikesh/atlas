@@ -98,6 +98,14 @@ class BM25SparseIndex(BaseIndex):
             await asyncio.to_thread(self._save_to_disk)
         return removed
 
+    async def prune_document(self, doc_id: str, chunk_count: int) -> int:
+        stale = [
+            e["chunk_id"]
+            for e in self._corpus
+            if e["metadata"]["doc_id"] == doc_id and e["metadata"]["chunk_index"] >= chunk_count
+        ]
+        return await self.delete(stale) if stale else 0
+
     def sources(self) -> list[dict[str, Any]]:
         """
         Chunk counts grouped by source document, in first-seen order.
