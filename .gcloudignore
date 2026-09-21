@@ -1,0 +1,3 @@
+# Upload context for `gcloud builds submit`. Without this file gcloud falls back to
+# .gitignore, which excludes data/ — but the image bakes data/index/ (BM25).
+#!include:.dockerignore
