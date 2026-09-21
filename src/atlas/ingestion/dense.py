@@ -83,7 +83,24 @@ class QdrantDenseIndex(BaseIndex):
                     collection=self._config.collection_name,
                     dimensions=self._dimensions,
                 )
+            await self._ensure_payload_indexes()
             self._collection_ready = True
+
+    async def _ensure_payload_indexes(self) -> None:
+        """Qdrant Cloud rejects filtered scroll/delete on unindexed payload
+        keys (400 "Index required but not found"); local Qdrant tolerates it.
+        prune_document filters on doc_id + chunk_index. Idempotent."""
+        from qdrant_client.models import PayloadSchemaType
+
+        for field, schema in (
+            ("doc_id", PayloadSchemaType.KEYWORD),
+            ("chunk_index", PayloadSchemaType.INTEGER),
+        ):
+            await self._client.create_payload_index(
+                collection_name=self._config.collection_name,
+                field_name=field,
+                field_schema=schema,
+            )
 
     async def unchanged_ids(self, chunks: list[Chunk]) -> set[str]:
         await self.ensure_collection()

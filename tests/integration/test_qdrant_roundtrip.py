@@ -209,3 +209,21 @@ class TestDenseRoundTrip:
         await index.ensure_collection()
 
         assert (await retriever.retrieve("anything", top_k=5)).chunks == []
+
+    async def test_payload_indexes_requested_for_prune_filters(self, wired) -> None:
+        """Qdrant Cloud 400s a filtered scroll on an unindexed key. Local mode
+        accepts create_payload_index but records nothing, so the schema cannot
+        be read back here — assert the request itself was made, once per key."""
+        from unittest.mock import AsyncMock
+
+        index, _, _ = wired
+        spy = AsyncMock(wraps=index._client.create_payload_index)
+        index._client.create_payload_index = spy  # type: ignore[method-assign]
+        await index.ensure_collection()
+        await index.ensure_collection()  # cached: no second round of requests
+
+        requested = {
+            (c.kwargs["field_name"], c.kwargs["field_schema"].value) for c in spy.call_args_list
+        }
+        assert requested == {("doc_id", "keyword"), ("chunk_index", "integer")}
+        assert spy.await_count == 2
