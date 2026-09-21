@@ -7,14 +7,15 @@
 # nothing sensitive passes through this file or the shell history.
 #
 # Usage: PROJECT=atlas-rag-rush scripts/deploy_gcp.sh
-#        SKIP_BUILD=1 ...            reuse the image already built for HEAD
+#        SKIP_BUILD=1 IMAGE_TAG=abc1234 ...   deploy an image already in the registry
 set -euo pipefail
 
 PROJECT="${PROJECT:-atlas-rag-rush}"
 REGION="${REGION:-asia-south1}"
 SERVICE="${SERVICE:-atlas-api}"
 REPO="${REPO:-atlas}"
-IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:$(git rev-parse --short HEAD)"
+IMAGE_TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD)}"
+IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:${IMAGE_TAG}"
 
 if [[ -z "${SKIP_BUILD:-}" ]]; then
   echo "→ building ${IMAGE}"
