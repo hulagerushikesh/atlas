@@ -104,7 +104,7 @@ monitor-up: ## Start Prometheus + Grafana (requires docker-up first)
 monitor-down: ## Stop Prometheus + Grafana
 	docker compose -f docker-compose.yml -f docker-compose.prod.yml stop prometheus grafana
 
-deploy-gcp: ## Build + deploy to Cloud Run (PROJECT=... REGION=asia-south1; see docs/deploy.md)
+deploy-gcp: ## Build + deploy to Cloud Run (PROJECT=atlas-rag-rush default; SKIP_BUILD=1 reuses image; see docs/deploy.md)
 	scripts/deploy_gcp.sh
 
 # ── Cleanup ────────────────────────────────────────────────────────────────────
