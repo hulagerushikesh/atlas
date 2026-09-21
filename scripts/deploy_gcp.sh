@@ -6,17 +6,22 @@
 # Registry, roll a new Cloud Run revision. Secrets are referenced by name —
 # nothing sensitive passes through this file or the shell history.
 #
-# Usage: PROJECT=atlas-rag REGION=asia-south1 scripts/deploy_gcp.sh
+# Usage: PROJECT=atlas-rag-rush scripts/deploy_gcp.sh
+#        SKIP_BUILD=1 ...            reuse the image already built for HEAD
 set -euo pipefail
 
-PROJECT="${PROJECT:?set PROJECT}"
+PROJECT="${PROJECT:-atlas-rag-rush}"
 REGION="${REGION:-asia-south1}"
 SERVICE="${SERVICE:-atlas-api}"
 REPO="${REPO:-atlas}"
 IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:$(git rev-parse --short HEAD)"
 
-echo "→ building ${IMAGE}"
-gcloud builds submit --project "${PROJECT}" --tag "${IMAGE}" --quiet .
+if [[ -z "${SKIP_BUILD:-}" ]]; then
+  echo "→ building ${IMAGE}"
+  gcloud builds submit --project "${PROJECT}" --tag "${IMAGE}" --quiet .
+else
+  echo "→ SKIP_BUILD set; deploying existing ${IMAGE}"
+fi
 
 echo "→ deploying ${SERVICE} to ${REGION}"
 gcloud run deploy "${SERVICE}" \
