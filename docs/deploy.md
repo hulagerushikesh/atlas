@@ -120,6 +120,28 @@ Vercel project that rewrites every path to the service URL — the same shape as
 Finertia, and cheaper than the ₹1,500/mo a global load balancer would cost for
 one small service. See `proxy/README.md`.
 
+DNS lives on Cloudflare: a **CNAME** for `atlas` pointing at the target Vercel
+prints (`<hash>.vercel-dns-017.com`), with the orange cloud **off** — proxying
+it through Cloudflare would break Vercel's own certificate issuance. Vercel
+issues a Let's Encrypt certificate within a minute of the record resolving.
+
+```bash
+vercel project add atlas            # non-interactive; `vercel link` prompts
+vercel link --yes --project atlas
+vercel --prod --yes
+vercel domains add atlas.hulage.in atlas
+```
+
+A freshly added record can be missing locally long after it resolves publicly,
+because the resolver caches the NXDOMAIN. Verify against the edge instead of
+waiting:
+
+```bash
+IP=$(dig +short @1.1.1.1 <hash>.vercel-dns-017.com A | head -1)
+curl -s --resolve atlas.hulage.in:443:$IP -o /dev/null \
+  -w '%{http_code}\n' https://atlas.hulage.in/health
+```
+
 ### First API key
 
 ```bash

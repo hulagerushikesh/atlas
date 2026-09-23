@@ -4,6 +4,11 @@ A production-grade, self-improving retrieval-augmented generation system for
 enterprise knowledge bases. Built as a portfolio centerpiece demonstrating
 clean architecture, type safety, full observability, and reproducible evaluation.
 
+**Live:** [atlas.hulage.in](https://atlas.hulage.in) — console at
+[/app](https://atlas.hulage.in/app), OpenAPI at
+[/docs](https://atlas.hulage.in/docs). Cloud Run with scale-to-zero, so the
+first request after an idle spell waits ~15 s for the container.
+
 ---
 
 ## Architecture

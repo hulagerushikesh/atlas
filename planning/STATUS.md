@@ -1,11 +1,11 @@
-# Status — 2026-09-23 (v0.1.0, M2 in flight)
+# Status — 2026-09-23 (v0.1.0, M2 done)
 
 ## One line
 
-M1 done 2026-09-20 (v0.1.0). M2 infrastructure is up on GCP project
-`atlas-rag-rush` — image built, Qdrant Cloud loaded with 4,020 chunks,
-secrets and Firestore in place — and stops one command short: the Cloud Run
-deploy itself.
+**M2 is done: https://atlas.hulage.in is live** — Cloud Run rev 00004 in
+`asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
+Firestore for keys and the spend counter, four Secret Manager secrets, ₹200/mo
+budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 
 ## Blocked on you
 
@@ -18,10 +18,16 @@ deploy itself.
       2026-09-20; key died with it. `.env` uses local Docker Qdrant.
 - [ ] **Resume bullets** with M1 numbers (P 0.42 · R 0.78 · F 1.0, 4,021
       chunks) — drafted 2026-09-20, say "apply" to patch `resume_v5a.tex`.
-- [ ] **Run the Cloud Run deploy** — the sandbox blocks `gcloud run deploy`:
-      `SKIP_BUILD=1 IMAGE_TAG=0fdd0b2 scripts/deploy_gcp.sh`
-- [ ] **Billing budget alert** ₹200/mo on `atlas-rag-rush` (console).
-- [ ] **DNS** — CNAME for `atlas.hulage.in` once the service URL exists.
+- [x] ~~Run the Cloud Run deploy~~ → four revisions rolled 2026-09-23; the
+      sandbox blocks `gcloud run deploy`, so every deploy is
+      `scripts/deploy_gcp.sh` run by hand.
+- [x] ~~Billing budget alert~~ → ₹200/mo on `atlas-rag-rush`, alerts at
+      50/90/100%.
+- [x] ~~DNS~~ → Cloudflare CNAME `atlas` → `<hash>.vercel-dns-017.com`,
+      DNS-only. Certificate issued; all four routes 200.
+- [ ] **Full eval run** (≈₹0.3) to confirm the tokeniser change against the
+      published P 0.42 / R 0.78 baseline, then update README and landing.
+      Say "run eval".
 
 ## Where things stand
 
@@ -34,9 +40,9 @@ deploy itself.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **329 tests** green, 89% cov | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **340 tests** green, 90% cov | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE: https://atlas-api-797295077194.asia-south1.run.app** (rev 00002, `/health` ok); Docker Compose local; GCP infra (`atlas-rag-rush`, image `0fdd0b2` in Artifact Registry, Qdrant Cloud + Firestore + 4 secrets); Cloud Run revision not yet rolled | `docs/deploy.md`, `scripts/deploy_gcp.sh` |
+| Deploy | **LIVE: https://atlas.hulage.in** (Cloud Run rev 00004 `d280006`, Vercel rewrite, Let's Encrypt cert); `/`, `/app`, `/docs`, `/health` all 200; budget ₹200/mo | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
 ## Measured (2026-09-20, v0.1.0)
@@ -58,6 +64,17 @@ daily spend cap, console markdown.
 
 ## Last three sessions
 
+- 2026-09-23 (M2 done + M3 opened, ≈₹1.1) — four Cloud Run revisions. Three
+  defects only the cloud could find: missing Qdrant payload indexes, the
+  missing `.gcloudignore`, and a Redis client cached before its ping (the
+  service reported `degraded` forever). Two more only the proxy could find: the
+  catch-all rewrite does not match `/`, and the StaticFiles mount's 307 for
+  `/app` leaked the run.app host. Spend moved to Firestore after the live
+  service reported `spent_today_usd: 0.0` for a query it had just charged.
+  `atlas.hulage.in` fronted by a Vercel rewrite because Cloud Run refuses
+  domain mappings in `asia-south1`. M3 started: identifier-aware BM25
+  tokeniser, recall 0.726 → 0.798 and precision 0.529 → 0.486 on the new
+  retrieval-only harness.
 - 2026-09-23 (M2 infra, ≈₹1) — GCP project `atlas-rag-rush` created and
   billed, five APIs on, Artifact Registry + Firestore in `asia-south1`, four
   Secret Manager secrets (all piped from `.env`, none typed), IAM for the
@@ -97,8 +114,9 @@ daily spend cap, console markdown.
 
 ## Next
 
-[M2 — Cloud deploy (GCP)](ROADMAP.md#m2--cloud-deploy-gcp), one command from
-done. After the revision is live: smoke `/health`, mint the first key with
-`X-Admin-Secret`, one live query (≈₹0.02), custom domain, budget alert, then
-the landing page states the cold start. Ask before anything billable; budget
-in INR.
+M3 — retrieval quality. Four questions still miss on retrieval alone:
+`tutorial/security/oauth2-jwt`, `advanced/custom-response`,
+`tutorial/response-model`, `tutorial/query-params-str-validations`. Candidates,
+each measurable for ≈₹0.01 with `scripts/eval_retrieval.py`: a rerank `top_k`
+sweep (5 / 10 / 15), and profiling the retrieval stage, which at ~5.1 s is the
+slowest of the six. Ask before anything billable; budget in INR.
