@@ -43,6 +43,7 @@ from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents
 from atlas.api.routes import health, ingest, keys, metrics_route, namespaces, query
+from atlas.api.spendstore import build_spend_backend
 from atlas.config import Settings, get_settings
 from atlas.logging import configure_logging
 
@@ -118,7 +119,12 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_model=shared.settings.openai.embedding_model,
         chat_model=shared.settings.openai.primary_model,
         spend=SpendMeter(
-            budget_usd=settings.budget.daily_usd, redis_client=redis_client
+            budget_usd=settings.budget.daily_usd,
+            backend=build_spend_backend(
+                settings.budget.store,
+                redis_client=redis_client,
+                firestore_project=settings.auth_firestore_project or None,
+            ),
         ),
     )
     if settings.budget.daily_usd > 0:

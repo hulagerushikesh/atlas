@@ -103,3 +103,12 @@ Format: date — decision — alternatives — reason.
   assigned the client before pinging it, so every request then retried a
   refused connection on localhost. Absent Redis is the M2 design, not a
   fault, and `/health` has to say so or the signal is worthless.
+- **2026-09-23** — The daily spend total moves to Firestore on Cloud Run
+  (`BUDGET_STORE=firestore`, one document per UTC day, `Increment`).
+  *Alt:* leave it in-process. *Why:* the live service reported
+  `spent_today_usd: 0.0` right after a charged query — the instance that
+  recorded it had already scaled to zero. In-process capped a container's
+  lifetime, not a day, which is precisely the case a runaway client
+  produces. Firestore is already a dependency for keys and one doc a day is
+  free. The meter keeps a per-process mirror as the floor, so a counter
+  outage cannot uncap the spend either.

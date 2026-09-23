@@ -94,6 +94,10 @@ class BudgetConfig(BaseSettings):
     # Hard cap on estimated API spend per UTC day, in USD. 0 disables it.
     # Requests past the cap get 429 until midnight UTC. See atlas.api.budget.
     daily_usd: float = 0.0
+    # Where the day's total lives. "auto" = Redis if connected, else in-process
+    # (per-instance, so it resets on a Cloud Run cold start). "firestore" makes
+    # it durable without a Redis. See atlas.api.spendstore.
+    store: Literal["auto", "memory", "redis", "firestore"] = "auto"
 
 
 class APIConfig(BaseSettings):
