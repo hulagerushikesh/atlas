@@ -112,6 +112,14 @@ wire protocol, and `OPENAI_BASE_URL` points at Gemini's OpenAI-compatible
 endpoint. Renaming them to `GEMINI_*` makes `OpenAIConfig` fail with
 `api_key Field required`.
 
+### Custom domain
+
+Cloud Run refuses domain mappings in `asia-south1` (501, "Creating domain
+mappings is not allowed in asia-south1"), so `atlas.hulage.in` is fronted by a
+Vercel project that rewrites every path to the service URL — the same shape as
+Finertia, and cheaper than the ₹1,500/mo a global load balancer would cost for
+one small service. See `proxy/README.md`.
+
 ### First API key
 
 ```bash

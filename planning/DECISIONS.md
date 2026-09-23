@@ -112,3 +112,10 @@ Format: date — decision — alternatives — reason.
   produces. Firestore is already a dependency for keys and one doc a day is
   free. The meter keeps a per-process mirror as the floor, so a counter
   outage cannot uncap the spend either.
+- **2026-09-23** — `atlas.hulage.in` is fronted by a Vercel rewrite, not a
+  Cloud Run domain mapping. *Why:* mappings are not offered in `asia-south1`
+  (501 UNIMPLEMENTED). The alternatives were a global external load balancer
+  (~₹1,500/mo for a forwarding rule, more than the whole service costs) or
+  moving the service to a mapping-capable region and paying ~200 ms on every
+  Indian request. A Vercel rewrite costs ₹0 and one hop, and Finertia already
+  runs this shape.
