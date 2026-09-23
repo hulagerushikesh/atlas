@@ -39,7 +39,7 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live ×5.** Deployed: P 0.431 · R 0.778 · F 1.000 · AR 0.825 (relabelled baseline 0.416/0.778; all deltas < 0.02). Retrieval-only harness at ≈₹0.01 for cheap rejection | `eval_data/reports/fastapi-v3-tokenizer_*.json` |
+| Evaluation (D) | **Run live ×6.** Deployed (`top_k` 15): P 0.302 · R **0.900** · F 1.000 · AR 0.819. Recall +0.122 on the previous run, 6× the noise floor; precision falls as the window widens (denominator). Retrieval-only harness at ≈₹0.01 for cheap rejection | `eval_data/reports/topk15_*.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |

@@ -201,12 +201,12 @@ noise floor.
 
 ### Headline numbers
 
-| Metric | Run 1 | Run 2 | Relabelled | Deployed | What it measures |
+| Metric | Run 1 | Relabelled | `top_k` 5 | **Deployed** | What it measures |
 |---|---|---|---|---|---|
-| Context precision | 0.309 | 0.309 | 0.416 | **0.431** | Of the 5 chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.667 | 0.778 | **0.778** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Context precision | 0.309 | 0.416 | 0.431 | **0.302** | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.778 | 0.778 | **0.900** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
 | Faithfulness | 1.000 | 1.000 | 1.000 | **1.000** | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.826 | 0.832 | **0.825** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Answer relevance | 0.815 | 0.832 | 0.825 | **0.819** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
 *15 questions, ~15k tokens and ≈₹0.3 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run; the LLM-judged
@@ -217,11 +217,17 @@ The "Relabelled" column is the **same pipeline, same index**, re-run after
 reading the two misses that were labelling errors (below) and fixing the
 dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
 
-"Deployed" is what `atlas.hulage.in` serves today: the identifier-aware BM25
-tokeniser, against the Qdrant Cloud index. Every delta from the relabelled run
-is below the 0.02 significance floor, so the honest summary is *no measured
-end-to-end change* — see below for why that is more interesting than it looks.
-`eval_data/reports/fastapi-v3-tokenizer_*.json`.
+"Deployed" is what `atlas.hulage.in` serves today: `reranker.top_k = 15`
+against the Qdrant Cloud index. Recall is up 0.122 on the column before it,
+six times the 0.02 significance floor, and faithfulness did not move.
+`eval_data/reports/topk15_*.json`.
+
+**Read the precision drop as a denominator, not a regression.** Each question
+labels one relevant document, so with a 15-slot window a perfect retrieval
+still scores about 0.2–0.4: the other slots have nothing relevant left to
+hold. Nothing got worse — the window got wider and the metric is a fraction
+of it. Recall, faithfulness and answer relevance are the ones that carry
+meaning across a `top_k` change, and they went up, flat, flat.
 
 ### The honest read
 
@@ -237,10 +243,23 @@ end-to-end change* — see below for why that is more interesting than it looks.
   hit. The remaining three are genuine retrieval misses (`tutorial/body`,
   `tutorial/response-model`, `tutorial/security/*`) where chunks from
   adjacent tutorial pages outranked the target — those are the M3 work.
-- **Precision ~0.43 is the number to move.** With `reranker.top_k = 5` and
-  one relevant document per question, the ceiling is ~0.2–0.6 per sample;
-  the misses above score 0 and pull it down. Next experiments (M3): rerank
-  top-k 10–15 (`run_eval.py --set reranker.top_k=10`), HyDE query expansion,
+- **The misses were never unreachable.** Widening the reranker window from 5
+  to 15 recovered `advanced/custom-response` and `tutorial/response-model`
+  outright and took `tutorial/security/oauth2-jwt` from 0 to 0.5 — documents
+  that had survived every M1 attempt. They had been sitting just below rank 5
+  the whole time, in the candidate set, discarded by the window rather than
+  missed by the retriever. The cost is 2.45x the generator tokens
+  (~\$0.0005 → ~\$0.0012 per query) and faithfulness held at 1.000, which
+  was the risk worth checking: more context is where lost-in-the-middle
+  shows up.
+- **`fq-012` is the one left.** "Does FastAPI require Pydantic, or can you
+  skip it entirely?" — a comparative question whose answer is spread across
+  pages rather than stated on one. Query decomposition finds it at
+  `top_k` 5 and the wider window does not. That shape needs
+  decomposition or contextual chunk headers, not more slots.
+- **Next experiments (M3):** `retrieval.top_k` 20 → 40 (the reranker
+  currently keeps 15 of 20, so it barely filters — retrieval-only recall
+  measures 0.964 there, unconfirmed end to end), HyDE query expansion,
   contextual chunk headers.
 - **Better tokenisation and query decomposition are substitutes, not
   additions.** The identifier-aware BM25 tokeniser is worth +0.07 recall when
