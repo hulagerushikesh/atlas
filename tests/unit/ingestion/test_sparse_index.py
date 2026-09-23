@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from atlas.ingestion.sparse import BM25SparseIndex
+from atlas.ingestion.sparse import BM25SparseIndex, _tokenize
 from atlas.interfaces.document import Chunk, ChunkMetadata, DocumentType
 
 
@@ -172,3 +172,50 @@ class TestPruneDocument:
         await index.upsert([_make_chunk("a0", "only chunk", doc_id="doc-a")])
         assert await index.prune_document("doc-a", chunk_count=1) == 0
         assert await index.prune_document("doc-missing", chunk_count=0) == 0
+
+
+class TestTokenizer:
+    """
+    The tokeniser decides what BM25 can ever match. Whitespace splitting tied
+    tokens to the punctuation around them and hid every compound identifier
+    behind its exact spelling.
+    """
+
+    def test_punctuation_no_longer_sticks_to_words(self) -> None:
+        assert _tokenize("Use `response_model`, then stop.")[:4] == [
+            "use", "response_model", "response", "model",
+        ]
+
+    @pytest.mark.parametrize(
+        ("identifier", "expected_pieces"),
+        [
+            ("get_current_user", ["get", "current", "user"]),
+            ("HTTPException", ["http", "exception"]),
+            ("JSONResponse", ["json", "response"]),
+            ("OAuth2PasswordBearer", ["auth2", "password", "bearer"]),
+        ],
+    )
+    def test_identifier_pieces_are_indexed(
+        self, identifier: str, expected_pieces: list[str]
+    ) -> None:
+        tokens = _tokenize(identifier)
+        assert tokens[0] == identifier.lower()  # the whole name still wins
+        assert all(piece in tokens for piece in expected_pieces)
+
+    def test_single_letters_are_dropped(self) -> None:
+        """"O" from OAuth2… matches nothing useful and dilutes every score."""
+        assert "o" not in _tokenize("OAuth2PasswordBearer")
+
+    def test_plain_prose_is_unchanged_apart_from_case(self) -> None:
+        assert _tokenize("The quick brown fox") == ["the", "quick", "brown", "fox"]
+
+    async def test_query_finds_a_chunk_by_an_identifier_piece(
+        self, index: BM25SparseIndex
+    ) -> None:
+        """The point of the change: prose wording reaches code identifiers."""
+        await index.upsert([
+            _make_chunk("c1", "Use HTTPException to return an error response."),
+            _make_chunk("c2", "Pydantic models describe the request body."),
+        ])
+        [(top, _score)] = index.search("http exception", top_k=1)
+        assert top["chunk_id"] == "c1"

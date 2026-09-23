@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -43,9 +44,37 @@ from atlas.interfaces.index import BaseIndex, IndexStats
 logger = structlog.get_logger(__name__)
 
 
+# Words are letters, digits and underscores; everything else (punctuation,
+# backticks, parentheses, markdown syntax) separates them.
+_WORD = re.compile(r"[A-Za-z0-9_]+")
+# Pieces inside an identifier: HTTPException → HTTP, Exception; get_current_user
+# → get, current, user; oauth2 → oauth2.
+_PIECE = re.compile(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+")
+
+
 def _tokenize(text: str) -> list[str]:
-    """Simple whitespace + lowercase tokeniser. Swap for a stemmer if needed."""
-    return text.lower().split()
+    """
+    Lowercase word tokens, plus the pieces of any compound identifier.
+
+    Whitespace splitting is wrong for a documentation corpus: `response_model`
+    at the end of a sentence became "response_model," and never matched the
+    query token "response_model", while "HTTPException" and "get_current_user"
+    could not be reached by the words a question actually uses ("http
+    exception", "current user"). Both the whole identifier and its pieces are
+    indexed, so an exact mention still scores highest — BM25 counts it twice,
+    once whole and once in parts — while a natural-language phrasing can find
+    it at all.
+    """
+    tokens: list[str] = []
+    for word in _WORD.findall(text):
+        whole = word.lower()
+        tokens.append(whole)
+        pieces = [p.lower() for p in _PIECE.findall(word)]
+        if len(pieces) > 1:
+            # Single letters are noise: "OAuth2PasswordBearer" splits to
+            # O | Auth2 | Password | Bearer, and "o" matches nothing useful.
+            tokens.extend(p for p in pieces if p != whole and len(p) > 1)
+    return tokens
 
 
 class BM25SparseIndex(BaseIndex):
