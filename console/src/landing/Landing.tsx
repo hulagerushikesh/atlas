@@ -38,9 +38,14 @@ export default function Landing() {
               <a href={GITHUB} target="_blank" rel="noreferrer"><Code2 className="size-4" /> Source</a>
             </Button>
           </div>
+          <p style={rise(260)} className="animate-rise mt-3 text-[13.5px] leading-relaxed text-ink-2">
+            Hosted on Cloud Run with scale-to-zero, so the first request after an idle spell
+            waits ~15&nbsp;s for the container. That is the cost of an idle bill of ₹0; every
+            request after it is warm.
+          </p>
           <div style={rise(320)} className="animate-rise label mt-10 flex flex-wrap gap-x-6 gap-y-1 tabular">
-            <span><b className="font-medium text-foreground">312</b> tests</span>
-            <span><b className="font-medium text-foreground">86%</b> coverage</span>
+            <span><b className="font-medium text-foreground">313</b> tests</span>
+            <span><b className="font-medium text-foreground">89%</b> coverage</span>
             <span><b className="font-medium text-foreground">6</b> stages</span>
             <span><b className="font-medium text-foreground">&lt;1 ms</b> cache hit</span>
           </div>
