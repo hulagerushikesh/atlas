@@ -155,7 +155,23 @@ The key is returned once. Paste it into the console's Settings dialog.
 ### Cost
 
 Idle: ₹0 (Cloud Run min-instances 0, Qdrant free tier, Firestore free tier).
-Artifact Registry ≈₹10/mo for the image. Per query ≈₹0.02 in Gemini tokens,
+Artifact Registry is the one cost that grows on its own: every deploy pushes a
+new ~540 MB image and almost nothing dedupes, because the `uv pip install`
+layer gets a fresh digest each build (no `--cache-from`). Seven tags reached
+3.8 GB, ≈₹30/mo. Prune to the serving image plus one rollback:
+
+```bash
+gcloud artifacts docker images list <repo>/atlas-api --include-tags \
+  --format='table(TAGS,CREATE_TIME,DIGEST)' --project atlas-rag-rush
+gcloud run revisions list --service atlas-api --region asia-south1 \
+  --format='table(METADATA.NAME,SPEC.containers[0].image)'   # what is referenced
+gcloud artifacts docker images delete <repo>/atlas-api@<digest> --delete-tags --quiet
+```
+
+Deleting an image a revision references makes that revision permanently
+un-startable, so check the second listing before the third command. The
+repository's reported size lags deletions by hours — trust the tag listing,
+not `Repository Size`. Per query ≈₹0.02 in Gemini tokens,
 capped by `BUDGET_DAILY_USD` (429 past it). One full corpus ingest ≈₹1 in
 embeddings; re-runs skip unchanged documents and cost ₹0. Set a billing budget
 alert at ₹200/mo in the console as a backstop.
