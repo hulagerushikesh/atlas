@@ -188,7 +188,7 @@ export function FieldNotes() {
 /* ── Measured ──────────────────────────────────────────────────────────── */
 
 const MEASURED = [
-  { k: "Context precision", v: "0.42", d: "of the 5 chunks handed to the generator came from a labelled-relevant page" },
+  { k: "Context precision", v: "0.43", d: "of the 5 chunks handed to the generator came from a labelled-relevant page" },
   { k: "Context recall", v: "0.78", d: "of labelled pages had at least one chunk retrieved — 3 of 15 questions missed" },
   { k: "Faithfulness", v: "1.00", d: "of answer claims grounded in the retrieved references, per the claim-level judge" },
   { k: "Answer relevance", v: "0.83", d: "question ↔ answer alignment (RAGAS reverse-question), ±0.01 run to run" },
@@ -213,9 +213,11 @@ export function Measured() {
       </div>
       <Reveal delay={0.2} className="mt-6 max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
         The honest read: faithfulness is real but easy on documentation questions; precision is the number to
-        move. The three remaining recall misses are genuine — adjacent tutorial pages outranked the target — and
-        the planned fixes are a wider rerank window, HyDE, and contextual chunk headers. Full per-question
-        breakdown in the README.
+        move. The three remaining recall misses are genuine — adjacent tutorial pages outranked the target. The
+        last experiment says the binding constraint is the five slots, not the retriever: a better BM25
+        tokeniser recovered one question and lost another at the rank-5 boundary, for no net change. So the
+        next fix is a wider rerank window, then HyDE and contextual chunk headers. Full per-question breakdown
+        in the README.
       </Reveal>
     </section>
   )
