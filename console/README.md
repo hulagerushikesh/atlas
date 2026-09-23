@@ -1,54 +1,21 @@
-# React + TypeScript + Vite
+# Atlas console
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React front end for Atlas: the landing page served at `/` and the query
+console served at `/app`. Vite multi-page build (`index.html` → console,
+`landing.html` → landing), Tailwind v4, shadcn/ui primitives, Motion for
+anything that has to interpolate.
 
-Currently, two official plugins are available:
+`npm run build` writes straight into `../src/atlas/api/static/`, and that
+output **is committed**. The Python image stays Node-free that way: FastAPI
+mounts the built files and the Dockerfile never installs a toolchain. The
+consequence is that a source change is not deployed until the build has been
+re-run and the new hashed assets committed — the served bundle name is the
+thing to check when a change appears to have had no effect.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```bash
+npm install
+npm run dev      # standalone, expects the API on :8010
+npm run build    # writes ../src/atlas/api/static/ — commit the result
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
+Design direction and the vocabulary behind it are in `../DESIGN.md`.
