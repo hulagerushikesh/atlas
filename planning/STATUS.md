@@ -25,9 +25,10 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
       50/90/100%.
 - [x] ~~DNS~~ → Cloudflare CNAME `atlas` → `<hash>.vercel-dns-017.com`,
       DNS-only. Certificate issued; all four routes 200.
-- [ ] **Full eval run** (≈₹0.3) to confirm the tokeniser change against the
-      published P 0.42 / R 0.78 baseline, then update README and landing.
-      Say "run eval".
+- [x] ~~Full eval run~~ → run 2026-09-23 (₹0.3, 83 s, 15,341 tokens).
+      P 0.431 · R 0.778 · F 1.000 · AR 0.825; every delta from the relabelled
+      baseline below the 0.02 floor. README carries it as the "Deployed"
+      column.
 
 ## Where things stand
 
@@ -36,7 +37,7 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live ×4.** Relabelled: P 0.42 · R 0.78 · F 1.00 · AR 0.83 (was 0.31/0.67 with two mislabelled questions; same code, same index) | `eval_data/reports/fastapi-v2-relabel_*.json` |
+| Evaluation (D) | **Run live ×5.** Deployed: P 0.431 · R 0.778 · F 1.000 · AR 0.825 (relabelled baseline 0.416/0.778; all deltas < 0.02). Retrieval-only harness at ≈₹0.01 for cheap rejection | `eval_data/reports/fastapi-v3-tokenizer_*.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -74,7 +75,10 @@ daily spend cap, console markdown.
   `atlas.hulage.in` fronted by a Vercel rewrite because Cloud Run refuses
   domain mappings in `asia-south1`. M3 started: identifier-aware BM25
   tokeniser, recall 0.726 → 0.798 and precision 0.529 → 0.486 on the new
-  retrieval-only harness.
+  retrieval-only harness — but the full eval then showed it is worth nothing
+  end to end (recall 0.778 either way, `fq-005` won and `fq-012` lost), because
+  query decomposition already recovers what better tokenisation recovers. Kept
+  for the router's non-decomposing "simple" branch.
 - 2026-09-23 (M2 infra, ≈₹1) — GCP project `atlas-rag-rush` created and
   billed, five APIs on, Artifact Registry + Firestore in `asia-south1`, four
   Secret Manager secrets (all piped from `.env`, none typed), IAM for the
@@ -114,9 +118,19 @@ daily spend cap, console markdown.
 
 ## Next
 
-M3 — retrieval quality. Four questions still miss on retrieval alone:
-`tutorial/security/oauth2-jwt`, `advanced/custom-response`,
-`tutorial/response-model`, `tutorial/query-params-str-validations`. Candidates,
-each measurable for ≈₹0.01 with `scripts/eval_retrieval.py`: a rerank `top_k`
-sweep (5 / 10 / 15), and profiling the retrieval stage, which at ~5.1 s is the
-slowest of the six. Ask before anything billable; budget in INR.
+M3 — retrieval quality. Three questions miss end to end
+(`fq-007 tutorial/security/oauth2-jwt`, `fq-011 tutorial/response-model`,
+`fq-012 tutorial/query-params-str-validations`) and `fq-008
+advanced/custom-response` is partial at 0.67.
+
+The tokeniser result says the constraint is the **five slots**, not the
+retriever's ability to find the document: `fq-005` and `fq-012` traded places
+at the rank-5 boundary rather than both fitting. So the next experiment is the
+rerank `top_k` sweep (5 / 10 / 15, `run_eval.py --set reranker.top_k=10`),
+which changes the number of slots directly. Then profiling the retrieval
+stage, ~5.1 s of the six.
+
+Measure with `scripts/eval_retrieval.py` (≈₹0.01) to reject, then confirm with
+the full eval (≈₹0.3) before publishing — the cheap harness runs the
+un-decomposed path and flatters retrieval changes. Ask before anything
+billable; budget in INR.

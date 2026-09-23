@@ -128,9 +128,27 @@ Format: date — decision — alternatives — reason.
   already handle — faithfulness has stayed at 1.00. A variant that counted
   each piece once per chunk was tried and rejected: it kept the precision
   cost and lost the recall gain.
+
+  **Corrected 2026-09-23 (same day), after the full eval.** End to end the
+  change is worth nothing: recall 0.778 → 0.778, precision 0.416 → 0.431,
+  faithfulness 1.000, answer relevance 0.832 → 0.825 — every delta under the
+  0.02 floor. Per sample it is a swap: `fq-005` 0 → 1.0, `fq-012` 1.0 → 0,
+  both flipping at the rank-5 boundary. Query decomposition was already
+  recovering what the tokeniser recovers, so they compete for the same five
+  slots rather than compounding. Kept regardless, because the router's
+  "simple" branch retrieves once without decomposing, and the retrieval-only
+  numbers are exactly that branch. The claim this entry originally made — that
+  the tokeniser buys recall — is true only there.
 - **2026-09-23** — Retrieval changes are measured with a retrieval-only
   harness (`scripts/eval_retrieval.py`, ≈₹0.01) before the full eval
   (≈₹0.3). *Why:* a tokeniser cannot move faithfulness or answer relevance,
   so paying four LLM calls a question to see context metrics is waste. Its
   numbers are not comparable with run_eval.py's — it does not decompose
   complex questions — so it is a before/after instrument, not a scoreboard.
+
+  **Amended 2026-09-23:** it is also systematically optimistic. It measures
+  the un-decomposed path, where retrieval carries the whole question alone, so
+  any retrieval improvement looks larger there than it will through a pipeline
+  whose decomposition is already compensating. Use it to reject changes
+  cheaply; confirm anything it likes with the full eval before publishing a
+  number.

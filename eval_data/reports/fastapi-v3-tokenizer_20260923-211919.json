@@ -1,0 +1,534 @@
+{
+  "pipeline_config": {
+    "name": "fastapi-v3-tokenizer",
+    "description": "chat=gemini-3.1-flash-lite embed=gemini-embedding-001@1536 retrieval.top_k=20 reranker=on/top_k=5 chunk=recursive/512/64 namespace=default",
+    "overrides": {}
+  },
+  "sample_results": [
+    {
+      "sample_id": "fq-001",
+      "question": "How do you declare a path parameter in FastAPI?",
+      "generated_answer": "You can declare path parameters or variables using the same syntax as Python format strings [4]. When a function parameter matches a path parameter, FastAPI will extract the value from the path, validate it, and convert it to the specified type [2][3].",
+      "retrieved_chunk_ids": [
+        "1a0eb7b9-c95e-51c6-b2b2-1adf2c2ac86d",
+        "71162282-0473-541f-9e93-e14cdc7b85b8",
+        "fc2f66d8-c7c5-511f-ba3d-fd39432caed0",
+        "8a8bd54b-f11c-5286-bc92-b17c4e248607",
+        "f0fff19f-a205-5761-910c-7d2f3f044321"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.4,
+          "reasoning": "2/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/path-params'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 2 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8122,
+          "reasoning": "Mean cosine similarity 0.812 over 3 synthetic questions. Synthetic questions: ['How does FastAPI handle the extraction and validation of path parameters?', 'What syntax is used to define variables within a URL path in FastAPI?', 'How does FastAPI ensure that path parameters are converted to the correct data type?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-002",
+      "question": "What Python version does FastAPI require?",
+      "generated_answer": "FastAPI requirements regarding Python versions have evolved over time:\n\n*   FastAPI 0.84.0 dropped support for Python 3.6, requiring Python 3.7 or above [4].\n*   Subsequent updates dropped support for Python 3.7, requiring Python 3.8 or above [3].\n*   Pydantic v1 (including `pydantic.v1`) is not supported in Python 3.14 and above [1].",
+      "retrieved_chunk_ids": [
+        "68976f00-a8b7-50f8-aa8e-7f8a959f0536",
+        "66b15f51-87ee-5ed3-a48f-038260053055",
+        "848cddd3-51c8-5a71-906d-b1ce68a77086",
+        "d258ac94-a640-5824-8132-0a12d539079d",
+        "3eb55125-63e1-5efb-8a2a-7d6fbb04f61f"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "3/5 retrieved chunks came from relevant documents (relevant doc IDs: ['release-notes'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8437,
+          "reasoning": "Mean cosine similarity 0.844 over 3 synthetic questions. Synthetic questions: ['What are the historical changes in Python version requirements for FastAPI?', 'Which Python version is the minimum requirement for using FastAPI 0.84.0 and later?', 'Are there any compatibility limitations regarding Pydantic v1 in newer Python releases?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-003",
+      "question": "How do you make a query parameter optional with a default value in FastAPI?",
+      "generated_answer": "To make a query parameter optional in FastAPI, you can use the following methods:\n\n* **Set a default value:** Assigning any default value (including `None`) to a parameter makes it optional [3][5].\n* **Use `None` as the default:** Setting the default value to `None` is the standard way to make a parameter optional without a specific value [1][4].\n* **Use `Query` with a default:** When using `Query`, you can set the default value using `Query(default=None)` or by assigning a specific default value [2][3].\n\nIf you do not want to make a parameter optional, you should not declare any default value [4][5].",
+      "retrieved_chunk_ids": [
+        "ecea0645-1dc5-5183-a185-01d5911359e3",
+        "3c1a46fb-91c8-543f-b65d-35e8af67c7d1",
+        "91818d93-3f94-508f-8312-6b799d033dbd",
+        "0883ee48-c1ef-55e7-b098-4c1a6db8d070",
+        "e4c56ebc-a629-5f6d-a365-d081ed2a7b52"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.4,
+          "reasoning": "2/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/query-params'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 5 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8395,
+          "reasoning": "Mean cosine similarity 0.839 over 3 synthetic questions. Synthetic questions: ['How can you define an optional query parameter in a FastAPI endpoint?', 'What is the standard method for making a FastAPI query parameter optional when it does not require a specific default value?', 'How do you ensure a FastAPI query parameter remains mandatory for a client request?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-004",
+      "question": "What decorator do you use to define a POST endpoint in FastAPI?",
+      "generated_answer": "To define a POST endpoint in FastAPI, you use the `@app.post()` decorator [1].",
+      "retrieved_chunk_ids": [
+        "b5b61d66-c50c-506d-8ac8-2d241b293697",
+        "b4a11c07-4d54-5cf4-9723-ef4187957e6a",
+        "5ca490c4-b157-5f61-b764-facce0d1d48f",
+        "008c9cdc-b9ff-575f-859e-7ce1197bcff9",
+        "1a0eb7b9-c95e-51c6-b2b2-1adf2c2ac86d"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "3/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/first-steps'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 1 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8832,
+          "reasoning": "Mean cosine similarity 0.883 over 3 synthetic questions. Synthetic questions: ['How do you create a POST endpoint using the FastAPI framework?', 'Which decorator is required to handle POST requests in a FastAPI application?', 'What is the standard syntax for defining a route that accepts POST methods in FastAPI?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-005",
+      "question": "How does FastAPI validate request body data?",
+      "generated_answer": "FastAPI validates request body data through the following mechanisms:\n\n* **Type Declarations**: FastAPI uses Python type declarations to define requirements and validate data coming from each request [3].\n* **Pydantic Models**: When function parameters are declared as Pydantic models, FastAPI recognizes them as being part of the request body and performs validation on them [5].\n* **Automatic Conversion and Validation**: FastAPI automatically converts data from the request to the required type and validates compound data [1][3].\n* **Error Handling**: If the data is invalid, FastAPI automatically generates and returns errors to the client [3].\n* **Documentation**: FastAPI uses these declarations to document the schema in OpenAPI, which powers automatic interactive documentation [1][3].\n\nNote: If you access the `Request` object directly to read the body, FastAPI will not validate, convert, or document that data [4].",
+      "retrieved_chunk_ids": [
+        "f1026fd1-c484-5e27-a166-177a1831600c",
+        "8a9945c1-15bc-5a9b-991b-6eac83b160e9",
+        "1d092a18-05be-5270-bff3-3d45b957aae2",
+        "9f90dc62-4ff8-5a5d-8b80-c92d0102617b",
+        "fc2f66d8-c7c5-511f-ba3d-fd39432caed0"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.2,
+          "reasoning": "1/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/body'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8515,
+          "reasoning": "Mean cosine similarity 0.851 over 3 synthetic questions. Synthetic questions: ['How does FastAPI ensure that the data received in a request body adheres to expected types and structures?', 'What role do Pydantic models play in the data validation process within FastAPI applications?', 'What happens when a request body contains invalid data in a FastAPI endpoint?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-006",
+      "question": "What is dependency injection in FastAPI and how do you use it?",
+      "generated_answer": "Dependency injection in **FastAPI** is a system that allows your code (specifically *path operation functions*) to declare the dependencies it requires to function [3]. The system then handles the execution and provision of those dependencies [2][3].\n\nHow to use it:\n* **Declare dependencies:** You can define a dependency as a function that accepts the same parameters as a *path operation function* [4].\n* **Inject dependencies:** You can tell **FastAPI** that a *path operation function* depends on something by using `Depends()`, which ensures the dependency is executed before the function [2][5].\n* **Multi-level injection:** You can declare dependencies at multiple levels, such as in *path operation functions*, dependencies, or sub-dependencies [1].\n* **Background tasks:** You can use `BackgroundTasks` with dependency injection; **FastAPI** will merge tasks from different levels and execute them in the background [1].\n* **Instances:** You can use an instance of a class as a dependency by passing it into `Depends()`, which **FastAPI** will then call to provide the return value to your function [5].",
+      "retrieved_chunk_ids": [
+        "4f6eef7f-88df-509b-98d1-bb2ff1bfb754",
+        "e51f2e01-2d8f-5718-8e73-27f3bbb93ee2",
+        "ca478715-71a1-5bb6-a6ce-b3988ffbe327",
+        "23b03593-0b0c-509b-8741-32a34f3202da",
+        "30419ffd-117c-5f4d-b02a-025a6e9a38cd"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "3/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/dependencies/index'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 7 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8461,
+          "reasoning": "Mean cosine similarity 0.846 over 3 synthetic questions. Synthetic questions: ['What is the purpose of the dependency injection system in FastAPI?', 'How do you implement and use dependency injection in a FastAPI path operation function?', \"What are the key features and capabilities of FastAPI's dependency injection system?\"]"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-007",
+      "question": "How do you add authentication and then use the current user in a protected endpoint?",
+      "generated_answer": "I don't have sufficient information to answer this question. While the provided context explains how to use `OAuth2PasswordBearer` to require an `Authorization` header [1], how to use `OAuth2PasswordRequestForm` to handle credentials [5], and that FastAPI provides utilities for OAuth2 flows [4], it does not provide the specific steps or code patterns required to implement the logic for retrieving or using the \"current user\" within a protected endpoint.",
+      "retrieved_chunk_ids": [
+        "9b1666d2-38e7-5d37-b48b-e29f2619c64a",
+        "f9e563bb-409a-5800-afa7-0bb4b5aa4139",
+        "e1d6fe24-c2da-5167-b89e-7952b2df46e5",
+        "e1ceda1d-b0ee-54fe-b8e9-f23db9c93542",
+        "173546a2-e58e-5385-bc74-14bc60dafef5"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.0,
+          "reasoning": "0/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/security/get-current-user', 'tutorial/security/oauth2-jwt'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 0.0,
+          "reasoning": "Retrieved chunks from 0/2 relevant documents. Missing: ['tutorial/security/get-current-user', 'tutorial/security/oauth2-jwt']."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 5 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.7457,
+          "reasoning": "Mean cosine similarity 0.746 over 3 synthetic questions. Synthetic questions: ['How can I implement the logic to retrieve the current user within a protected FastAPI endpoint?', 'What are the necessary code patterns for identifying the authenticated user inside a route protected by OAuth2?', 'Can you provide the steps required to access the current user object after verifying an Authorization header in FastAPI?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-008",
+      "question": "How do you stream a large file download through FastAPI without loading it all into memory?",
+      "generated_answer": "To stream a large file without loading it all into memory, you can use `UploadFile` or `StreamingResponse`:\n\n*   **`UploadFile`**: This uses a \"spooled\" file, which stores data in memory up to a maximum size limit before writing it to disk, allowing you to handle large files like images, videos, and binaries without consuming all available memory [2].\n*   **`StreamingResponse`**: By declaring `response_class=StreamingResponse` in your path operation function and using `yield`, you can stream chunks of data as you read them, avoiding the need to load the entire file into memory at once [1][3].",
+      "retrieved_chunk_ids": [
+        "a2f9ebb3-1613-536d-8406-16bcfdd4c877",
+        "09547e00-7f7d-5e4e-9ac6-7b620bdcd841",
+        "4e0f0674-caa2-5f4e-b1ab-e5a88ff9c257",
+        "370a16a7-ae4f-5b54-bbbc-7d2aa1c1640d",
+        "fe73efea-a574-572c-8722-05bae70f7f9f"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.8,
+          "reasoning": "4/5 retrieved chunks came from relevant documents (relevant doc IDs: ['advanced/custom-response', 'advanced/stream-data', 'tutorial/stream-json-lines'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 0.6667,
+          "reasoning": "Retrieved chunks from 2/3 relevant documents. Missing: ['advanced/custom-response']."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.7386,
+          "reasoning": "Mean cosine similarity 0.739 over 3 synthetic questions. Synthetic questions: ['How can you handle large file uploads in a web application without exhausting server memory?', 'What is the recommended approach for streaming large files from a server to a client to prevent memory overflow?', 'What are the specific utilities provided in FastAPI to efficiently manage large data transfers?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-009",
+      "question": "How do you run startup and shutdown logic in a FastAPI application?",
+      "generated_answer": "To run startup and shutdown logic in a FastAPI application, it is recommended to use the `lifespan` parameter [1][2][4].\n\n*   **Lifespan:** You define this logic using a context manager decorated with `@asynccontextmanager` [1][3]. This approach allows you to share variables and logic between startup and shutdown by using `yield` within a single function [3][4].\n*   **Alternative (Deprecated):** You can define separate `startup` and `shutdown` event handlers [2][5]. However, this method is deprecated; if a `lifespan` parameter is provided, these event handlers will not be called [2].",
+      "retrieved_chunk_ids": [
+        "9477cdb3-c4d1-502a-8e76-0bd4cadaf0b9",
+        "ef5739e5-22a2-5dce-8276-75775d7222fa",
+        "4b22e1f2-8831-5125-a414-9433e659edd5",
+        "cc6fe1ce-3c8e-5ae9-83b8-9e0db27790a2",
+        "06918a51-842e-51b1-8be7-a64560d21160"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.8,
+          "reasoning": "4/5 retrieved chunks came from relevant documents (relevant doc IDs: ['advanced/events'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8707,
+          "reasoning": "Mean cosine similarity 0.871 over 3 synthetic questions. Synthetic questions: ['What is the recommended approach for handling startup and shutdown logic in a FastAPI application?', 'How do you implement startup and shutdown logic using the @asynccontextmanager decorator in FastAPI?', 'Why should developers avoid using the separate startup and shutdown event handlers in modern FastAPI applications?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-010",
+      "question": "Can you use synchronous blocking database calls directly in a FastAPI async endpoint without any workaround?",
+      "generated_answer": "No. If you use a regular `def` function instead of `async def`, FastAPI runs the function in an external threadpool to avoid blocking the main event loop [2][5]. If you use `async def` for code that performs blocking I/O, it will block the server [1][4][5].",
+      "retrieved_chunk_ids": [
+        "f11adb0d-30e2-5538-9002-947ca0590651",
+        "2122079b-2dc1-5f8a-aa13-c230be242bd5",
+        "a481f9e2-0ee0-5403-bfff-cd0d5e297882",
+        "c4941d21-11bb-5999-9bc2-63f8cb690253",
+        "7b294221-2568-5f1e-bc5d-f12a16910e3c"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "3/5 retrieved chunks came from relevant documents (relevant doc IDs: ['async'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 2 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.7878,
+          "reasoning": "Mean cosine similarity 0.788 over 3 synthetic questions. Synthetic questions: [\"Does defining a function with 'async def' in FastAPI automatically prevent the server from blocking during synchronous I/O operations?\", \"How does FastAPI handle functions defined with the standard 'def' keyword versus those defined with 'async def'?\", \"What are the performance implications of using 'async def' for blocking I/O tasks within a FastAPI application?\"]"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-011",
+      "question": "Is it possible to return a plain dict from a FastAPI endpoint without declaring a response model?",
+      "generated_answer": "Yes, it is possible to return a plain `dict` from a FastAPI endpoint without declaring a response model [3]. In this scenario:\n\n* FastAPI will use the `jsonable_encoder` to process the data [2].\n* The result will be placed in a `JSONResponse` [2].\n* You can also choose to create and return a `JSONResponse` directly [2].",
+      "retrieved_chunk_ids": [
+        "d9f88127-0348-51f0-8052-80d4891fe2c1",
+        "0ae5dc89-2377-5e91-953d-e08acd28d1e9",
+        "fc9b90bc-b4e9-57ca-8536-36fe43d7f77c",
+        "2754cd93-574b-5497-809f-1d87d89d94c5",
+        "d7dc66a0-68d3-5b53-af82-a68ef70e5a9b"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.0,
+          "reasoning": "0/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/response-model'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 0.0,
+          "reasoning": "Retrieved chunks from 0/1 relevant documents. Missing: ['tutorial/response-model']."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 4 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8737,
+          "reasoning": "Mean cosine similarity 0.874 over 3 synthetic questions. Synthetic questions: ['Is it possible to return a standard Python dictionary from a FastAPI endpoint without defining a response model?', 'How does FastAPI process a plain dictionary returned from an endpoint when no response model is specified?', 'What are the methods available for returning JSON data in FastAPI when you want to bypass response models?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-012",
+      "question": "Does FastAPI require you to use Pydantic for input validation, or can you skip it entirely?",
+      "generated_answer": "You can skip using FastAPI's automatic Pydantic features for request validation [1][2]. \n\n* You can choose to read and validate the request using your own code instead of relying on FastAPI's automatic Pydantic integration [1].\n* You can still define the request in the OpenAPI schema even when bypassing automatic Pydantic validation by using `openapi_extra` [1].\n* It is possible to use a different content type, such as YAML, instead of JSON, and forgo the automatic extraction of JSON Schema from Pydantic models [2].",
+      "retrieved_chunk_ids": [
+        "ada53938-0d7d-542c-8205-7141ad5ecd70",
+        "2a2b5903-1399-5a13-94fd-7f4788f6fc81",
+        "675868f8-9be5-535d-a01d-9ca7366a3de7",
+        "d9ec1e9e-d2f1-5179-91d6-dfd05061cceb",
+        "c1685720-84a6-528b-b5f3-d22c976a465e"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.0,
+          "reasoning": "0/5 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/query-params-str-validations'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 0.0,
+          "reasoning": "Retrieved chunks from 0/1 relevant documents. Missing: ['tutorial/query-params-str-validations']."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 4 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.7421,
+          "reasoning": "Mean cosine similarity 0.742 over 3 synthetic questions. Synthetic questions: ['Is it possible to handle request validation in FastAPI without using the integrated Pydantic features?', 'How can you include a custom request body in the OpenAPI documentation when you are manually validating inputs?', 'Can you configure a FastAPI endpoint to accept data formats like YAML while opting out of automatic Pydantic schema generation?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-013",
+      "question": "How do you handle file uploads and form data in the same FastAPI endpoint?",
+      "generated_answer": "To handle file uploads and form data in the same FastAPI endpoint, follow these steps:\n\n*   **Install dependency:** You must install `python-multipart` in your project [12].\n*   **Import classes:** Import both `File` and `Form` from `fastapi` [12].\n*   **Define parameters:** Use `File` and `Form` as parameters in your *path operation function* to receive files and form fields simultaneously [12].\n*   **Encoding:** When using `File` and `Form` together, the request body is encoded as `multipart/form-data` [1][9].\n*   **Constraint:** You cannot declare `Body` fields expected as JSON in the same endpoint, as the HTTP protocol requires the body to be encoded as `multipart/form-data` rather than `application/json` when files are included [1][9].",
+      "retrieved_chunk_ids": [
+        "7034355a-1622-5c79-b9c2-c38e3e57046f",
+        "bb118b10-a329-5067-8f0a-117b5ffed312",
+        "eb5ff3f0-4775-519e-bfd2-bdbf6438f5c9",
+        "365725b3-0e59-504d-8200-53e66244190e",
+        "d5f5fc4d-b386-5f46-a930-15c132065add",
+        "7930b0db-538d-5512-91e0-a2b7da2acb21",
+        "1ec38415-e617-543f-8477-2a1422187602",
+        "28f7fd02-b32b-5534-91f1-21d1b34ede66",
+        "c8c9a371-ba80-526f-9838-bcb0b1ca83c6",
+        "56c6be2f-7c7f-5ddf-ad8a-0d549723383c",
+        "7c9ecd4a-9193-5f8d-9226-6e79b16e85c2",
+        "772e0b7e-3fed-5aeb-98e4-f56634ece7ca"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6667,
+          "reasoning": "8/12 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/request-files', 'tutorial/request-forms-and-files'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 5 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8505,
+          "reasoning": "Mean cosine similarity 0.850 over 3 synthetic questions. Synthetic questions: ['What are the necessary steps to process both file uploads and form fields in a single FastAPI endpoint?', 'Why is it not possible to mix JSON body parameters with file uploads in a FastAPI path operation?', 'What specific library must be installed to enable multipart form data handling in FastAPI?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-014",
+      "question": "How do you mount a sub-application or another ASGI app inside FastAPI?",
+      "generated_answer": "To mount a sub-application in FastAPI:\n\n*   \"Mounting\" involves adding an independent application to a specific path in your top-level application [3].\n*   The sub-application handles all requests under that specific path using its own declared path operations [3].\n*   You mount the sub-application within your top-level application (e.g., `app.mount(\"/subapi\", subapi)`) [4].\n*   FastAPI automatically manages the `root_path` (an ASGI specification mechanism) to ensure the sub-application correctly identifies its path prefix for features like the documentation UI [1][5].\n*   If you are using a proxy with `root_path`, FastAPI handles the integration automatically when mounting sub-applications [2].",
+      "retrieved_chunk_ids": [
+        "4b272611-60ee-5f42-94c9-8c480ddc15c6",
+        "6ec6c4c0-81a5-53db-b0ff-55dd4362821a",
+        "7d73d4b4-23d3-5a8a-b6dd-6a7df937a51a",
+        "7ab1cdbe-7b03-5b4e-8c19-944241655e87",
+        "94c725d1-c5b2-5a7f-8972-537e377cf8b1"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.8,
+          "reasoning": "4/5 retrieved chunks came from relevant documents (relevant doc IDs: ['advanced/sub-applications'])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 5 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8425,
+          "reasoning": "Mean cosine similarity 0.842 over 3 synthetic questions. Synthetic questions: ['How do you integrate an independent FastAPI application into a specific route of a main FastAPI application?', 'What is the process for mounting a sub-application within a top-level FastAPI project?', 'How does FastAPI manage path prefixes and documentation for sub-applications when they are mounted at a specific URL path?']"
+        }
+      ]
+    },
+    {
+      "sample_id": "fq-015",
+      "question": "How does FastAPI handle real-time WebSocket connections with a React frontend?",
+      "generated_answer": "In a production system, a React frontend communicates with a FastAPI WebSocket backend using the frontend's own utilities [1]. FastAPI handles these connections by allowing you to:\n\n*   **Manage multiple clients:** You can handle disconnections by catching the `WebSocketDisconnect` exception, which is raised when `await websocket.receive_text()` is called after a connection is closed [3].\n*   **Broadcast messages:** You can implement logic to broadcast messages to several active WebSocket connections [2].\n*   **Use dependencies:** WebSocket endpoints support the use of `Depends`, `Security`, `Cookie`, `Header`, `Path`, and `Query` [4].\n*   **Maintain connections:** Multiple messages can be sent and received over the same WebSocket connection [4].",
+      "retrieved_chunk_ids": [
+        "22f93092-10cd-5179-b073-81210fb5216b",
+        "f71185d9-0cf1-55c9-85a2-f46f2e096f13",
+        "d9a1da68-40bf-5b31-99e4-94342e676e3a",
+        "76e5c675-6e19-51ec-af25-654a997e8bf6",
+        "168f64ba-b0a7-5e0b-bd31-97c33f971ab5"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.0,
+          "reasoning": "0/5 retrieved chunks came from relevant documents (relevant doc IDs: [])."
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "No relevant documents specified; recall is vacuously 1.0."
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported."
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8503,
+          "reasoning": "Mean cosine similarity 0.850 over 3 synthetic questions. Synthetic questions: ['How does a FastAPI backend manage communication with a React frontend using WebSockets?', 'What are the key features and capabilities provided by FastAPI when working with WebSocket connections?', 'How are connection closures and active client management handled in a FastAPI WebSocket implementation?']"
+        }
+      ]
+    }
+  ],
+  "aggregate_scores": {
+    "context_precision": 0.4311,
+    "context_recall": 0.7778,
+    "faithfulness": 1.0,
+    "answer_relevance": 0.8252
+  },
+  "total_tokens_used": 15341,
+  "duration_seconds": 83.21
+}

@@ -201,12 +201,12 @@ noise floor.
 
 ### Headline numbers
 
-| Metric | Run 1 | Run 2 | Relabelled | What it measures |
-|---|---|---|---|---|
-| Context precision | 0.309 | 0.309 | **0.416** | Of the 5 chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.667 | **0.778** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
-| Faithfulness | 1.000 | 1.000 | 1.000 | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.826 | 0.832 | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Metric | Run 1 | Run 2 | Relabelled | Deployed | What it measures |
+|---|---|---|---|---|---|
+| Context precision | 0.309 | 0.309 | 0.416 | **0.431** | Of the 5 chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.667 | 0.778 | **0.778** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Faithfulness | 1.000 | 1.000 | 1.000 | **1.000** | Fraction of answer claims the judge found grounded in the retrieved context |
+| Answer relevance | 0.815 | 0.826 | 0.832 | **0.825** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
 *15 questions, ~15k tokens and ≈₹0.3 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run; the LLM-judged
@@ -216,6 +216,12 @@ confidence interval.*
 The "Relabelled" column is the **same pipeline, same index**, re-run after
 reading the two misses that were labelling errors (below) and fixing the
 dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
+
+"Deployed" is what `atlas.hulage.in` serves today: the identifier-aware BM25
+tokeniser, against the Qdrant Cloud index. Every delta from the relabelled run
+is below the 0.02 significance floor, so the honest summary is *no measured
+end-to-end change* — see below for why that is more interesting than it looks.
+`eval_data/reports/fastapi-v3-tokenizer_*.json`.
 
 ### The honest read
 
@@ -231,11 +237,22 @@ dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
   hit. The remaining three are genuine retrieval misses (`tutorial/body`,
   `tutorial/response-model`, `tutorial/security/*`) where chunks from
   adjacent tutorial pages outranked the target — those are the M3 work.
-- **Precision 0.42 is the number to move.** With `reranker.top_k = 5` and
+- **Precision ~0.43 is the number to move.** With `reranker.top_k = 5` and
   one relevant document per question, the ceiling is ~0.2–0.6 per sample;
-  the three misses above score 0 and pull it down. First experiments
-  (planned, M3): rerank top-k 10–15 (`run_eval.py --set reranker.top_k=10`),
-  HyDE query expansion, contextual chunk headers.
+  the misses above score 0 and pull it down. Next experiments (M3): rerank
+  top-k 10–15 (`run_eval.py --set reranker.top_k=10`), HyDE query expansion,
+  contextual chunk headers.
+- **Better tokenisation and query decomposition are substitutes, not
+  additions.** The identifier-aware BM25 tokeniser is worth +0.07 recall when
+  the raw question goes straight to the retriever, which is what
+  `scripts/eval_retrieval.py` measures. Through the full pipeline it is worth
+  nothing: recall is 0.778 either way. Per sample it is a swap, not a wash —
+  `fq-005` goes 0 → 1.0 and `fq-012` goes 1.0 → 0, both at the rank-5
+  boundary. Decomposition was already recovering what the tokeniser recovers,
+  so the two compete for the same five slots. It ships anyway, because the
+  router sends "simple" questions down a path that never decomposes, and that
+  path is measurably better with it — but the cheap harness over-credits any
+  retrieval change, and this is the correction.
 
 ### Smoke test, same day
 
