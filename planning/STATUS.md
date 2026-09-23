@@ -16,8 +16,10 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
       revoked 2026-09-20.
 - [x] ~~Revoke the compromised Qdrant Cloud key~~ → cluster deleted
       2026-09-20; key died with it. `.env` uses local Docker Qdrant.
-- [ ] **Resume bullets** with M1 numbers (P 0.42 · R 0.78 · F 1.0, 4,021
-      chunks) — drafted 2026-09-20, say "apply" to patch `resume_v5a.tex`.
+- [x] ~~Resume bullets~~ → applied 2026-09-23 to `resume_v5a.tex`: four
+      bullets, GitHub + atlas.hulage.in links, deployed numbers (P 0.43 ·
+      R 0.78 · F 1.00, 4,020 chunks, 340 tests). Compiled with tectonic,
+      still 2 pages; `resume_v5a_preview_5.pdf`.
 - [x] ~~Run the Cloud Run deploy~~ → four revisions rolled 2026-09-23; the
       sandbox blocks `gcloud run deploy`, so every deploy is
       `scripts/deploy_gcp.sh` run by hand.
