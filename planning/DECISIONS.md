@@ -97,3 +97,9 @@ Format: date — decision — alternatives — reason.
   to pick the upload, which drops the gitignored `data/index/` the image
   bakes in — the build fails at `COPY data/index/`, and the failure names
   Docker, not gcloud.
+- **2026-09-23** — `REDIS_URL=""` means "no Redis on purpose", and a client
+  that fails its ping is discarded rather than passed to the cache. *Why:*
+  the first Cloud Run revision reported `degraded` forever — the startup code
+  assigned the client before pinging it, so every request then retried a
+  refused connection on localhost. Absent Redis is the M2 design, not a
+  fault, and `/health` has to say so or the signal is worthless.

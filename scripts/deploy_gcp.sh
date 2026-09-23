@@ -38,7 +38,8 @@ OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/,\
 OPENAI_PRIMARY_MODEL=gemini-3.1-flash-lite,OPENAI_FALLBACK_MODEL=gemini-3.5-flash-lite,\
 OPENAI_EMBEDDING_MODEL=gemini-embedding-001,OPENAI_EMBEDDING_DIMENSIONS=1536,\
 ROUTER_DOMAIN=the FastAPI web framework documentation,\
-ATLAS_INDEX_DIR=/app/data/index" \
+ATLAS_INDEX_DIR=/app/data/index,\
+REDIS_URL=" \
   --set-secrets "OPENAI_API_KEY=atlas-openai-api-key:latest,\
 QDRANT_URL=atlas-qdrant-url:latest,\
 QDRANT_API_KEY=atlas-qdrant-api-key:latest,\
