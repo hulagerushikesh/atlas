@@ -44,8 +44,8 @@ export default function Landing() {
             request after it is warm.
           </p>
           <div style={rise(320)} className="animate-rise label mt-10 flex flex-wrap gap-x-6 gap-y-1 tabular">
-            <span><b className="font-medium text-foreground">329</b> tests</span>
-            <span><b className="font-medium text-foreground">89%</b> coverage</span>
+            <span><b className="font-medium text-foreground">340</b> tests</span>
+            <span><b className="font-medium text-foreground">90%</b> coverage</span>
             <span><b className="font-medium text-foreground">6</b> stages</span>
             <span><b className="font-medium text-foreground">&lt;1 ms</b> cache hit</span>
           </div>
