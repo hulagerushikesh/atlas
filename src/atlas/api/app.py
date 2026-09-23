@@ -50,6 +50,31 @@ logger = structlog.get_logger(__name__)
 
 
 
+async def connect_redis(settings: Settings) -> object | None:
+    """
+    Return a live Redis client, or None when Redis is absent.
+
+    REDIS_URL="" means deliberately absent: Cloud Run runs without Redis and
+    the in-process cache, rate limiter and spend counter are the design there,
+    not a degraded mode. A client that fails its ping is discarded rather than
+    handed on — keeping it makes every cache get/set raise and pins /health at
+    "degraded" for the life of the process.
+    """
+    if not settings.redis.url:
+        logger.info("redis_disabled", detail="REDIS_URL empty; using in-process fallbacks")
+        return None
+    try:
+        import redis.asyncio as aioredis
+
+        client = aioredis.from_url(settings.redis.url, encoding="utf-8", decode_responses=True)
+        await client.ping()
+    except Exception as exc:
+        logger.warning("redis_unavailable", error=str(exc), detail="running without Redis cache")
+        return None
+    logger.info("redis_connected", url=settings.redis.url)
+    return client
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state._settings
@@ -82,17 +107,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     shared = SharedComponents(settings)
     registry = NamespaceRegistry(shared)
 
-    # Redis (optional — gracefully skip if not configured)
-    redis_client = None
-    try:
-        import redis.asyncio as aioredis
-        redis_client = aioredis.from_url(
-            settings.redis.url, encoding="utf-8", decode_responses=True
-        )
-        await redis_client.ping()
-        logger.info("redis_connected", url=settings.redis.url)
-    except Exception as exc:
-        logger.warning("redis_unavailable", error=str(exc), detail="running without Redis cache")
+    redis_client = await connect_redis(settings)
 
     app.state.atlas = AppState(
         registry=registry,

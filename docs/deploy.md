@@ -139,7 +139,7 @@ alert at ₹200/mo in the console as a backstop.
 | `OPENAI_API_KEY` | Yes | |
 | `QDRANT_URL` | Yes | Qdrant Cloud URL |
 | `QDRANT_API_KEY` | Yes (cloud) | Leave blank for local |
-| `REDIS_URL` | No | Absent on Cloud Run; in-process fallbacks are used |
+| `REDIS_URL` | No | Set to `""` on Cloud Run: empty means deliberately absent, so `/health` reports `ok (disabled)` instead of `degraded`. In-process cache, rate limiter and spend counter take over |
 | `AUTH_ENABLED` | Recommended | `true` in production |
 | `ADMIN_SECRET` | When auth on | Random secret for `POST /keys` |
 | `AUTH_STORE` | No | `sqlite` (default) or `firestore` (Cloud Run) |

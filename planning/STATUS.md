@@ -34,7 +34,7 @@ deploy itself.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **313 tests** green, 89% cov | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **318 tests** green, 89% cov | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | Docker Compose local; **GCP infra live** (`atlas-rag-rush`, image `0fdd0b2` in Artifact Registry, Qdrant Cloud + Firestore + 4 secrets); Cloud Run revision not yet rolled | `docs/deploy.md`, `scripts/deploy_gcp.sh` |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
