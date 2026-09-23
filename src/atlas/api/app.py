@@ -191,6 +191,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     import pathlib
     _static_dir = pathlib.Path(__file__).parent / "static"
     if _static_dir.is_dir():
+        _console_index = _static_dir / "index.html"
+        if _console_index.exists():
+            _console_html = _console_index.read_text()
+
+            async def _console() -> HTMLResponse:
+                # Serve /app directly instead of letting the mount redirect to
+                # /app/. Starlette builds that redirect from the request's own
+                # host, which behind the domain proxy is the run.app origin —
+                # the browser would leave atlas.hulage.in mid-click.
+                return HTMLResponse(content=_console_html, headers={"Cache-Control": "no-cache"})
+
+            app.add_api_route(
+                "/app", _console, include_in_schema=False, response_class=HTMLResponse
+            )
         app.mount("/app", StaticFiles(directory=str(_static_dir), html=True), name="console")
 
     # Eval reports — served at /out so the console dashboard can load eval_report.json
