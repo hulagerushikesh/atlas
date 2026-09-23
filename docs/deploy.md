@@ -171,7 +171,21 @@ gcloud artifacts docker images delete <repo>/atlas-api@<digest> --delete-tags --
 Deleting an image a revision references makes that revision permanently
 un-startable, so check the second listing before the third command. The
 repository's reported size lags deletions by hours — trust the tag listing,
-not `Repository Size`. Per query ≈₹0.02 in Gemini tokens,
+not `Repository Size`.
+
+A cleanup policy now does this automatically
+(`infra/artifact-registry-cleanup.json`, applied with
+`gcloud artifacts repositories set-cleanup-policies`): keep the three most
+recent versions, delete anything else past seven days. Keep rules win over
+delete rules, so the three newest are safe at any age.
+
+The failure mode it introduces: after three more deploys, an image older than
+a week is gone, and a Cloud Run revision pointing at it can no longer start.
+Three is two rollback targets deep, which is more than has ever been needed
+here — but before a risky deploy, either note the digest of the image worth
+returning to or raise `keepCount` for the day. Set `--dry-run` on the
+repository first if the policy is ever changed; it logs what would be deleted
+and removes nothing. Per query ≈₹0.02 in Gemini tokens,
 capped by `BUDGET_DAILY_USD` (429 past it). One full corpus ingest ≈₹1 in
 embeddings; re-runs skip unchanged documents and cost ₹0. Set a billing budget
 alert at ₹200/mo in the console as a backstop.
