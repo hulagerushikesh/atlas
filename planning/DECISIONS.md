@@ -119,3 +119,18 @@ Format: date — decision — alternatives — reason.
   moving the service to a mapping-capable region and paying ~200 ms on every
   Indian request. A Vercel rewrite costs ₹0 and one hop, and Finertia already
   runs this shape.
+- **2026-09-23** — Identifier pieces are indexed for BM25 even though context
+  precision drops. Measured with `scripts/eval_retrieval.py` on the same 14
+  labelled questions: recall 0.726 → 0.798, precision 0.529 → 0.486, one more
+  question fully recalled (fq-005 `tutorial/body`). *Why:* a document the
+  retriever never returns cannot be recovered downstream, while an extra
+  chunk in a window of five is something the reranker and the generator
+  already handle — faithfulness has stayed at 1.00. A variant that counted
+  each piece once per chunk was tried and rejected: it kept the precision
+  cost and lost the recall gain.
+- **2026-09-23** — Retrieval changes are measured with a retrieval-only
+  harness (`scripts/eval_retrieval.py`, ≈₹0.01) before the full eval
+  (≈₹0.3). *Why:* a tokeniser cannot move faithfulness or answer relevance,
+  so paying four LLM calls a question to see context metrics is waste. Its
+  numbers are not comparable with run_eval.py's — it does not decompose
+  complex questions — so it is a before/after instrument, not a scoreboard.
