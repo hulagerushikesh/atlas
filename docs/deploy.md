@@ -26,7 +26,7 @@ Topology, chosen for a portfolio service that must cost ≈₹0 while idle:
 | Piece | Choice | Why |
 |---|---|---|
 | API | Cloud Run, `asia-south1`, 1 vCPU / 2 GiB, min 0 max 2 | Scales to zero; the torch image cold-starts in ~15 s, acceptable for a demo |
-| Vectors | Qdrant Cloud free cluster (1 GiB RAM, 4 GiB disk) | 4,021 chunks × 1536 d ≈ 25 MB; ₹0 |
+| Vectors | Qdrant Cloud free cluster (1 GiB RAM, 4 GiB disk) | 4,020 chunks × 1536 d ≈ 25 MB; ₹0 |
 | BM25 | `data/index/<ns>/bm25_index.json` baked into the image | 3.5 MB; one artifact, no bucket to mount; corpus is static for the demo |
 | API keys | Firestore (`AUTH_STORE=firestore`) | Disk is ephemeral; SQLite would reset every deploy |
 | Cache / rate limit / spend cap | In-process fallbacks (no Redis) | One instance most of the time; Memorystore is ₹2,500/mo minimum |
@@ -35,7 +35,7 @@ Topology, chosen for a portfolio service that must cost ≈₹0 while idle:
 ### One-time setup
 
 ```bash
-PROJECT=atlas-rag            # any unique id
+PROJECT=atlas-rag-rush       # any globally unique id; `atlas-rag` is taken
 REGION=asia-south1
 gcloud projects create $PROJECT
 gcloud billing projects link $PROJECT --billing-account <ACCOUNT_ID>
@@ -46,6 +46,9 @@ gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
 gcloud artifacts repositories create atlas --repository-format docker --location $REGION
 gcloud firestore databases create --location $REGION --type firestore-native
 ```
+
+Billing must be linked before the API enables: `gcloud services enable` fails
+on a project without it.
 
 Secrets — each value is read from a local file or generated, never typed
 into a terminal that keeps history:
@@ -73,12 +76,18 @@ gcloud projects add-iam-policy-binding $PROJECT --member serviceAccount:$SA --ro
 ### Deploy
 
 ```bash
-make deploy-gcp PROJECT=atlas-rag       # or: PROJECT=atlas-rag scripts/deploy_gcp.sh
+make deploy-gcp                          # PROJECT defaults to atlas-rag-rush
+SKIP_BUILD=1 IMAGE_TAG=0fdd0b2 scripts/deploy_gcp.sh   # roll an image already built
 ```
 
-Builds with Cloud Build (free tier: 120 min/day), pushes to Artifact Registry,
-rolls a revision. The script pins model, provider and budget env vars; change
-them there, not in the console, so the deploy stays reproducible.
+Builds with Cloud Build (free tier: 120 min/day, ~3 min per build), pushes to
+Artifact Registry, rolls a revision. The script pins model, provider and budget
+env vars; change them there, not in the console, so the deploy stays
+reproducible.
+
+`.gcloudignore` is required, not optional: without it `gcloud builds submit`
+falls back to `.gitignore`, which excludes `data/`, and the build fails at
+`COPY data/index/`. The file simply includes `.dockerignore`.
 
 ### Load the corpus
 
@@ -86,14 +95,22 @@ Ingest runs from your machine against the cloud Qdrant — the API's ingest
 endpoint would time out on 155 files — and writes the BM25 file that the next
 image build bakes in:
 
+Point `QDRANT_URL` / `QDRANT_API_KEY` in `.env` at the cloud cluster, then:
+
 ```bash
-QDRANT_URL=https://<cluster>.cloud.qdrant.io:6333 QDRANT_API_KEY=... \
-  python scripts/ingest.py --namespace default data/corpus/fastapi
-make deploy-gcp PROJECT=atlas-rag     # picks up data/index/default/bm25_index.json
+.venv/bin/python scripts/ingest.py --namespace default --glob '**/*.md' data/corpus/fastapi
+make deploy-gcp                       # picks up data/index/default/bm25_index.json
 ```
 
 Chunk ids are deterministic (uuid5), so the local BM25 file and the cloud
-Qdrant collection agree even though they were written by separate runs.
+Qdrant collection agree even though they were written by separate runs. Build
+the image *after* the ingest — the BM25 file is baked in, so an image built
+first ships a stale index.
+
+The LLM env vars keep the `OPENAI_` prefix even on Gemini: the prefix names the
+wire protocol, and `OPENAI_BASE_URL` points at Gemini's OpenAI-compatible
+endpoint. Renaming them to `GEMINI_*` makes `OpenAIConfig` fail with
+`api_key Field required`.
 
 ### First API key
 
@@ -109,8 +126,9 @@ The key is returned once. Paste it into the console's Settings dialog.
 
 Idle: ₹0 (Cloud Run min-instances 0, Qdrant free tier, Firestore free tier).
 Artifact Registry ≈₹10/mo for the image. Per query ≈₹0.02 in Gemini tokens,
-capped by `BUDGET_DAILY_USD` (429 past it). Set a billing budget alert at
-₹200/mo in the console as a backstop.
+capped by `BUDGET_DAILY_USD` (429 past it). One full corpus ingest ≈₹1 in
+embeddings; re-runs skip unchanged documents and cost ₹0. Set a billing budget
+alert at ₹200/mo in the console as a backstop.
 
 ---
 

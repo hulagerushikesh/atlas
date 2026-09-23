@@ -84,3 +84,16 @@ Format: date — decision — alternatives — reason.
 - **2026-09-20** — `sentence-transformers<6`. *Why:* 6.x cannot load the
   MiniLM cross-encoder tokenizer ("Unrecognized processing class"); the
   pin keeps the image build deterministic until upstream settles.
+- **2026-09-23** — Payload indexes (`doc_id` keyword, `chunk_index` integer)
+  are created in `ensure_collection`, not left to Qdrant defaults. *Why:*
+  Qdrant Cloud rejects a filtered scroll or delete on an unindexed key with
+  400 "Index required but not found"; local Qdrant answers the same filter
+  happily, so `prune_document` passed every local test and failed on the
+  first cloud ingest for all 155 documents. The roundtrip test asserts the
+  index requests are made, because local mode accepts them and reports no
+  schema back.
+- **2026-09-23** — `.gcloudignore` in the repo, including `.dockerignore`.
+  *Why:* with no `.gcloudignore`, `gcloud builds submit` uses `.gitignore`
+  to pick the upload, which drops the gitignored `data/index/` the image
+  bakes in — the build fails at `COPY data/index/`, and the failure names
+  Docker, not gcloud.
