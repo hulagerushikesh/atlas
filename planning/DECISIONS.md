@@ -152,3 +152,23 @@ Format: date — decision — alternatives — reason.
   whose decomposition is already compensating. Use it to reject changes
   cheaply; confirm anything it likes with the full eval before publishing a
   number.
+- **2026-09-23** — `reranker.top_k` 5 → 15. *Alt:* 10, or leave it at 5 and
+  chase the misses with HyDE and contextual headers. *Why:* measured, end to
+  end, on the labelled set: context recall 0.778 → 0.900 (+0.122, six times
+  the 0.02 floor), faithfulness 1.000 → 1.000, answer relevance 0.825 → 0.819.
+  `advanced/custom-response` and `tutorial/response-model` recovered outright
+  and `tutorial/security/oauth2-jwt` went 0 → 0.5 — three documents that had
+  survived every M1 attempt and turned out to be in the candidate set all
+  along, below rank 5. Context precision falls 0.431 → 0.302, which is the
+  denominator rather than a regression: one relevant document per question
+  cannot fill fifteen slots. The cost is 2.45x generator tokens
+  (~$0.0005 → ~$0.0012 a query), accepted because faithfulness — the thing
+  more context actually threatens — did not move. 10 was not run end to end:
+  the cheap harness ranked 15 above it on recall, and buying second-best for
+  another ₹0.3 is not worth it.
+- **2026-09-23** — `retrieval.top_k` stays 20 for now, though the reranker
+  keeps 15 of those 20 and so barely filters. Retrieval-only recall at 40 is
+  0.964 against 0.929 at 20. *Why not ship it:* that is the harness this same
+  day showed to be systematically optimistic, and the discipline that caught
+  the tokeniser is worth more than one experiment. It is the next thing to
+  confirm with a full run.

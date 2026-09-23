@@ -188,8 +188,8 @@ export function FieldNotes() {
 /* ── Measured ──────────────────────────────────────────────────────────── */
 
 const MEASURED = [
-  { k: "Context precision", v: "0.43", d: "of the 5 chunks handed to the generator came from a labelled-relevant page" },
-  { k: "Context recall", v: "0.78", d: "of labelled pages had at least one chunk retrieved — 3 of 15 questions missed" },
+  { k: "Context precision", v: "0.30", d: "of the 15 chunks handed to the generator came from a labelled-relevant page — one page per question cannot fill fifteen slots" },
+  { k: "Context recall", v: "0.90", d: "of labelled pages had at least one chunk retrieved — 1 of 15 questions missed outright" },
   { k: "Faithfulness", v: "1.00", d: "of answer claims grounded in the retrieved references, per the claim-level judge" },
   { k: "Answer relevance", v: "0.83", d: "question ↔ answer alignment (RAGAS reverse-question), ±0.01 run to run" },
 ]
@@ -212,12 +212,12 @@ export function Measured() {
         ))}
       </div>
       <Reveal delay={0.2} className="mt-6 max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
-        The honest read: faithfulness is real but easy on documentation questions; precision is the number to
-        move. The three remaining recall misses are genuine — adjacent tutorial pages outranked the target. The
-        last experiment says the binding constraint is the five slots, not the retriever: a better BM25
-        tokeniser recovered one question and lost another at the rank-5 boundary, for no net change. So the
-        next fix is a wider rerank window, then HyDE and contextual chunk headers. Full per-question breakdown
-        in the README.
+        The honest read: faithfulness is real but easy on documentation questions. The misses were never
+        unreachable — widening the rerank window from five slots to fifteen recovered two of them and halved a
+        third, because those pages had been in the candidate set all along, ranked just below the cut. Recall
+        went 0.78 to 0.90 and faithfulness did not move; precision fell because it is a fraction of a window
+        that got three times wider, not because anything got worse. One question is still missed, and it is a
+        comparative one whose answer no single page states. Full per-question breakdown in the README.
       </Reveal>
     </section>
   )

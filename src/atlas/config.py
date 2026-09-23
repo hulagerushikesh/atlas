@@ -84,7 +84,12 @@ class RerankerConfig(BaseSettings):
     # False skips the cross-encoder entirely (RRF order is final). Mainly an
     # eval knob: `--set reranker.enabled=false` for the reranker-off A/B.
     enabled: bool = True
-    top_k: int = 5
+    # 15, not 5. Measured 2026-09-23: context recall 0.778 -> 0.900 end to end
+    # with faithfulness unchanged at 1.000. The three documents that survived
+    # every M1 miss were already in the candidate set, just below rank 5.
+    # Context precision falls to 0.302, which is mostly the denominator: one
+    # relevant document per question over a 15-slot window caps it low.
+    top_k: int = 15
     model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
