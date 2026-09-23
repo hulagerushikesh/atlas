@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
+from atlas.api.spendstore import RedisSpendBackend
 
 
 class TestSpendMeter:
@@ -50,18 +52,20 @@ class TestSpendMeter:
         redis.get = AsyncMock(return_value="0.25")
         redis.incrbyfloat = AsyncMock(return_value="0.30")
         redis.expire = AsyncMock()
-        meter = SpendMeter(budget_usd=1.0, redis_client=redis)
+        meter = SpendMeter(budget_usd=1.0, backend=RedisSpendBackend(redis))
 
         assert await meter.today_usd() == 0.25
         assert await meter.add(0.05) == 0.30
         redis.incrbyfloat.assert_awaited_once()
         redis.expire.assert_awaited_once()
 
-    async def test_redis_failure_falls_back_to_local(self) -> None:
+    async def test_backend_failure_falls_back_to_this_process_total(self) -> None:
+        """An unreachable counter must not uncap the spend: the process's own
+        mirror still trips the budget."""
         redis = MagicMock()
         redis.get = AsyncMock(side_effect=ConnectionError("down"))
         redis.incrbyfloat = AsyncMock(side_effect=ConnectionError("down"))
-        meter = SpendMeter(budget_usd=0.05, redis_client=redis)
+        meter = SpendMeter(budget_usd=0.05, backend=RedisSpendBackend(redis))
         await meter.add(0.05)
         with pytest.raises(BudgetExceeded):
             await meter.check()
@@ -70,10 +74,25 @@ class TestSpendMeter:
         assert 1 <= seconds_until_utc_midnight() <= 24 * 3600
 
 
+class _SpentBackend:
+    """A counter that already holds today's spend, whatever day it is."""
+
+    def __init__(self, usd: float) -> None:
+        self.usd = usd
+
+    async def total(self, day: str) -> float:
+        return self.usd
+
+    async def add(self, day: str, usd: float) -> float:
+        self.usd += usd
+        return self.usd
+
+
 class TestBudgetAtRoutes:
     def _trip(self, client: TestClient) -> None:
-        client.app.state.atlas.spend = SpendMeter(budget_usd=0.01)
-        client.app.state.atlas.spend._local = 0.01
+        client.app.state.atlas.spend = SpendMeter(
+            budget_usd=0.01, backend=_SpentBackend(0.01)
+        )
 
     def test_query_returns_429_with_retry_after(self, client: TestClient) -> None:
         self._trip(client)
@@ -106,13 +125,13 @@ class TestBudgetAtRoutes:
         client.app.state.atlas.spend = SpendMeter(budget_usd=10.0)
         resp = client.post("/query", json={"query": "What is Atlas?"})
         assert resp.status_code == 200
-        assert client.app.state.atlas.spend._local == pytest.approx(
-            resp.json()["token_usage"]["estimated_cost_usd"]
-        )
+        charged = asyncio.run(client.app.state.atlas.spend.today_usd())
+        assert charged == pytest.approx(resp.json()["token_usage"]["estimated_cost_usd"])
 
     def test_health_reports_budget_when_enabled(self, client: TestClient) -> None:
         assert client.get("/health").json()["budget"] is None
-        client.app.state.atlas.spend = SpendMeter(budget_usd=0.5)
-        client.app.state.atlas.spend._local = 0.125
+        client.app.state.atlas.spend = SpendMeter(
+            budget_usd=0.5, backend=_SpentBackend(0.125)
+        )
         body = client.get("/health").json()["budget"]
         assert body == {"daily_usd": 0.5, "spent_today_usd": 0.125}

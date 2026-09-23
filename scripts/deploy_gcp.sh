@@ -33,7 +33,7 @@ gcloud run deploy "${SERVICE}" \
   --min-instances 0 --max-instances 2 \
   --timeout 120 \
   --set-env-vars "AUTH_ENABLED=true,AUTH_STORE=firestore,RERANKER_ENABLED=true,\
-BUDGET_DAILY_USD=${BUDGET_DAILY_USD:-0.60},\
+BUDGET_DAILY_USD=${BUDGET_DAILY_USD:-0.60},BUDGET_STORE=firestore,\
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/,\
 OPENAI_PRIMARY_MODEL=gemini-3.1-flash-lite,OPENAI_FALLBACK_MODEL=gemini-3.5-flash-lite,\
 OPENAI_EMBEDDING_MODEL=gemini-embedding-001,OPENAI_EMBEDDING_DIMENSIONS=1536,\

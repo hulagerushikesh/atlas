@@ -143,6 +143,7 @@ alert at ₹200/mo in the console as a backstop.
 | `AUTH_ENABLED` | Recommended | `true` in production |
 | `ADMIN_SECRET` | When auth on | Random secret for `POST /keys` |
 | `AUTH_STORE` | No | `sqlite` (default) or `firestore` (Cloud Run) |
+| `BUDGET_STORE` | No | `auto` (Redis if present, else in-process) or `firestore`. Cloud Run needs `firestore`: an in-process counter dies with the instance, so scale-to-zero would reset the daily cap on every cold start |
 | `BUDGET_DAILY_USD` | Recommended | Daily spend cap; `0` disables |
 | `SENTRY_DSN` | No | From sentry.io project settings |
 | `LOG_LEVEL` | No | Default `INFO` |
