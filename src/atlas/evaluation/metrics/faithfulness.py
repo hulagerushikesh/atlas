@@ -22,6 +22,14 @@ Design rationale:
     The eval metric is ground-truth agnostic — it judges the answer against
     the retrieved context only, which may differ between pipeline runs.
 
+    Refusals are excluded, not scored. The generator is instructed to emit one
+    exact sentence when the context cannot support an answer; that sentence has
+    no factual claims, so the judge dutifully found one claim, marked it
+    unsupported and returned 0.0. On the 2026-09-24 run that single sample took
+    the headline faithfulness from 1.000 to 0.933 — the harness punishing the
+    pipeline for the most honest thing it can do. The refusal count is reported
+    separately so the exclusion cannot quietly flatter the score.
+
     Judge prompt temperature=0.0: faithfulness is a factual determination,
     not a creative judgement. Zero temperature minimises inter-run variance,
     making scores reproducible across eval runs.
@@ -35,6 +43,7 @@ from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
+from atlas.orchestration.generator import is_refusal
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -76,6 +85,17 @@ class FaithfulnessMetric(BaseMetric):
         retrieved_chunks: list[RetrievedChunk],
         relevant_doc_ids: list[str],
     ) -> MetricScore:
+        if is_refusal(generated_answer):
+            # Nothing to audit: the generator declined rather than asserted.
+            # Scored 1.0 so a stray reader sees "not unfaithful", but marked
+            # inapplicable so it never reaches the mean in either direction.
+            return MetricScore(
+                metric_name=self.name,
+                score=1.0,
+                reasoning="Answer is the refusal sentence; no claims to verify.",
+                applicable=False,
+            )
+
         context = "\n\n".join(f"[{i}] {c.content}" for i, c in enumerate(retrieved_chunks, 1))
         request = GenerationRequest(
             messages=[

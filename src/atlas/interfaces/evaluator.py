@@ -47,6 +47,13 @@ class MetricScore(BaseModel):
     metric_name: str
     score: float          # normalised to [0, 1]
     reasoning: str = ""   # LLM judge explanation or formula derivation
+    # False when the metric has no opinion about this sample rather than a
+    # bad one — a refusal has no claims, so auditing it for hallucination
+    # answers a question nobody asked. Inapplicable scores are reported per
+    # sample but left out of the aggregate mean, so the count has to be
+    # published alongside it or "faithfulness 1.000" could mean "refused
+    # everything".
+    applicable: bool = True
 
 
 class PipelineConfig(BaseModel):
@@ -86,3 +93,8 @@ class EvalResult(BaseModel):
     aggregate_scores: dict[str, float]  # metric_name → mean score
     total_tokens_used: int = 0
     duration_seconds: float = 0.0
+    # Which chat model actually served the calls in this run, summed over the
+    # pipeline and the judges. A run that fell back to the secondary model is
+    # not comparable with one that did not, and without this the only trace is
+    # a warning in a log nobody keeps.
+    model_calls: dict[str, int] = Field(default_factory=dict)
