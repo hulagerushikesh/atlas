@@ -135,8 +135,17 @@ daily spend cap, console markdown.
 
 ## Next
 
-- `retrieval.top_k` 20 → 40, confirmed end to end (≈₹0.73). Measured 0.964 vs
-  0.929 on the cheap harness; unshipped on purpose.
+- ~~`retrieval.top_k` 20 → 40~~ run 2026-09-24 and **rejected**: recall
+  0.9000 → 0.9333 in aggregate, but per sample `fq-012` and `fq-007` were
+  bought with `fq-005` breaking outright, and precision fell 0.3022 → 0.2711
+  at an unchanged window width. The reranker, not the retriever, is now the
+  constraint.
+- **`retrieval.top_k=30` + `reranker.top_k=20` — ≈₹0.9.** The cheap sweep puts
+  it at recall 1.000 with the best precision of the configs that get there.
+  Needs the full eval before anything ships; the cheap harness mispredicted
+  the 40 run per sample.
+- A stronger reranker, or lost-in-the-middle ordering of the window. MiniLM-L-6
+  filtering 15 of 40 is where the `fq-005` regression came from.
 - Cap and rerank the sub-query merge — `_retrieve_all` never truncates, so a
   complex question can hand the generator `sub_queries x top_k` chunks
   (`fq-013` sent 30). See BACKLOG.

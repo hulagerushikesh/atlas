@@ -29,6 +29,8 @@ import sys
 import time
 from pathlib import Path
 
+import structlog
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents  # noqa: E402
@@ -52,6 +54,12 @@ def _parse_args() -> argparse.Namespace:
 
 async def main() -> int:
     args = _parse_args()
+    if args.json:
+        # structlog writes to stdout by default, so --json handed the caller a
+        # stream of log lines with a JSON object at the end of it. A sweep that
+        # pipes this to a parser then fails after paying for every run. Logs go
+        # to stderr for the duration; the report is the only thing on stdout.
+        structlog.configure(logger_factory=structlog.PrintLoggerFactory(sys.stderr))
     settings = get_settings()
     if args.overrides:
         settings = apply_overrides(settings, dict(parse_override(o) for o in args.overrides))
