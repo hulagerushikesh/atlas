@@ -191,3 +191,80 @@ class TestLatencyTable:
 
     def test_table_reaches_the_markdown_report(self) -> None:
         assert "p95 ms" in _md_table(_timed([{"grading": 120.0}]))
+
+
+# ── Refusals ──────────────────────────────────────────────────────────────────
+
+def _mixed(scores_per_sample: list[tuple[float, bool]]) -> EvalResult:
+    """One metric ("faithfulness"), one (score, applicable) pair per sample."""
+    samples = [
+        SampleResult(
+            sample_id=f"s{i}", question="q", generated_answer="a",
+            retrieved_chunk_ids=["c1"],
+            metrics=[
+                MetricScore(metric_name="faithfulness", score=score, applicable=applicable)
+            ],
+        )
+        for i, (score, applicable) in enumerate(scores_per_sample)
+    ]
+    return EvalResult(
+        pipeline_config=PipelineConfig(name="run"),
+        sample_results=samples,
+        aggregate_scores={"faithfulness": 1.0},
+        total_tokens_used=0,
+        duration_seconds=5.2,
+    )
+
+
+class TestInapplicableScores:
+    def test_table_says_how_many_samples_the_mean_covers(self) -> None:
+        md = _md_table(_mixed([(1.0, True), (1.0, True), (1.0, False)]))
+        assert "over 2 of 3" in md
+        assert "1 n/a" in md
+
+    def test_silent_when_every_sample_counted(self) -> None:
+        # The annotation is an exception report; a clean run must stay clean.
+        assert "n/a" not in _md_table(_mixed([(1.0, True), (0.9, True)]))
+
+    def test_metrics_default_to_applicable(self) -> None:
+        # Reports and metrics written before the flag existed must not vanish
+        # from the aggregate.
+        assert MetricScore(metric_name="faithfulness", score=0.5).applicable is True
+
+
+# ── Served models ─────────────────────────────────────────────────────────────
+
+def _served(model_calls: dict[str, int]) -> EvalResult:
+    return EvalResult(
+        pipeline_config=PipelineConfig(name="run"),
+        sample_results=[
+            SampleResult(
+                sample_id="s1", question="q", generated_answer="a",
+                retrieved_chunk_ids=["c1"],
+                metrics=[MetricScore(metric_name="faithfulness", score=1.0)],
+            )
+        ],
+        aggregate_scores={"faithfulness": 1.0},
+        total_tokens_used=0,
+        duration_seconds=1.0,
+        model_calls=model_calls,
+    )
+
+
+class TestServedModels:
+    def test_single_model_run_says_nothing(self) -> None:
+        # The config line already names the primary; repeating it is noise.
+        assert "Mixed models" not in _md_table(_served({"gemini-3.1-flash-lite": 90}))
+
+    def test_fallback_run_is_called_out_with_shares(self) -> None:
+        md = _md_table(_served({"gemini-3.1-flash-lite": 10, "gemini-3.5-flash-lite": 90}))
+        assert "Mixed models" in md
+        assert "gemini-3.5-flash-lite 90 (90%)" in md
+        assert "not a clean measurement" in md
+
+    def test_majority_model_listed_first(self) -> None:
+        md = _md_table(_served({"primary": 1, "fallback": 99}))
+        assert md.index("fallback 99") < md.index("primary 1")
+
+    def test_old_reports_without_the_field_still_render(self) -> None:
+        assert "Mixed models" not in _md_table(_result("cfg", {"faithfulness": 1.0}))

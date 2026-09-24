@@ -40,11 +40,16 @@ class TestParse:
 
 class TestApply:
     def test_nested_override_does_not_touch_siblings(self, settings: Settings) -> None:
+        # Captured, not hardcoded: this asserts apply_overrides leaves the
+        # original alone, and pinning the literal 5 made it fail the day the
+        # default became 15 for an unrelated reason.
+        before = settings.reranker.top_k
         patched = apply_overrides(settings, {"reranker.top_k": 10})
         assert patched.reranker.top_k == 10
         assert patched.reranker.model == settings.reranker.model
         assert patched.retrieval.top_k == settings.retrieval.top_k
-        assert settings.reranker.top_k == 5  # original untouched
+        assert settings.reranker.top_k == before  # original untouched
+        assert before != 10  # or the assertion above proves nothing
 
     def test_reranker_off(self, settings: Settings) -> None:
         patched = apply_overrides(settings, {"reranker.enabled": False})

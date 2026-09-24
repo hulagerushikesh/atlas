@@ -41,17 +41,40 @@ logger = structlog.get_logger(__name__)
 
 _CITATION_RE = re.compile(r"\[(\d+)\]")
 
-_SYSTEM_PROMPT = """\
+# The exact sentence the generator is told to produce when the context does not
+# support an answer. It is a constant rather than prose inside the prompt because
+# two downstream readers have to recognise it: the faithfulness checker, which
+# would otherwise audit it as an unsupported claim, and the eval metric, which
+# would otherwise average that 0.0 into the headline score.
+REFUSAL = "I don't have sufficient information to answer this question"
+
+_SYSTEM_PROMPT = f"""\
 You are an expert assistant for an enterprise knowledge base. Answer the user's \
 question using ONLY the provided context passages.
 
 Rules:
 1. Cite every factual claim with [N] where N is the passage number.
-2. If the answer requires information not in the context, say "I don't have \
-sufficient information to answer this question" — do NOT fabricate facts.
+2. If the answer requires information not in the context, say "{REFUSAL}" \
+— do NOT fabricate facts.
 3. Be concise and precise. Use bullet points for multi-part answers.
 4. If multiple passages support the same claim, cite all of them: [1][3].
 5. Start the answer directly — no preamble like "Based on the context..."."""
+
+# Curly apostrophes, a trailing full stop and surrounding whitespace are all
+# things the model varies between calls; none of them change what it said.
+_REFUSAL_NORMALISED = REFUSAL.lower().strip(" .")
+
+
+def is_refusal(answer: str) -> bool:
+    """True when the answer is the refusal sentence and nothing else.
+
+    Deliberately an equality check, not a substring one: "I don't have
+    sufficient information about the timeout, but the retry policy is ..."
+    is a real answer that happens to open with a caveat, and treating it as a
+    refusal would exempt its claims from every check that matters.
+    """
+    cleaned = " ".join(answer.replace("\u2019", "'").lower().split()).strip(" .!\"'")
+    return cleaned == _REFUSAL_NORMALISED
 
 
 @dataclass

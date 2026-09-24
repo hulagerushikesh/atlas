@@ -33,6 +33,16 @@ Newest at the bottom of each section.
 - ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
 - Streaming errors after first byte become events; document the event
   schema in `docs/api.md`.
+- **`reranker.top_k` is a per-sub-query cap, not a window size.**
+  `RAGPipeline._retrieve_all` deduplicates the sub-query results by chunk_id
+  and merges them, but never truncates, so a question the router calls
+  complex hands the generator up to `sub_queries x top_k` chunks.
+  `fq-013` sent 30 on the 2026-09-24 run. At `top_k` 5 the worst case was 15
+  and nobody noticed; at 15 it is 45. Two things to decide together: whether
+  to cap the merged list, and whether to rerank across sub-queries — the
+  merge is in sub-query order, so the best chunk for the second sub-question
+  sits below the worst chunk for the first, which is exactly the position
+  lost-in-the-middle says is worst. Needs a full eval, not a guess.
 
 ## Ideas (research-backed, see learning/09)
 
@@ -40,13 +50,15 @@ Newest at the bottom of each section.
 - Contextual retrieval at ingest (LLM-written chunk context).
 - ~~BM25 tokeniser: keep identifiers, split camelCase~~ shipped cb4e28d;
   measured neutral end to end, see DECISIONS 2026-09-23.
-- Rerank top_k 5 → 10–15 with lost-in-the-middle ordering. **Promoted to the
-  next experiment:** the tokeniser result showed `fq-005` and `fq-012`
-  trading places at the rank-5 boundary, so the window width is the binding
-  constraint, not the retriever's ability to find the page.
+- ~~Rerank top_k 5 → 10–15~~ shipped 6443bb6 at 15; recall 0.778 → 0.900.
+  The **lost-in-the-middle ordering** half is still open and matters more now
+  that the window is three times wider.
 - Local embedding model option (bge-small / e5-small) for zero-cost dev.
 - Parent-child chunks: retrieve small, hand the LLM the parent.
 - Unanswerable-question samples in the eval set to measure refusal.
+  **Now cheap:** refusals are detected and excluded from faithfulness
+  (2026-09-24), so such samples would score the refusal rate directly
+  instead of poisoning the mean.
 - Citation precision metric: does the cited chunk support *that* sentence.
 - Console: per-key usage page; ingest-from-console with progress events.
 

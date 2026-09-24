@@ -34,6 +34,7 @@ import structlog
 
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
+from atlas.orchestration.generator import is_refusal
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -105,6 +106,15 @@ class FaithfulnessChecker:
     ) -> FaithfulnessResult:
         if not self.enabled:
             return FaithfulnessResult(score=1.0, is_faithful=True, summary="check disabled")
+
+        if is_refusal(answer):
+            # A refusal asserts nothing, so there is nothing to ground. Before
+            # this, the auditor treated the refusal sentence itself as a claim,
+            # found no passage supporting it, and returned 0.0 — the API then
+            # warned the caller that the one answer guaranteed not to be
+            # fabricated might be. Skipping also saves an LLM call on the path
+            # where the pipeline already knows it has nothing.
+            return FaithfulnessResult(score=1.0, is_faithful=True, summary="answer is a refusal")
 
         context = _format_context(chunks)
         request = GenerationRequest(

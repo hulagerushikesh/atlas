@@ -181,3 +181,43 @@ Format: date — decision — alternatives — reason.
   after that deploy took 23 s against ~11 s before, and the harness had no
   opinion about it. p50/p95 are nearest-rank: 15 samples do not support
   interpolating between two of them.
+- **2026-09-24** — The 23 s live query is not attributed to `reranker.top_k`.
+  The first run with per-stage timings put p50 at 19.9 s against ~7 s measured
+  on 2026-09-20, which looks like the `top_k` 5 → 15 deploy tripling latency.
+  It is not, and the report says why: **routing** is a single LLM call with a
+  fixed prompt that runs *before* retrieval, so it cannot depend on `top_k` by
+  construction, and its p50 is 2,570 ms. Retrieval (2,668 ms) and grading
+  (3,184 ms, truncated to five chunks at `grader.py:82`) are equally
+  independent, and the two stages that *are* sensitive to window width —
+  generation 3,136 ms and faithfulness 3,518 ms — are no slower than the ones
+  that are not. Every stage costs roughly one LLM round trip and they are all
+  about 2.5–3.5 s. That is a per-call cost, not a context-size cost. The
+  proximate cause was visible in the logs: the primary model returned 503
+  throughout and every call paid a failed request plus a fallback. *Not
+  concluded:* what p50 is on an undegraded provider. The run that answers it
+  has to report which model served it, which is the next entry.
+- **2026-09-24** — A run reports which chat model actually served its calls,
+  and the report refuses to compare quietly when more than one did. *Why:*
+  `GenerationResponse.model_used` and `fallback_triggered` had existed since
+  Module C and were read by nothing; the only trace of a fallback was a log
+  warning. The 2026-09-24 eval ran largely on `gemini-3.5-flash-lite` after
+  503s on the primary, and was diffed against a run that had not — recall
+  moved 0.900 → 0.967 and faithfulness 1.000 → 0.933 on an unchanged config,
+  deltas well past the 0.02 floor that were being read as noise. A different
+  model is not noise. The counter lives on the provider and is summed across
+  the pipeline and the judges, because they may or may not share an instance.
+- **2026-09-24** — A refusal is excluded from faithfulness, not scored zero.
+  *Alt:* score it 1.0; leave it alone. *Why:* the generator is instructed to
+  emit one exact sentence when the context cannot support an answer. Both
+  auditors — the pipeline's `FaithfulnessChecker` and the eval's
+  `FaithfulnessMetric` — enumerated that sentence as a factual claim, found no
+  passage supporting it, and returned 0.0. In the harness one such sample took
+  the headline from 1.000 to 0.933; in production the API attached a
+  possible-fabrication warning to the one answer that cannot be fabricated.
+  Scoring 1.0 instead would reward refusing everything, so the sample is
+  marked inapplicable and dropped from the mean, and the report prints
+  "over 14 of 15; 1 n/a" next to any score that had one. The refusal sentence
+  is now a shared constant (`generator.REFUSAL`) so the prompt and the two
+  readers cannot drift apart, and detection is equality after normalisation,
+  never substring: "I don't have sufficient information about X, but Y"
+  asserts Y and must still be audited.

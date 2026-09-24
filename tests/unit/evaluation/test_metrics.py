@@ -22,6 +22,7 @@ from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.embedder import EmbeddingResult
 from atlas.interfaces.llm import GenerationResponse
 from atlas.interfaces.retriever import RetrievedChunk
+from atlas.orchestration.generator import REFUSAL
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,29 @@ class TestContextRecall:
 # ── FaithfulnessMetric ────────────────────────────────────────────────────────
 
 class TestFaithfulnessMetric:
+    @pytest.mark.asyncio
+    async def test_refusal_is_excluded_not_scored_zero(self) -> None:
+        # The judge used to enumerate the refusal sentence as one unsupported
+        # claim and return 0.0. On the 2026-09-24 run that one sample dropped
+        # the headline from 1.000 to 0.933 for declining to fabricate.
+        llm = _llm(json.dumps({"claims": [], "faithfulness_score": 0.0}))
+        ms = await FaithfulnessMetric(llm).score(
+            "q", "a", REFUSAL, [_chunk("c1", "d1")], []
+        )
+        assert ms.applicable is False
+        llm.generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_real_answer_stays_applicable(self) -> None:
+        payload = json.dumps({
+            "claims": [{"claim": "X", "verdict": "supported"}],
+            "faithfulness_score": 1.0,
+        })
+        ms = await FaithfulnessMetric(_llm(payload)).score(
+            "q", "a", "FastAPI validates with Pydantic [1].", [_chunk("c1", "d1")], []
+        )
+        assert ms.applicable is True
+
     @pytest.mark.asyncio
     async def test_high_faithfulness(self) -> None:
         payload = json.dumps({

@@ -31,6 +31,7 @@ from __future__ import annotations
 import asyncio
 import time
 from statistics import mean
+from typing import Any
 
 import structlog
 
@@ -49,6 +50,37 @@ logger = structlog.get_logger(__name__)
 _FAILED_SENTINEL = -1.0   # score value for a sample that errored
 
 
+def _find_providers(pipeline: object, metrics: list[BaseMetric]) -> list[Any]:
+    """Every distinct LLM provider reachable from the pipeline and the judges.
+
+    Deduplicated by identity, because the pipeline's stages usually share one
+    provider and counting it once per stage would report six times the calls.
+    """
+    found: list[Any] = []
+    seen: set[int] = set()
+
+    def walk(obj: object, depth: int) -> None:
+        # Depth 2 reaches a judge's own provider (metric._llm) and a pipeline
+        # stage's (pipeline._generator._llm). Deeper would start walking into
+        # the OpenAI client itself for nothing.
+        if depth < 0 or not hasattr(obj, "__dict__"):
+            return
+        for attr in vars(obj).values():
+            # isinstance, not hasattr: a Mock answers hasattr for every name,
+            # so attribute-presence duck-typing matched every test double and
+            # then tried to iterate a coroutine.
+            if isinstance(getattr(attr, "model_calls", None), dict):
+                if id(attr) not in seen:
+                    seen.add(id(attr))
+                    found.append(attr)
+            else:
+                walk(attr, depth - 1)
+
+    for holder in [pipeline, *metrics]:
+        walk(holder, 2)
+    return found
+
+
 class EvalRunner:
     """Run a retrieval pipeline over an EvalDataset and score the results."""
 
@@ -61,6 +93,10 @@ class EvalRunner:
         self._pipeline = pipeline
         self._metrics = metrics
         self._sem = asyncio.Semaphore(concurrency)
+        # Providers are found by duck-type rather than passed in: the pipeline
+        # and each judge may share one instance or hold their own, and the
+        # runner should not have to know which.
+        self._providers = _find_providers(pipeline, metrics)
 
     async def run(
         self,
@@ -87,7 +123,9 @@ class EvalRunner:
                 ms.score
                 for sr in sample_results
                 for ms in sr.metrics
-                if ms.metric_name == metric.name and ms.score != _FAILED_SENTINEL
+                if ms.metric_name == metric.name
+                and ms.score != _FAILED_SENTINEL
+                and ms.applicable
             ]
             aggregate[metric.name] = round(mean(valid_scores), 4) if valid_scores else 0.0
 
@@ -108,7 +146,15 @@ class EvalRunner:
             aggregate_scores=aggregate,
             total_tokens_used=total_tokens,
             duration_seconds=duration,
+            model_calls=self._model_calls(),
         )
+
+    def _model_calls(self) -> dict[str, int]:
+        totals: dict[str, int] = {}
+        for provider in self._providers:
+            for model, n in provider.model_calls.items():
+                totals[model] = totals.get(model, 0) + n
+        return totals
 
     async def _score_sample(self, sample: object) -> SampleResult:
         async with self._sem:

@@ -68,6 +68,16 @@ class OpenAILLMProvider(BaseLLMProvider):
             base_url=config.base_url,
             max_retries=0,
         )
+        # Which model actually served each call, counted for the life of the
+        # provider. The fallback already logged a warning, but a warning is not
+        # a number: the 2026-09-24 eval ran almost entirely on the fallback
+        # model after the primary returned 503, which silently changed both the
+        # quality scores and the latency being compared against a run that had
+        # not. A run has to be able to say which model produced it.
+        self.model_calls: dict[str, int] = {}
+
+    def _record(self, model: str) -> None:
+        self.model_calls[model] = self.model_calls.get(model, 0) + 1
 
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         model = request.model or self._config.primary_model
@@ -142,6 +152,7 @@ class OpenAILLMProvider(BaseLLMProvider):
             fallback=fallback_triggered,
         )
 
+        self._record(model)
         return GenerationResponse(
             content=content,
             model_used=model,
