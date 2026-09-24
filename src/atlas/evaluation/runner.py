@@ -147,6 +147,7 @@ class EvalRunner:
                     generated_answer=answer,
                     retrieved_chunk_ids=[c.chunk_id for c in chunks],
                     metrics=metric_scores,
+                    stage_ms=dict(getattr(result, "stage_ms", {}) or {}),
                 )
                 # Stash token count as a private attr for aggregation above
                 gen = getattr(result, "generation", None)

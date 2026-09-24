@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from atlas.evaluation.comparator import _SIGNIFICANCE_THRESHOLD, compare, save_comparison
-from atlas.evaluation.reporter import _md_table, save_report
+from atlas.evaluation.reporter import _md_latency, _md_table, save_report
 from atlas.interfaces.evaluator import EvalResult, MetricScore, PipelineConfig, SampleResult
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -134,3 +134,60 @@ class TestComparator:
         b = _result("B", {"context_precision": 0.5, "context_recall": 0.9})
         comparison = compare(a, b)
         assert comparison.overall_winner == "tie"
+
+
+# ── Latency table ─────────────────────────────────────────────────────────────
+
+def _timed(stage_ms_per_sample: list[dict[str, float]]) -> EvalResult:
+    samples = [
+        SampleResult(
+            sample_id=f"s{i}", question="q", generated_answer="a",
+            retrieved_chunk_ids=["c1"], metrics=[], stage_ms=sm,
+        )
+        for i, sm in enumerate(stage_ms_per_sample)
+    ]
+    return EvalResult(
+        pipeline_config=PipelineConfig(name="run"),
+        sample_results=samples,
+        aggregate_scores={},
+        total_tokens_used=0,
+        duration_seconds=5.2,
+    )
+
+
+class TestLatencyTable:
+    def test_absent_when_no_timings_recorded(self) -> None:
+        # Reports written before stage_ms existed must still render.
+        assert _md_latency(_result("baseline", {"faithfulness": 1.0})) == ""
+
+    def test_stages_ordered_slowest_first(self) -> None:
+        table = _md_latency(_timed([{"routing": 100.0, "grading": 900.0, "retrieval": 400.0}]))
+        rows = [r for r in table.splitlines() if r.startswith("| ") and "---" not in r]
+        assert [r.split("|")[1].strip() for r in rows[1:]] == [
+            "grading", "retrieval", "routing", "**total**",
+        ]
+
+    def test_total_is_the_sum_per_sample_not_the_sum_of_percentiles(self) -> None:
+        # Sample A is slow at retrieval, B slow at grading. Adding the two p50s
+        # would invent a 900 ms request that never happened; both totals are 600.
+        table = _md_latency(_timed([
+            {"retrieval": 500.0, "grading": 100.0},
+            {"retrieval": 100.0, "grading": 500.0},
+        ]))
+        total = next(r for r in table.splitlines() if "**total**" in r)
+        assert "**600**" in total
+
+    def test_percentile_uses_nearest_rank(self) -> None:
+        # 15 samples, one outlier: p95 must surface it, p50 must not.
+        values = [{"grading": 100.0} for _ in range(14)] + [{"grading": 9000.0}]
+        table = _md_latency(_timed(values))
+        row = next(r for r in table.splitlines() if r.startswith("| grading"))
+        assert row.split("|")[2].strip() == "100"
+        assert row.split("|")[3].strip() == "9000"
+
+    def test_says_run_duration_is_not_comparable(self) -> None:
+        # The footnote exists so nobody reads concurrency-wide wall clock as latency.
+        assert "concurrency-wide" in _md_latency(_timed([{"grading": 1.0}]))
+
+    def test_table_reaches_the_markdown_report(self) -> None:
+        assert "p95 ms" in _md_table(_timed([{"grading": 120.0}]))
