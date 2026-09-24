@@ -244,3 +244,32 @@ Format: date — decision — alternatives — reason.
   measured differently; it is not evidence of a regression in either
   direction. If latency is to be reduced, the target is the number of
   sequential calls, not `top_k`.
+- **2026-09-24** — `retrieval.top_k` stays 20. Measured end to end at 40 and
+  **not shipped**, for the second time and now on better evidence. The
+  aggregate looks like a pass: recall 0.9000 → 0.9333, +0.033 against a 0.02
+  floor, faithfulness unchanged at 1.000. Per sample it is a three-way swap —
+  `fq-007` 0.5 → 1.0 and `fq-012` 0 → **1.0**, the long-standing last miss,
+  paid for by `fq-005` going **1.0 → 0**, a question that had worked in every
+  run since the labels were fixed. Context precision fell 0.3022 → 0.2711, and
+  unlike the `reranker.top_k` change this one is *not* a denominator effect:
+  the window is still fifteen slots, so a lower fraction means the reranker
+  put worse chunks in them. That is the finding. At 20 candidates the reranker
+  kept 15 and barely filtered; at 40 it keeps 15 of 40, and MiniLM-L-6 starts
+  making mistakes a wider net cannot compensate for. **The binding constraint
+  has moved from the retriever to the reranker**, which is a different
+  experiment from this one.
+- **2026-09-24** — Next candidate is `retrieval.top_k=30` with
+  `reranker.top_k=20`, not 40. The cheap harness swept six configurations for
+  about ₹0.06: 20/15 recall 0.929 (misses `fq-012`), 30/15 and 40/15 both
+  0.964 (miss `fq-007`), and 30/20, 40/20, 40/25 all reach **1.000** with
+  precision 0.332, 0.314, 0.291 respectively. So 40 buys nothing over 30 at
+  the same window and costs precision, and the widest window costs most.
+  Unconfirmed on purpose: this is the harness that does not decompose, and it
+  already mispredicted this run — it had `fq-007` missing at 40/15 where the
+  full eval recovered it, and said nothing about `fq-005` breaking. It picks
+  the candidate; the full eval decides. 30/20 would also raise generator
+  context by a third, so the confirming run is ≈₹0.9, not ₹0.73.
+- **2026-09-24** — `eval_retrieval.py --json` sends logs to stderr. *Why:*
+  structlog defaults to stdout, so the flag that exists to be piped into a
+  parser emitted log lines with a JSON object buried at the end. A six-config
+  sweep failed to parse after every run had already been paid for.
