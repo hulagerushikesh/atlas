@@ -222,6 +222,14 @@ against the Qdrant Cloud index. Recall is up 0.122 on the column before it,
 six times the 0.02 significance floor, and faithfulness did not move.
 `eval_data/reports/topk15_*.json`.
 
+**Replicated.** The identical config re-run a day later returned precision
+0.3022, recall 0.9000 and faithfulness 1.0000 — the same to four decimal
+places; only answer relevance moved, 0.819 → 0.828, inside the floor. Worth
+stating because the run in between *did* move: it fell back to the secondary
+model after the primary returned 503, and shifted recall and faithfulness by
+0.067 each on an unchanged config. Reports now record which model served
+them, so a run like that announces itself instead of being read as variance.
+
 **Read the precision drop as a denominator, not a regression.** Each question
 labels one relevant document, so with a 15-slot window a perfect retrieval
 still scores about 0.2–0.4: the other slots have nothing relevant left to
@@ -280,6 +288,15 @@ answered with 3–5 citations each and faithfulness 1.0; one off-corpus question
 ("what does the capital of France have to do with FastAPI") stopped at the
 router with no retrieval. p50 latency ≈7 s uncached, <1 ms on a cache hit;
 the reranker's first call after a cold start adds ~5 s.
+
+**Latency as measured 2026-09-24, at `top_k` 15:** p50 **15.0 s** per query,
+p95 24.7 s, and a live production query the same hour took 15.7 s. That is six
+sequential LLM round trips at roughly 2.5 s each. It is not the wider window:
+the slowest stage is *grading* at 3.5 s, which sees only the top five chunks
+whatever `top_k` says, while generation (2.9 s) and faithfulness (3.0 s) — the
+two stages that read all fifteen — come in under it. Shortening this means
+removing a call from the pipeline, not narrowing the window. The ≈7 s above
+was measured differently, in September, and is not a baseline to diff against.
 
 ### What the first live run found
 

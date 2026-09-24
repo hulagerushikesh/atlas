@@ -1,4 +1,4 @@
-# Status — 2026-09-23 (v0.1.0, M2 done)
+# Status — 2026-09-24 (v0.1.0, M2 done, M3 in progress)
 
 ## One line
 
@@ -39,7 +39,7 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live ×6.** Deployed (`top_k` 15): P 0.302 · R **0.900** · F 1.000 · AR 0.819. Recall +0.122 on the previous run, 6× the noise floor; precision falls as the window widens (denominator). Retrieval-only harness at ≈₹0.01 for cheap rejection | `eval_data/reports/topk15_*.json` |
+| Evaluation (D) | **Run live ×8.** Deployed (`top_k` 15): P 0.302 · R **0.900** · F 1.000 · AR 0.828. **Replicated 2026-09-24:** the identical config a day later reproduced precision, recall and faithfulness to four decimal places. Reports now carry per-stage p50/p95 and the model that served the run. Retrieval-only harness at ≈₹0.01 for cheap rejection | `eval_data/reports/topk15-clean_*.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -58,6 +58,21 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Answer relevance | 0.815 / 0.826 (two runs) |
 | Latency | p50 ≈7 s uncached (Gemini flash-lite, 5–7 LLM calls); <1 ms cache hit; reranker cold start +5 s |
 | Cost | ≈₹0.03 per uncached query; ≈₹1.5 per 15-sample eval |
+
+## Measured (2026-09-24, `top_k` 15)
+
+| Metric | Value |
+|---|---|
+| Context precision | 0.3022 (one relevant doc cannot fill a 15-slot window) |
+| Context recall | 0.9000 (`fq-012` misses outright, `fq-007` partial at 0.5) |
+| Faithfulness | 1.0000 |
+| Answer relevance | 0.8277 |
+| Latency | **p50 15.0 s / p95 24.7 s** per sample; slowest stage is grading (3.5 s), which is `top_k`-independent. Live production query the same hour: 15.7 s wall clock |
+| Cost | ≈₹0.085 per uncached query; ≈₹0.73 per 15-sample eval (37.6k tokens) |
+
+The ≈7 s above is from 2026-09-20 and was measured differently — it is not a
+baseline this can be diffed against. Latency is six sequential LLM round trips
+at ~2.5 s each; reducing it means removing a call, not narrowing the window.
 
 ## Known defects
 
@@ -119,6 +134,16 @@ daily spend cap, console markdown.
   and types cleaned.
 
 ## Next
+
+- `retrieval.top_k` 20 → 40, confirmed end to end (≈₹0.73). Measured 0.964 vs
+  0.929 on the cheap harness; unshipped on purpose.
+- Cap and rerank the sub-query merge — `_retrieve_all` never truncates, so a
+  complex question can hand the generator `sub_queries x top_k` chunks
+  (`fq-013` sent 30). See BACKLOG.
+- `fq-012` is the last outright miss. Contextual chunk headers, ~₹15, needs a
+  re-ingest — ask before starting.
+
+## Earlier plan (M3 as opened)
 
 M3 — retrieval quality. Three questions miss end to end
 (`fq-007 tutorial/security/oauth2-jwt`, `fq-011 tutorial/response-model`,
