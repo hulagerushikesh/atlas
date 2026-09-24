@@ -221,3 +221,26 @@ Format: date — decision — alternatives — reason.
   readers cannot drift apart, and detection is equality after normalisation,
   never substring: "I don't have sufficient information about X, but Y"
   asserts Y and must still be audited.
+- **2026-09-24 (closing the previous three entries)** — Re-ran the identical
+  `top_k` 15 config on a healthy provider. Context precision 0.3022, recall
+  0.9000, faithfulness 1.0000 — the first three reproduce the 2026-09-23 run
+  **to four decimal places**; only answer relevance moved, 0.8193 → 0.8277,
+  inside the floor. So the degraded run's recall +0.067 and faithfulness
+  −0.067 were entirely the model swap and the refusal artifact, not variance,
+  and the 0.02 significance floor is if anything generous: with the model held
+  constant these metrics are near-deterministic. `model_calls` recorded
+  `{gemini-3.1-flash-lite: 102}`, which is how the run can say so.
+- **2026-09-24** — `reranker.top_k` 15 costs no measurable latency, and the
+  question opened by the 23 s live query is closed. p50 per sample is 15.0 s,
+  and the stage table shows why that is not about window width: **grading**
+  (3,478 ms) is the slowest stage and truncates to five chunks regardless of
+  `top_k`, while **generation** (2,866 ms) and **faithfulness** (2,975 ms) —
+  the only two stages that see all fifteen — rank third and second behind it.
+  Every stage lands between 2,280 and 3,478 ms. That is six sequential LLM
+  round trips at roughly 2.5 s each, which is the pipeline's shape, not the
+  window's size. A live production query the same hour took 15.7 s wall clock
+  with grading at 2,370 ms, against 23.1 s and 11,050 ms during the outage.
+  *Not comparable:* the "p50 ≈7 s" in STATUS is from 2026-09-20 and was
+  measured differently; it is not evidence of a regression in either
+  direction. If latency is to be reduced, the target is the number of
+  sequential calls, not `top_k`.
