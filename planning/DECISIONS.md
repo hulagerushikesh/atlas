@@ -172,3 +172,12 @@ Format: date — decision — alternatives — reason.
   day showed to be systematically optimistic, and the discipline that caught
   the tokeniser is worth more than one experiment. It is the next thing to
   confirm with a full run.
+- **2026-09-24** — Eval reports record per-sample `stage_ms` and print a
+  p50/p95 table per stage. *Why:* `reranker.top_k` 5 → 15 was shipped on
+  quality numbers alone, and nothing in the harness could have caught a
+  latency cost. A run's `duration_seconds` is wall clock over the whole set at
+  concurrency 4, which is throughput, not what one caller waits for — the two
+  move in opposite directions when work per query grows. The first live query
+  after that deploy took 23 s against ~11 s before, and the harness had no
+  opinion about it. p50/p95 are nearest-rank: 15 samples do not support
+  interpolating between two of them.

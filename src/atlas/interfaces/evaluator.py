@@ -71,6 +71,11 @@ class SampleResult(BaseModel):
     generated_answer: str
     retrieved_chunk_ids: list[str]
     metrics: list[MetricScore]
+    # Per-stage wall clock for this sample. Recorded because an eval run's
+    # own duration is concurrency-wide and hides what one caller waits for:
+    # reranker.top_k 5 -> 15 was shipped on quality numbers with nobody
+    # looking at latency, and the first live query after it took 23 s.
+    stage_ms: dict[str, float] = Field(default_factory=dict)
 
 
 class EvalResult(BaseModel):

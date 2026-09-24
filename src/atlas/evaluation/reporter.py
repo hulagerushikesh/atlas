@@ -22,6 +22,7 @@ Design rationale:
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from atlas.interfaces.evaluator import EvalResult
@@ -56,6 +57,50 @@ def _md_table(result: EvalResult) -> str:
     rows.append(f"*{len(result.sample_results)} samples · "
                 f"{result.duration_seconds:.1f}s · "
                 f"{result.total_tokens_used:,} tokens*")
+
+    latency = _md_latency(result)
+    if latency:
+        rows.append("")
+        rows.append(latency)
+    return "\n".join(rows)
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    """Nearest-rank percentile. The eval set is 15 samples; interpolating
+    between two of them would imply a precision the sample size does not have."""
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, math.ceil(pct / 100 * len(ordered)) - 1))
+    return ordered[idx]
+
+
+def _md_latency(result: EvalResult) -> str:
+    """Per-stage latency table.
+
+    The run's own `duration_seconds` is wall clock across the whole set at
+    whatever concurrency was configured, so it says nothing about what one
+    caller waits for. These are per-sample, which is the number a user feels.
+    """
+    samples = [s for s in result.sample_results if s.stage_ms]
+    if not samples:
+        return ""
+
+    stages: dict[str, list[float]] = {}
+    totals: list[float] = []
+    for s in samples:
+        for stage, ms in s.stage_ms.items():
+            stages.setdefault(stage, []).append(ms)
+        totals.append(sum(s.stage_ms.values()))
+
+    rows = ["| Stage | p50 ms | p95 ms |", "| --- | --- | --- |"]
+    for stage, values in sorted(stages.items(), key=lambda kv: -_percentile(kv[1], 50)):
+        rows.append(f"| {stage} | {_percentile(values, 50):.0f} | {_percentile(values, 95):.0f} |")
+    rows.append(
+        f"| **total** | **{_percentile(totals, 50):.0f}** "
+        f"| **{_percentile(totals, 95):.0f}** |"
+    )
+    rows.append("")
+    rows.append(f"*per-sample latency, {len(samples)} samples; the run's own "
+                f"{result.duration_seconds:.1f}s is concurrency-wide and not comparable*")
     return "\n".join(rows)
 
 
