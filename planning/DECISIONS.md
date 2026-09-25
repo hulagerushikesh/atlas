@@ -300,6 +300,17 @@ Format: date — decision — alternatives — reason.
   one: no ordering of indistinguishable chunks separates them, which is why
   three ranking changes all moved the same 1.0 from one question to the other.
   Ranking tuning is closed until the chunks can be told apart.
+
+  **Retracted 2026-09-25, same day, on ₹0.06 of evidence that should have been
+  bought before the entry was written.** Dumping what is actually retrieved
+  refutes it. For `fq-005`, `tutorial/body` sits at ranks 5, 6, 8, 10 and 13 —
+  five chunks, comfortably inside the window. For `fq-012`,
+  `tutorial/query-params-str-validations` does not appear at all. They are not
+  competing for one slot: one target is abundant and the other is absent. The
+  common factor across the three experiments is real, but the mechanism is the
+  next entry, not this one. The lesson is the obvious one — three experiments
+  sharing a symptom invited a story, and the story was cheaper to write than
+  the dump that disproved it.
 - **2026-09-25** — The retrieval-only harness has now mispredicted three
   consecutive full evals and its guidance is downgraded accordingly. It said
   the tokeniser bought recall (worth nothing end to end), it said
@@ -312,3 +323,31 @@ Format: date — decision — alternatives — reason.
   see latency, which is what actually rejected L-12. Use it to confirm a
   document is in the index at all. Do not use it to predict a score, and do
   not let a 1.000 on it justify skipping the ₹0.73.
+- **2026-09-25** — **The grader-driven retry can destroy a good retrieval, and
+  that is what broke `fq-005`.** Traced by running the one question through
+  the full pipeline under both configurations. At the baseline it is
+  classified `simple`, retrieves once, the grader scores 0.9, and
+  `tutorial/body` lands at ranks 5, 6, 8, 10 and 13. Under L-12 with 30
+  candidates the same first retrieval happens — the retrieval-only harness
+  confirms the target is in that window — but the grader returns **0.4,
+  insufficient**, the pipeline reformulates to "What is the underlying
+  mechanism FastAPI uses to perform req…", retrieves again, and the
+  replacement window contains **no `tutorial/body` at all** (five chunks of
+  `alternatives`, two of `release-notes`). The grader then scores that
+  strictly worse set **0.9** and the pipeline returns it.
+
+  Two defects compound. First, `grader.py:82` grades `chunks[:5]`, with the
+  comment "more adds noise" — written when `reranker.top_k` was 5, so it saw
+  the whole window. At 15 it judges a third of it and calls a window
+  insufficient while the answer sits at rank 6. Second,
+  `pipeline.py:_retrieve_with_retry` does `current_queries = [reformulated]`
+  and the next pass **replaces** the accumulated context rather than adding to
+  it, so a false "insufficient" does not merely fail to help — it throws away
+  documents the pipeline already had. Either alone is survivable. Together
+  they lose the answer.
+
+  This also corrects the previous entry's account of the cheap harness. For
+  `fq-005` the harness was not optimistic because it skips decomposition —
+  the question is `simple` and never decomposes. It was optimistic because it
+  has no grader and therefore no retry. The harness measures the pipeline
+  without the stage that did the damage.

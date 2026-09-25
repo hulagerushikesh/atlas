@@ -46,6 +46,7 @@ from typing import Any, Protocol
 
 import structlog
 
+from atlas.interfaces.reranker import BaseReranker
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.decomposer import QueryDecomposer
 from atlas.orchestration.faithfulness import FaithfulnessChecker, FaithfulnessResult
@@ -150,6 +151,7 @@ class RAGPipeline:
         grader: RetrievalGrader,
         generator: AnswerGenerator,
         faithfulness: FaithfulnessChecker,
+        reranker: BaseReranker | None = None,
     ) -> None:
         self._retriever = retriever
         self._router = router
@@ -157,6 +159,10 @@ class RAGPipeline:
         self._grader = grader
         self._generator = generator
         self._faithfulness = faithfulness
+        # Used only to re-rank the union of a retried retrieval against the
+        # original query. Optional so a caller that builds a pipeline without
+        # one keeps the old single-pass behaviour instead of failing.
+        self._reranker = reranker
 
     async def run(self, query: str) -> PipelineResult:
         log = logger.bind(query=query[:80])
@@ -247,11 +253,26 @@ class RAGPipeline:
         """
         current_queries = sub_queries
         retries = 0
+        # Every chunk any attempt has seen, in first-seen order, and the width
+        # of one window. A retry used to overwrite `retrieval`, so a grader
+        # that wrongly called a window insufficient did not merely fail to
+        # help — the next pass discarded documents the pipeline already had.
+        # fq-005 lost `tutorial/body` that way: five chunks of it in the first
+        # window, graded 0.4 because the grader only reads the top five, and
+        # the replacement window had none.
+        union: list[RetrievedChunk] = []
+        seen: set[str] = set()
+        window = 0
 
         while True:
             t0 = time.perf_counter()
             retrieval = await self._retrieve_all(current_queries)
             stage_ms["retrieval"] = stage_ms.get("retrieval", 0.0) + _elapsed_ms(t0)
+            window = window or len(retrieval.chunks)
+            for chunk in retrieval.chunks:
+                if chunk.chunk_id not in seen:
+                    seen.add(chunk.chunk_id)
+                    union.append(chunk)
 
             t0 = time.perf_counter()
             sufficient, score, reformulated = await self._grader.grade(
@@ -260,6 +281,10 @@ class RAGPipeline:
             stage_ms["grading"] = stage_ms.get("grading", 0.0) + _elapsed_ms(t0)
 
             if sufficient or retries >= _MAX_RETRIES:
+                if retries:
+                    retrieval = await self._merge_attempts(
+                        original_query, retrieval, union, window, stage_ms
+                    )
                 return retrieval, score, retries
 
             logger.info(
@@ -270,6 +295,33 @@ class RAGPipeline:
             )
             current_queries = [reformulated]
             retries += 1
+
+    async def _merge_attempts(
+        self,
+        original_query: str,
+        latest: RetrievalPass,
+        union: list[RetrievedChunk],
+        window: int,
+        stage_ms: dict[str, float],
+    ) -> RetrievalPass:
+        """Collapse every attempt's chunks back to one window.
+
+        Scored against the *original* query, not the reformulation: attempt
+        one's scores and attempt two's are each relative to a different
+        question, so the two rankings cannot be interleaved as they stand, and
+        what the caller asked is the only question both sets can be compared
+        on. Without a reranker there is nothing to compare them with, so the
+        latest attempt is returned unchanged — the old behaviour.
+        """
+        if self._reranker is None:
+            return latest
+        if len(union) <= window:
+            return RetrievalPass(chunks=union, evidence=latest.evidence)
+        t0 = time.perf_counter()
+        merged = await self._reranker.rerank(original_query, union, window)
+        stage_ms["retrieval"] = stage_ms.get("retrieval", 0.0) + _elapsed_ms(t0)
+        logger.info("retry_union_reranked", union=len(union), kept=len(merged))
+        return RetrievalPass(chunks=merged, evidence=latest.evidence)
 
     async def _retrieve_all(self, queries: list[str]) -> RetrievalPass:
         """Retrieve for each sub-query concurrently, deduplicate by chunk_id."""

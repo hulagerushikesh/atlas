@@ -33,6 +33,15 @@ Newest at the bottom of each section.
 - ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
 - Streaming errors after first byte become events; document the event
   schema in `docs/api.md`.
+- **The grader reads a third of the window it is judging.**
+  `grader.py:82` is `_format_context(chunks[:5])`, commented "more adds
+  noise" — true when `reranker.top_k` was 5 and the slice was the whole
+  window. At 15 the grader calls a retrieval insufficient while the answer
+  sits at rank 6, which is how `fq-005` triggered the retry that lost it.
+  Now that a retry can no longer discard context the consequence is only a
+  wasted round trip, so this is a cost and latency item rather than a
+  correctness one. Grading all 15 triples the grader prompt; grading the
+  top 10 might be the trade. Needs a full eval either way.
 - **`reranker.top_k` is a per-sub-query cap, not a window size.**
   `RAGPipeline._retrieve_all` deduplicates the sub-query results by chunk_id
   and merges them, but never truncates, so a question the router calls
