@@ -273,3 +273,42 @@ Format: date — decision — alternatives — reason.
   structlog defaults to stdout, so the flag that exists to be piped into a
   parser emitted log lines with a JSON object buried at the end. A six-config
   sweep failed to parse after every run had already been paid for.
+- **2026-09-25** — `cross-encoder/ms-marco-MiniLM-L-12-v2` rejected, and with
+  it the whole reranker-tuning direction. The cheap harness liked it: at 25,
+  30 and 40 candidates it reached retrieval-only recall **1.000** where L-6
+  managed 0.929–0.964, with the window left at 15 so nothing downstream got
+  more expensive. End to end it bought **nothing**: recall 0.9000 → 0.9000,
+  precision 0.3022 → 0.2667, faithfulness flat. Latency was the real verdict —
+  retrieval p50 went 2,366 → **18,158 ms** and p95 to 50,335 ms. L-12 is only
+  1.6x slower per pair in isolation (332 ms vs 210 ms for 40 pairs), so most
+  of that is CPU contention: at concurrency 4, with decomposed questions
+  reranking once per sub-query, four torch forward passes fight for the same
+  cores. The same harness ran L-6 over *more* candidates (40) at 3,230 ms.
+  Also measured and rejected: `BAAI/bge-reranker-base`, 278M parameters, which
+  scored **worse** than L-6 at 40 candidates (0.929, and it lost `fq-001`
+  instead). Bigger reranker is not better here.
+- **2026-09-25** — **`fq-005` and `fq-012` are one slot, not two problems.**
+  Three unrelated changes have now produced the identical trade: the BM25
+  tokeniser, `retrieval.top_k` 40, and the L-12 reranker each recovered
+  `fq-012` and lost `fq-005`, which had been solid since the labels were
+  fixed. The questions explain it — *"How does FastAPI validate request body
+  data?"* wants `tutorial/body`, and *"Does FastAPI require you to use Pydantic
+  for input validation, or can you skip it entirely?"* wants
+  `tutorial/query-params-str-validations`. Both are about validation, both
+  target pages discuss validation, and the chunks carry nothing that says
+  which kind. So this is a **chunk representation** problem, not a ranking
+  one: no ordering of indistinguishable chunks separates them, which is why
+  three ranking changes all moved the same 1.0 from one question to the other.
+  Ranking tuning is closed until the chunks can be told apart.
+- **2026-09-25** — The retrieval-only harness has now mispredicted three
+  consecutive full evals and its guidance is downgraded accordingly. It said
+  the tokeniser bought recall (worth nothing end to end), it said
+  `retrieval.top_k` 40 would miss `fq-007` (the full run recovered it and
+  broke `fq-005` instead), and it said L-12 reached 1.000 (the full run stayed
+  at 0.900). The pattern is consistent rather than random: it retrieves once
+  per question where the pipeline decomposes and retrieves per sub-query, so
+  it measures whether a document is *reachable*, never whether the pipeline
+  will *keep* it once the sub-queries compete for the window. It also cannot
+  see latency, which is what actually rejected L-12. Use it to confirm a
+  document is in the index at all. Do not use it to predict a score, and do
+  not let a 1.000 on it justify skipping the ₹0.73.
