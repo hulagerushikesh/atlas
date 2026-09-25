@@ -57,13 +57,17 @@ def _build_pipeline(settings, namespace: str = "default"):
     llm = OpenAILLMProvider(settings.openai)
     sparse_index = BM25SparseIndex(persist_path=sparse_index_path(namespace))
 
+    # One instance, shared: the pipeline re-ranks a retried union with the same
+    # model the retriever used, and loading it twice would cost a second copy
+    # of the weights for nothing.
+    reranker = CrossEncoderReranker(settings.reranker) if settings.reranker.enabled else None
     hybrid = HybridRetriever(
         retrievers=[
             QdrantDenseRetriever(settings.qdrant, embedder),
             BM25Retriever(sparse_index),
         ],
         config=settings.retrieval,
-        reranker=CrossEncoderReranker(settings.reranker) if settings.reranker.enabled else None,
+        reranker=reranker,
         reranker_top_k=settings.reranker.top_k,
     )
 
@@ -74,6 +78,7 @@ def _build_pipeline(settings, namespace: str = "default"):
         grader=RetrievalGrader(llm),
         generator=AnswerGenerator(llm),
         faithfulness=FaithfulnessChecker(llm),
+        reranker=reranker,
     )
 
 

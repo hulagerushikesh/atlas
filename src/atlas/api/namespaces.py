@@ -149,6 +149,7 @@ class NamespaceRegistry:
             grader=RetrievalGrader(s.llm),
             generator=AnswerGenerator(s.llm),
             faithfulness=FaithfulnessChecker(s.llm),
+            reranker=s.reranker,
         )
 
         indexer = DocumentIndexer(

@@ -85,7 +85,7 @@ def _mock_faithfulness(faithful: bool = True, score: float = 0.95) -> MagicMock:
 def _pipeline(
     retriever=None, router=None, decomposer=None,
     grader=None, generator=None, faithfulness=None,
-    chunks=None,
+    chunks=None, reranker=None,
 ) -> RAGPipeline:
     if chunks is None:
         chunks = [_chunk("c1")]
@@ -96,6 +96,7 @@ def _pipeline(
         grader=grader or _mock_grader([(True, 0.9, "q")]),
         generator=generator or _mock_generator(),
         faithfulness=faithfulness or _mock_faithfulness(),
+        reranker=reranker,
     )
 
 
@@ -324,3 +325,100 @@ class TestEvidenceProvenance:
         result = await _pipeline(router=_mock_router("out_of_scope")).run("q")
         assert set(result.stage_ms) == {"routing"}
         assert result.evidence == []
+
+
+# ── Retry must not lose context ───────────────────────────────────────────────
+
+def _retriever_per_attempt(batches: list[list[RetrievedChunk]]) -> MagicMock:
+    """A retriever returning a different chunk set on each successive call."""
+    r = MagicMock()
+
+    def _result(chunks: list[RetrievedChunk]) -> MagicMock:
+        res = MagicMock()
+        res.chunks = chunks
+        return res
+
+    r.retrieve = AsyncMock(side_effect=[_result(b) for b in batches])
+    return r
+
+
+def _reranker_keeping(order: list[str]) -> MagicMock:
+    """Reranker that ranks by a fixed chunk_id preference, then truncates."""
+    rr = MagicMock()
+
+    async def _rerank(query: str, candidates: list[RetrievedChunk], top_k: int):
+        rank = {cid: i for i, cid in enumerate(order)}
+        return sorted(candidates, key=lambda c: rank.get(c.chunk_id, 99))[:top_k]
+
+    rr.rerank = AsyncMock(side_effect=_rerank)
+    return rr
+
+
+class TestRetryKeepsEarlierChunks:
+    """A retry used to overwrite the window, so a grader that wrongly called it
+    insufficient threw away documents already retrieved. fq-005 lost
+    tutorial/body exactly that way."""
+
+    @pytest.mark.asyncio
+    async def test_chunk_from_first_attempt_survives_a_retry(self) -> None:
+        good, filler, junk = _chunk("good"), _chunk("filler"), _chunk("junk")
+        result = await _pipeline(
+            retriever=_retriever_per_attempt([[good, filler], [junk, filler]]),
+            router=_mock_router("simple"),
+            grader=_mock_grader([(False, 0.4, "reformulated"), (True, 0.9, "q")]),
+            reranker=_reranker_keeping(["good", "junk", "filler"]),
+        ).run("q")
+        assert result.grader_retries == 1
+        assert "good" in [c.chunk_id for c in result.retrieved_chunks]
+
+    @pytest.mark.asyncio
+    async def test_window_width_is_preserved_across_the_union(self) -> None:
+        # Two attempts of two chunks each must still hand the generator two,
+        # not four: the retry widens what is considered, not what is sent.
+        a, b, c, d = _chunk("a"), _chunk("b"), _chunk("c"), _chunk("d")
+        result = await _pipeline(
+            retriever=_retriever_per_attempt([[a, b], [c, d]]),
+            router=_mock_router("simple"),
+            grader=_mock_grader([(False, 0.4, "r"), (True, 0.9, "q")]),
+            reranker=_reranker_keeping(["c", "a", "b", "d"]),
+        ).run("q")
+        assert len(result.retrieved_chunks) == 2
+        assert [x.chunk_id for x in result.retrieved_chunks] == ["c", "a"]
+
+    @pytest.mark.asyncio
+    async def test_union_is_scored_against_the_original_query(self) -> None:
+        # Not the reformulation: the two attempts' scores are each relative to
+        # a different question, and the caller's is the only one both sets can
+        # be compared on.
+        rr = _reranker_keeping(["b", "a"])
+        await _pipeline(
+            retriever=_retriever_per_attempt([[_chunk("a")], [_chunk("b")]]),
+            router=_mock_router("simple"),
+            grader=_mock_grader([(False, 0.4, "reformulated"), (True, 0.9, "q")]),
+            reranker=rr,
+        ).run("the original question")
+        assert rr.rerank.await_args.args[0] == "the original question"
+
+    @pytest.mark.asyncio
+    async def test_no_retry_means_no_extra_rerank(self) -> None:
+        # The common path must not pay for the merge.
+        rr = _reranker_keeping(["a"])
+        await _pipeline(
+            retriever=_retriever_per_attempt([[_chunk("a")]]),
+            router=_mock_router("simple"),
+            grader=_mock_grader([(True, 0.9, "q")]),
+            reranker=rr,
+        ).run("q")
+        rr.rerank.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_without_a_reranker_the_old_behaviour_is_kept(self) -> None:
+        # Nothing can compare two attempts' scores without one, so the merge
+        # is skipped rather than guessed at. reranker.enabled=false is an
+        # ablation setting; production always has one.
+        result = await _pipeline(
+            retriever=_retriever_per_attempt([[_chunk("old")], [_chunk("new")]]),
+            router=_mock_router("simple"),
+            grader=_mock_grader([(False, 0.4, "r"), (True, 0.9, "q")]),
+        ).run("q")
+        assert [c.chunk_id for c in result.retrieved_chunks] == ["new"]
