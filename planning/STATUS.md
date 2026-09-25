@@ -140,12 +140,23 @@ daily spend cap, console markdown.
   bought with `fq-005` breaking outright, and precision fell 0.3022 → 0.2711
   at an unchanged window width. The reranker, not the retriever, is now the
   constraint.
-- **`retrieval.top_k=30` + `reranker.top_k=20` — ≈₹0.9.** The cheap sweep puts
-  it at recall 1.000 with the best precision of the configs that get there.
-  Needs the full eval before anything ships; the cheap harness mispredicted
-  the 40 run per sample.
-- A stronger reranker, or lost-in-the-middle ordering of the window. MiniLM-L-6
-  filtering 15 of 40 is where the `fq-005` regression came from.
+- ~~A stronger reranker~~ run 2026-09-25 and **rejected**. L-12 bought no
+  recall end to end and put retrieval p50 at 18 s under concurrency;
+  `bge-reranker-base` (278M) scored worse than the 23M model it would replace.
+- **Ranking tuning is closed.** `fq-005` and `fq-012` are the same slot: three
+  unrelated changes each recovered one and lost the other, because both
+  questions are about validation and neither target page's chunks say which
+  kind. The next move is chunk representation, not ordering.
+- **Deterministic chunk headers first (~₹10, embeddings only, no LLM).**
+  Prepend the source path and section heading to each chunk's indexed text, so
+  a `tutorial/body` chunk and a `tutorial/query-params-str-validations` chunk
+  stop looking alike. Needs a re-ingest of 4,020 chunks. Try this before the
+  LLM-written contextual headers, which are the same idea at ~20x the price.
+- LLM-written contextual headers — **re-price before starting.** The ~₹15
+  figure in earlier notes does not survive arithmetic: 4,020 chunks x ~2.5k
+  input tokens is ~10M tokens, nearer ₹200 without prompt caching. Caching the
+  per-document prefix across its own chunks is what would make it affordable,
+  and that has to be designed, not assumed.
 - Cap and rerank the sub-query merge — `_retrieve_all` never truncates, so a
   complex question can hand the generator `sub_queries x top_k` chunks
   (`fq-013` sent 30). See BACKLOG.
