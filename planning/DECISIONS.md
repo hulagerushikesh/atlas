@@ -606,3 +606,58 @@ Format: date — decision — alternatives — reason.
   confidently wrong answer as long as it is grounded in whatever was
   retrieved. The reference answers are there for a human reading a report.
   Worth saying out loud in the README next to the table.
+
+- **2026-09-27** — **The whole eval set audited; nine of fifteen rows were
+  wrong.** Method, after `fq-012` and `fq-010` showed there were two distinct
+  faults: read a row's reference answer, list the claims it makes, `grep` the
+  corpus for each one, then check the label set against the result — no page
+  missing that a claim rests on, no page present that nothing rests on.
+
+  | row | fault | fix |
+  |---|---|---|
+  | `fq-003` | wrote `Optional[str] = None`; that spelling is not on the labelled page | reworded to `str \| None = None` |
+  | `fq-004` | "the router equivalents are `@router.post()`" — `router.post` occurs nowhere in the corpus | clause dropped |
+  | `fq-005` | named a "422 Unprocessable Entity"; `422` is not in `tutorial/body.md` | reworded to the error the page describes |
+  | `fq-006` | promised yield-based cleanup; `yield` occurs 0 times on the labelled page | added `dependencies/dependencies-with-yield` |
+  | `fq-007` | `OAuth2PasswordBearer` is on neither labelled page | added `security/first-steps` |
+  | `fq-008` | `tutorial/stream-json-lines` was required and has no `StreamingResponse`, no `Response`, no `media_type` | removed |
+  | `fq-009` | quoted `@app.on_event('startup')`; that string is in the included code, not the page | reworded |
+  | `fq-012` | three claims, one labelled page | 1 → 5 |
+  | `fq-015` | categorised out-of-scope | relabelled, see below |
+
+  `fq-001`, `fq-002`, `fq-011`, `fq-013`, `fq-014` were read and left alone
+  except `fq-014`, which gained `tutorial/static-files` for its StaticFiles
+  claim. Corrected figures, all from an offline replay: precision
+  0.3733 → 0.3477 → 0.3867 → **0.4667**, recall 0.9244 → 0.9333 → 0.9333 →
+  **0.9378**, over all fifteen rows.
+
+  **This withdraws "three changes, each positive on precision."** The retry
+  fix *costs* precision, 0.3733 → 0.3477. It widens the window and two rows
+  the old labels could not see — `fq-015` and `fq-007` — are now visible
+  paying for it. The cap refunds it and the headers gain on top. The fix is
+  still right on the merits, and the day's net is still +0.093 precision, but
+  the monotone story was an artifact of the labels.
+
+- **2026-09-27** — **`fq-015` was not out of scope, and the metric change it
+  motivated has no row left to act on.** `advanced/websockets.md` is in the
+  corpus, and line 23 of it — the "WebSockets client" section — names React
+  by name, which is the half of the question the row was supposed to be
+  unanswerable on. Checking what the pipeline actually returned settles it:
+  it answered with citations, faithfulness 1.000, and a paraphrase of that
+  very line. Its context precision was 0.4667 and its recall 1.000, and both
+  were being recorded as "structurally meaningless" and discarded.
+
+  So the reasoning written into both context metrics two days ago — "an
+  out-of-scope row: nothing in the corpus is relevant, so the correct answer
+  is a refusal" — was sound as a rule and false about the only row it was
+  applied to. The guards stay, because a dataset may legitimately carry an
+  unanswerable row, and their comments now say plainly that this one does
+  not. The lesson is narrower than "the guard was wrong": **nobody checked
+  whether the corpus could answer the question before declaring it
+  out-of-scope, and the harness cannot check it for you** — a row with no
+  labels is unfalsifiable by construction, since precision and recall have
+  nothing to disagree with.
+
+  Cost of the set no longer having an out-of-scope row: the refusal path is
+  unmeasured end to end. It was already unmeasured — `fq-015` never triggered
+  it — but that is now visible instead of assumed. BACKLOG.

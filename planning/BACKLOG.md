@@ -68,20 +68,31 @@ Newest at the bottom of each section.
   from an offline replay of all twelve stored reports; the headers' recall
   gain and the "last outright miss" framing were both withdrawn.
 
-- **Re-read the other fourteen labels for the same fault.** `fq-012` was
-  found by reading its ground-truth answer against its `relevant_doc_ids` and
-  noticing the answer made three claims the label covered one of. Nobody has
-  done that pass for the rest of the set. Free, and
-  `scripts/replay_context_metrics.py` shows the consequence of any candidate
-  label set against all twelve stored runs before committing to it.
+- ~~Re-read the other fourteen labels for the same fault.~~ **done
+  2026-09-27.** Nine of fifteen rows needed a change; see DECISIONS for the
+  table and `metadata.label_rationale` on each row for the reason. Every
+  figure in STATUS and README restated from an offline replay, Rs.0.
 
-  Spot-checked while doing `fq-012`: `fq-011` is correctly labelled —
-  `tutorial/response-model` carries the filtering and validation claims on
-  its own. `fq-010` had the **opposite** fault and was fixed the same day
-  (answer rewritten, label left alone — see DECISIONS). Two of fifteen rows
-  were wrong in two different ways, so the remaining twelve are worth the
-  hour. The check is mechanical: read the reference answer, list its claims,
-  `grep` the corpus for each one.
+- **The set has no out-of-scope row, so the refusal path is unmeasured.**
+  `fq-015` was the only candidate and it turned out to be answerable from
+  `advanced/websockets.md`. Write one that the corpus genuinely cannot
+  answer — it has to be plausible enough that the retriever returns
+  something, or it tests nothing. Two shapes that would work against this
+  corpus: a question about a framework the docs only name in passing
+  (`alternatives.md` mentions plenty), or a FastAPI question whose answer
+  post-dates the snapshot. Note the cost asymmetry: a new row is free to
+  write but cannot be replayed into the existing reports, so the first
+  measurement of it needs a paid eval run (~Rs.0.77). Adding it also changes
+  the denominator of every aggregate, so do it at a milestone boundary, not
+  mid-comparison.
+
+- **Guard against the fault the audit found, in the dataset loader.** Two
+  cheap checks, both offline: every `relevant_doc_ids` entry must resolve to
+  a file in the corpus (catches a typo or a moved page silently scoring 0),
+  and a row whose `relevant_doc_ids` is empty must say so deliberately rather
+  than by omission. Neither catches an under-labelled row — only reading does
+  — but both catch the mechanical half, and a dataset that fails them should
+  fail loudly before a run is paid for.
 
 - **Add a correctness metric, or say in the README that there isn't one.**
   `ground_truth_answer` is passed to every metric by `runner.py:171` and read

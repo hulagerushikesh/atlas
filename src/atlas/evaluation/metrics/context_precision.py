@@ -54,8 +54,18 @@ class ContextPrecisionMetric(BaseMetric):
             # correct answer is a refusal and *every* retrieved chunk is
             # non-relevant by construction. The score is 0.0 however well the
             # retriever behaves, so averaging it in measures the shape of the
-            # dataset rather than the pipeline. fq-015 alone pulled the
-            # 2026-09-27 headline precision from 0.341 down to 0.319.
+            # dataset rather than the pipeline.
+            #
+            # This guard is currently unreachable from the FastAPI set. It was
+            # written for `fq-015`, on the belief that a question about
+            # WebSockets with a React frontend had no answer in the corpus.
+            # `advanced/websockets.md` is in the corpus, its "WebSockets
+            # client" section names React, and the pipeline answered the
+            # question from it with citations — so the row was a good
+            # retrieval being scored 0.0 and then discarded, not a refusal.
+            # Relabelled 2026-09-27. The branch stays because a dataset may
+            # legitimately carry an unanswerable row; it just does not have
+            # one today.
             return MetricScore(
                 metric_name=self.name,
                 score=0.0,

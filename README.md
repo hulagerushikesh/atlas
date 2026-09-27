@@ -203,19 +203,31 @@ noise floor.
 
 | Metric | Run 1 | BM25 tokeniser | `top_k` 15 | **Current** | *+ headers* | What it measures |
 |---|---|---|---|---|---|---|
-| Context precision | 0.460 | 0.476 | 0.333 | **0.376** | *0.457* | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.719 | 0.776 | 0.907 | **0.929** | *0.921* | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Context precision | 0.482 | 0.498 | 0.373 | **0.387** | *0.467* | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.682 | 0.736 | 0.924 | **0.933** | *0.938* | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
 | Faithfulness | 1.000 | 1.000 | 1.000 | **1.000** | *1.000* | Fraction of answer claims the judge found grounded in the retrieved context |
 | Answer relevance | 0.815 | 0.825 | 0.819 | **0.827** | *0.833* | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
-Every context number in that row is computed on the **14 answerable rows**
-(`fq-015` is excluded — see below) and against the label set as it stands
-today. Both of those differ from how this table read before 2026-09-27, when
-the columns mixed a 14-row and a 15-row basis and `fq-012` carried a label
-covering one of the three claims its answer makes. Relabelling it is free to
-account for: the stored reports hold their retrieved chunk ids, so
-`scripts/replay_context_metrics.py` replays any label set against every run
-ever recorded without a single model call. The table above is that replay.
+Every context number in that row is a **replay**, not a re-run. Chunk ids are
+`uuid5(document_id(source), chunk_index)` and every stored report keeps the
+ids it retrieved, so both context metrics — which are set arithmetic over
+document ids — can be recomputed against any label set for free, for every
+run ever recorded. `scripts/replay_context_metrics.py` does it, and checks
+itself by reproducing the stored score of every sample whose label did not
+change. That mattered on 2026-09-27, when the dataset was audited and nine of
+fifteen rows moved; without the replay, honest numbers would have cost an
+eval run per column.
+
+**What the audit was.** Read each row's reference answer, list the claims it
+makes, `grep` the corpus for each one. Two failure modes, in opposite
+directions, and both were present: an answer that rests on more pages than
+its label names (`fq-012` needed five, had one), and an answer that names
+things the corpus does not contain at all (`fq-010` prescribed
+`run_in_threadpool` and `asyncio.run_in_executor`, neither of which occurs
+anywhere in these 155 pages). One row had a required page that supported none
+of its claims. One row was categorised out-of-scope on a page the corpus in
+fact has. Nothing in the harness could have caught any of it — see the note
+on correctness below.
 
 A column that used to sit here, "Relabelled", is gone. It was the same
 pipeline and the same index re-run after two labelling errors were fixed, so
@@ -245,12 +257,16 @@ config a day apart reproduced three of them to four decimal places — and the
 LLM-judged one moves by about 0.01. Directional signal at this sample size,
 not a confidence interval.*
 
-One of the fifteen questions (`fq-015`) has no relevant document in the
-corpus — the correct answer is a refusal. Its context scores are structurally
-meaningless (precision 0 whatever the retriever does, recall a free 1.0), so
-every column excludes it from both. That is why the two leftmost columns read
-higher than they used to: they were printed over all fifteen rows, and a
-structural zero in the precision mean is not a measurement of anything.
+**All fifteen rows are in these numbers.** Until 2026-09-27 one of them
+(`fq-015`, on WebSockets with a React frontend) was labelled out of scope with
+no relevant document, on the reasoning that the correct answer was a refusal
+and so its precision was a structural zero worth discarding. That was wrong:
+`advanced/websockets.md` is in the corpus, its "WebSockets client" section
+names React, and the pipeline answers the question from it with citations and
+faithfulness 1.000. A precision of 0.467 was being recorded as 0.0 and then
+thrown away. The metrics still skip a row that has no relevant document —
+that guard is correct — but this dataset no longer has such a row, which is
+its own gap and is in BACKLOG.
 
 "Current" is `main` as it stands: `reranker.top_k = 15` against the Qdrant
 Cloud index, with a retry that accumulates context instead of replacing it
@@ -260,17 +276,18 @@ manual step. Three changes, measured one at a time, each against the run
 before it:
 
 - **Widening the window** (`reranker.top_k` 5 → 15) bought recall
-  0.776 → 0.907 and cost precision, which at one or two labelled documents
-  per question is largely a denominator effect.
-- **Making the retry additive** bought recall 0.907 → 0.929, and took
-  precision *up* with it. A retry used to replace the window it had, so a
-  grader that wrongly called a window insufficient destroyed documents
-  already retrieved. This is the only change all day that moved recall past
-  the 0.02 significance floor.
-- **Capping the sub-query merge** bought precision 0.341 → 0.376 at
-  identical recall, and gave back 19% of the tokens. A decomposed question
-  had been handing the generator `sub_queries × top_k` chunks — 41 for one
-  sample against a configured window of 15.
+  0.736 → 0.924 and cost precision, 0.498 → 0.373. That is the real trade in
+  this table and the only change that bought recall worth the name.
+- **Making the retry additive** moved recall 0.924 → 0.933 and cost precision
+  0.373 → 0.348. A retry used to replace the window it had, so a grader that
+  wrongly called a window insufficient destroyed documents already retrieved;
+  fixing that is right on the merits, but it widens the window and two rows
+  pay for it in precision. Both movements are at or inside the 0.02 floor.
+- **Capping the sub-query merge** bought precision 0.348 → 0.387 at identical
+  recall, and gave back 19% of the tokens. A decomposed question had been
+  handing the generator `sub_queries × top_k` chunks — 41 for one sample
+  against a configured window of 15. This is the change that pays back what
+  the retry fix cost.
 
 Both of the last two re-rank against the *original* question rather than a
 sub-query or a reformulation, because those scores are each relative to a
@@ -334,16 +351,16 @@ meaning across a `top_k` change, and they went up, flat, flat.
   additions.** The identifier-aware BM25 tokeniser is worth +0.07 recall when
   the raw question goes straight to the retriever, which is what
   `scripts/eval_retrieval.py` measures. Through the full pipeline it is worth
-  little: recall 0.719 → 0.776 on the 14-row basis, +0.057, and most of that
-  is one sample. Per sample it is a swap, not a wash — `fq-005` goes 0 → 1.0
-  while `fq-012` goes 0.4 → 0.2, both at the rank-5 boundary. Decomposition
-  was already recovering what the tokeniser recovers, so the two compete for
-  the same five slots. It ships anyway, because the router sends "simple"
-  questions down a path that never decomposes, and that path is measurably
-  better with it — but the cheap harness over-credits any retrieval change,
-  and this is the correction. *(Numbers restated 2026-09-27 after `fq-012`
-  was relabelled; the original text read "0.778 either way" and "`fq-012`
-  goes 1.0 → 0", both of which were the old one-document label talking.)*
+  little: recall 0.682 → 0.736, +0.054, and most of that is one sample. Per
+  sample it is a swap, not a wash — `fq-005` goes 0 → 1.0 while `fq-012` goes
+  0.4 → 0.2, both at the rank-5 boundary. Decomposition was already recovering
+  what the tokeniser recovers, so the two compete for the same five slots. It
+  ships anyway, because the router sends "simple" questions down a path that
+  never decomposes, and that path is measurably better with it — but the cheap
+  harness over-credits any retrieval change, and this is the correction.
+  *(Numbers restated 2026-09-27 after the dataset audit; the original text read
+  "0.778 either way" and "`fq-012` goes 1.0 → 0", both of which were the old
+  one-document label talking.)*
 
 ### Smoke test, same day
 
