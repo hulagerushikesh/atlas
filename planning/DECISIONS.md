@@ -569,3 +569,40 @@ Format: date — decision — alternatives — reason.
   which is why the table above can be trusted without re-running anything.
   What it cannot replay is `faithfulness` and `answer_relevance`, and a label
   change does not touch those.
+
+- **2026-09-27** — **`fq-010`'s reference answer prescribed two APIs the
+  corpus does not contain.** It told the reader to reach for
+  `asyncio.run_in_executor` or Starlette's `run_in_threadpool`. Neither
+  string occurs anywhere in `data/corpus/fastapi` — nor does `motor`,
+  `AsyncSession` or `aiosqlite`; `asyncpg` appears once, in a changelog line
+  in `release-notes.md`. The answer was written from general FastAPI
+  knowledge rather than from the 155 pages the system is actually allowed to
+  read, which makes it a standard no retrieval over this corpus can meet.
+
+  Rewritten to what `async.md` actually says, which is a different and better
+  answer: the fix is the **function declaration**, not a helper called from
+  inside the coroutine. Declare the path operation with plain `def` and
+  FastAPI moves it to an external threadpool and awaits it (`async.md:418`,
+  "as it would block the server"); the TL;DR recommends exactly that for
+  database libraries, "most" of which have no `await` support; `def`
+  dependencies and sub-dependencies get the same treatment (`:426`, `:430`);
+  and AnyIO is the documented route for mixing blocking code into async code
+  you write yourself (`:364`). The label stays `async` alone, and is now
+  right rather than right by luck — every claim is on that one page.
+
+  Opposite fault to `fq-012`, same root: nobody had read the reference
+  answers back against the corpus.
+
+- **2026-09-27** — **Nothing scores against `ground_truth_answer`.** Found
+  while fixing `fq-010`, by asking which metric the fix would move. Answer:
+  none. `runner.py:171` passes it into every `score()` call and all four
+  metrics take it in their signature and never read it — one occurrence each,
+  the parameter itself. Precision and recall use `relevant_doc_ids`;
+  faithfulness checks the generated answer against the *retrieved chunks*;
+  answer relevance compares the question against questions regenerated from
+  the generated answer. So a wrong reference answer is invisible to the
+  harness, which is exactly why `fq-010` survived this long, and **the eval
+  has no correctness metric at all.** Four metrics can be perfect on a
+  confidently wrong answer as long as it is grounded in whatever was
+  retrieved. The reference answers are there for a human reading a report.
+  Worth saying out loud in the README next to the table.

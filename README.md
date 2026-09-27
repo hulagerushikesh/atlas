@@ -229,6 +229,16 @@ table. It is **not** a recall gain — recall goes very slightly down, and the
 claim it made earlier today, that headers recovered a question nothing had
 ever retrieved, was an artifact of `fq-012`'s old label and is withdrawn.
 
+**None of these four is a correctness metric, and the table is weaker than
+it looks because of it.** The dataset carries a reference answer per
+question, but no metric reads it: precision and recall score the retrieved
+documents, faithfulness scores the answer against the chunks it was given,
+and answer relevance scores the question against questions regenerated from
+the answer. All four can be perfect on an answer that is grounded, on-topic
+and wrong. Read faithfulness 1.000 as "it did not invent anything beyond its
+context", not as "it was right". Wiring up a reference-vs-generated judge is
+in BACKLOG.
+
 *15 questions, 36k tokens and ≈₹0.70 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run — the identical
 config a day apart reproduced three of them to four decimal places — and the

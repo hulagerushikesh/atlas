@@ -77,13 +77,23 @@ Newest at the bottom of each section.
 
   Spot-checked while doing `fq-012`: `fq-011` is correctly labelled —
   `tutorial/response-model` carries the filtering and validation claims on
-  its own. `fq-010` has the **opposite** fault and is worse: its
-  ground-truth answer prescribes `asyncio.run_in_executor` and Starlette's
-  `run_in_threadpool`, and *neither string appears anywhere in the corpus*
-  (`grep -rl run_in_threadpool data/corpus/fastapi` is empty). `async.md`
-  explains that a `def` endpoint is moved to a threadpool, but never names
-  the helper the answer tells you to call. So the row is scoring retrieval
-  against an answer the corpus cannot support. Fix the answer, not the label.
+  its own. `fq-010` had the **opposite** fault and was fixed the same day
+  (answer rewritten, label left alone — see DECISIONS). Two of fifteen rows
+  were wrong in two different ways, so the remaining twelve are worth the
+  hour. The check is mechanical: read the reference answer, list its claims,
+  `grep` the corpus for each one.
+
+- **Add a correctness metric, or say in the README that there isn't one.**
+  `ground_truth_answer` is passed to every metric by `runner.py:171` and read
+  by none of them — precision and recall score `relevant_doc_ids`,
+  faithfulness scores the answer against the retrieved chunks, answer
+  relevance scores the question against questions regenerated from the
+  answer. So the harness cannot tell a right answer from a confidently wrong
+  one that cites its sources correctly, and a wrong reference answer is
+  invisible to it, which is how `fq-010` survived three milestones. Either
+  wire up an answer-correctness judge (reference vs generated, one extra LLM
+  call per sample, ~+15% eval cost) or state the gap next to the table.
+  Stating it is free and honest; the judge is the real fix.
 
 - **Ship the context headers to the `default` namespace — BLOCKED, user must
   run it.** Cost approved 2026-09-27; the auto-mode classifier refused the
