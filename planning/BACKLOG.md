@@ -53,6 +53,19 @@ Newest at the bottom of each section.
   sits below the worst chunk for the first, which is exactly the position
   lost-in-the-middle says is worst. Needs a full eval, not a guess.
 
+- **Make the comparator refuse two different datasets.** `run_eval.py`
+  defaults `--dataset` to `sample_dataset.json` (30 HR questions). Running it
+  in a FastAPI-corpus repo produces a full, well-formatted report of zeros and
+  then a confident `Overall winner` against a 15-sample FastAPI baseline. The
+  report does not look broken; only the token count does. Record the dataset
+  name and sample ids in `EvalResult` and have `compare()` refuse when they
+  disagree. Free, and it removes a whole class of wasted run.
+
+- **The `--dataset` default is a trap.** Same root cause as above, cheaper
+  fix: `make eval` passes `$(EVAL_DATA)` correctly, but a bare
+  `python scripts/run_eval.py` silently picks the wrong corpus. Either drop
+  the default and require the flag, or point it at `fastapi_dataset.json`.
+
 ## Ideas (research-backed, see learning/09)
 
 - HyDE retriever behind a config flag.
