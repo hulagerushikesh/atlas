@@ -214,7 +214,7 @@ async def _stream_query(
     # ── Stage 3: Retrieve ──────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
     t0 = time.perf_counter()
-    retrieval = await pipeline._retrieve_all(sub_queries)
+    retrieval = await pipeline._retrieve_all(sub_queries, query)
     chunks = retrieval.chunks
     # Evidence goes out as soon as retrieval finishes so the client can
     # render the trail while generation is still streaming.

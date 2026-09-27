@@ -422,3 +422,119 @@ class TestRetryKeepsEarlierChunks:
             grader=_mock_grader([(False, 0.4, "r"), (True, 0.9, "q")]),
         ).run("q")
         assert [c.chunk_id for c in result.retrieved_chunks] == ["new"]
+
+
+class TestSubQueryMergeFitsOneWindow:
+    """A decomposed question used to hand the generator `sub_queries x top_k`.
+
+    fq-007 sent 41 chunks against a configured window of 15 and fq-013 sent
+    30. That was never a decision to widen the window; it was the absence of
+    one about what a window means after a query is split.
+    """
+
+    @staticmethod
+    def _subquery_retriever(per_query: list[list[RetrievedChunk]]) -> MagicMock:
+        """One distinct result list per sub-query, in decomposition order."""
+        r = MagicMock()
+
+        def _result(chunks: list[RetrievedChunk]) -> MagicMock:
+            res = MagicMock()
+            res.chunks = chunks
+            return res
+
+        r.retrieve = AsyncMock(side_effect=[_result(b) for b in per_query])
+        return r
+
+    @pytest.mark.asyncio
+    async def test_merge_is_cut_back_to_one_window(self) -> None:
+        a = [_chunk(f"a{i}") for i in range(3)]
+        b = [_chunk(f"b{i}") for i in range(3)]
+        p = _pipeline(
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["s1", "s2"]),
+            retriever=self._subquery_retriever([a, b]),
+            reranker=_reranker_keeping(["a0", "b0", "a1"]),
+        )
+        result = await p.run("two-part question")
+        # Six distinct chunks retrieved, one window is three.
+        assert len(result.retrieved_chunks) == 3
+        assert [c.chunk_id for c in result.retrieved_chunks] == ["a0", "b0", "a1"]
+
+    @pytest.mark.asyncio
+    async def test_cut_is_scored_against_the_original_question(self) -> None:
+        # Not against a sub-query: each sub-query's scores are relative to a
+        # different question and cannot be interleaved as they stand.
+        reranker = _reranker_keeping(["a0"])
+        p = _pipeline(
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["sub one", "sub two"]),
+            retriever=self._subquery_retriever(
+                [[_chunk("a0"), _chunk("a1")], [_chunk("b0"), _chunk("b1")]]
+            ),
+            reranker=reranker,
+        )
+        await p.run("the original question")
+        assert reranker.rerank.await_args.args[0] == "the original question"
+
+    @pytest.mark.asyncio
+    async def test_every_subquery_survives_the_cut_without_a_reranker(self) -> None:
+        # Concatenating and truncating deleted the later sub-questions
+        # outright; round-robin keeps each one's best chunks.
+        a = [_chunk(f"a{i}") for i in range(4)]
+        b = [_chunk(f"b{i}") for i in range(4)]
+        c = [_chunk(f"c{i}") for i in range(4)]
+        p = _pipeline(
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["s1", "s2", "s3"]),
+            retriever=self._subquery_retriever([a, b, c]),
+            reranker=None,
+        )
+        result = await p.run("three-part question")
+        kept = [x.chunk_id for x in result.retrieved_chunks]
+        assert len(kept) == 4
+        assert {k[0] for k in kept} == {"a", "b", "c"}
+
+    @pytest.mark.asyncio
+    async def test_single_query_is_untouched(self) -> None:
+        chunks = [_chunk(f"c{i}") for i in range(5)]
+        reranker = _reranker_keeping(["c0"])
+        p = _pipeline(
+            router=_mock_router("simple"),
+            retriever=self._subquery_retriever([chunks]),
+            reranker=reranker,
+        )
+        result = await p.run("simple question")
+        assert [c.chunk_id for c in result.retrieved_chunks] == [c.chunk_id for c in chunks]
+        reranker.rerank.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_overlapping_subqueries_below_the_window_are_not_reranked(self) -> None:
+        # Heavy overlap already fits; paying for a rerank would buy nothing.
+        shared = [_chunk("x0"), _chunk("x1"), _chunk("x2")]
+        reranker = _reranker_keeping(["x0"])
+        p = _pipeline(
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["s1", "s2"]),
+            retriever=self._subquery_retriever([shared, list(shared)]),
+            reranker=reranker,
+        )
+        result = await p.run("two-part question")
+        assert len(result.retrieved_chunks) == 3
+        reranker.rerank.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_evidence_marks_only_the_kept_chunks_selected(self) -> None:
+        # The console's "selected" flag used to mark every merged chunk, which
+        # after a cut would claim the generator saw chunks it never got.
+        a = [_chunk(f"a{i}") for i in range(2)]
+        b = [_chunk(f"b{i}") for i in range(2)]
+        p = _pipeline(
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["s1", "s2"]),
+            retriever=self._subquery_retriever([a, b]),
+            reranker=_reranker_keeping(["a0", "b0"]),
+        )
+        result = await p.run("two-part question")
+        kept = {c.chunk_id for c in result.retrieved_chunks}
+        selected = {e.chunk.chunk_id for e in result.evidence if e.selected}
+        assert selected == kept

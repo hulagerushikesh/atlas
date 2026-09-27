@@ -423,3 +423,42 @@ Format: date — decision — alternatives — reason.
   the report it produced was not obviously wrong at a glance — only the token
   count gave it away. A comparison across datasets is meaningless and the
   comparator should refuse it. Logged in BACKLOG.
+- **2026-09-27** — **Capping and re-ranking the sub-query merge is shipped:
+  precision +0.035, recall unchanged, tokens −19%.** `_retrieve_all` now
+  round-robins across sub-queries and cuts the result back to one window,
+  re-ranked against the original query when a reranker exists. Full eval
+  against the `retry-union` run of the same morning, both served entirely by
+  `gemini-3.1-flash-lite`.
+
+  The printed A/B is **not** the comparison to read: this run excludes
+  `fq-015` from the context metrics and the stored baseline does not, so its
+  `recall −0.0047` is a change of denominator, not of retrieval. Like for
+  like, over the 14 answerable rows:
+
+  | Metric | retry-union | merge-capped | Delta |
+  |---|---|---|---|
+  | context_precision | 0.3412 | **0.3762** | **+0.0350** |
+  | context_recall | 0.9286 | 0.9286 | **0.0000** |
+  | faithfulness | 1.0000 | 1.0000 | tie |
+  | answer_relevance | 0.8253 | 0.8271 | tie |
+  | tokens | 44,224 | **35,928** | −19% (Rs.0.86 → Rs.0.70) |
+  | latency p50 | 11.0 s | 10.0 s | — |
+
+  Every sample now returns exactly 15 chunks. The risk stated before the run
+  was that the cap would take `fq-007` back to 0.5 recall, since its 41-chunk
+  window was what recovered it two hours earlier. It did not: recall held at
+  1.000 on 15 chunks while precision went 0.244 → 0.400, because the union is
+  ordered against the original question before being cut rather than
+  truncated in sub-query order. `fq-013` moved 0.467 → 0.800 the same way.
+  Recall is identical on every one of the fifteen samples.
+
+- **2026-09-27** — **The cap stopped `fq-007` retrying at all, which is a
+  second-order argument about the grader's 5-chunk window.** Not predicted;
+  found in the per-sample `stage_ms`. `fq-007` grading fell 5052 ms → 1158 ms,
+  three grader calls to one, and that is exactly the 102 → 100 model calls for
+  the run. The grader reads `chunks[:5]`; when those five are the best five
+  against the original question instead of the first five of sub-query one, it
+  accepts a window it previously called insufficient twice. So the grader
+  window (`grader.py:82`) is now doing much less damage than it was when it
+  was logged, and the case for widening it is weaker, not stronger. Leave it;
+  it stays a latency item and a low one.

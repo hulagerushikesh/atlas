@@ -42,16 +42,13 @@ Newest at the bottom of each section.
   wasted round trip, so this is a cost and latency item rather than a
   correctness one. Grading all 15 triples the grader prompt; grading the
   top 10 might be the trade. Needs a full eval either way.
-- **`reranker.top_k` is a per-sub-query cap, not a window size.**
-  `RAGPipeline._retrieve_all` deduplicates the sub-query results by chunk_id
-  and merges them, but never truncates, so a question the router calls
-  complex hands the generator up to `sub_queries x top_k` chunks.
-  `fq-013` sent 30 on the 2026-09-24 run. At `top_k` 5 the worst case was 15
-  and nobody noticed; at 15 it is 45. Two things to decide together: whether
-  to cap the merged list, and whether to rerank across sub-queries — the
-  merge is in sub-query order, so the best chunk for the second sub-question
-  sits below the worst chunk for the first, which is exactly the position
-  lost-in-the-middle says is worst. Needs a full eval, not a guess.
+- ~~**Cap and rerank the sub-query merge.**~~ **Shipped 2026-09-27.**
+  `_retrieve_all` now round-robins across sub-queries and cuts back to one
+  window, re-ranked against the original question when a reranker exists.
+  Both halves went in together because they are the same decision: the cap
+  without the rerank would have truncated in sub-query order and deleted the
+  later sub-questions outright. Precision 0.3412 -> 0.3762, recall unchanged,
+  tokens -19%. See DECISIONS 2026-09-27.
 
 - **Make the comparator refuse two different datasets.** `run_eval.py`
   defaults `--dataset` to `sample_dataset.json` (30 HR questions). Running it
