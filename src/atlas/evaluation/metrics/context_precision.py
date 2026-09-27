@@ -49,6 +49,20 @@ class ContextPrecisionMetric(BaseMetric):
         retrieved_chunks: list[RetrievedChunk],
         relevant_doc_ids: list[str],
     ) -> MetricScore:
+        if not relevant_doc_ids:
+            # An out-of-scope row: nothing in the corpus is relevant, so the
+            # correct answer is a refusal and *every* retrieved chunk is
+            # non-relevant by construction. The score is 0.0 however well the
+            # retriever behaves, so averaging it in measures the shape of the
+            # dataset rather than the pipeline. fq-015 alone pulled the
+            # 2026-09-27 headline precision from 0.341 down to 0.319.
+            return MetricScore(
+                metric_name=self.name,
+                score=0.0,
+                reasoning="No relevant documents specified; precision is undefined.",
+                applicable=False,
+            )
+
         if not retrieved_chunks:
             return MetricScore(
                 metric_name=self.name,

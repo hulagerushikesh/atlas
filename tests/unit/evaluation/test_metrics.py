@@ -238,3 +238,43 @@ class TestAnswerRelevanceMetric:
 
     def test_metric_name(self) -> None:
         assert AnswerRelevanceMetric(AsyncMock(), AsyncMock()).name == "answer_relevance"
+
+
+# ── Out-of-scope rows ─────────────────────────────────────────────────────────
+
+class TestOutOfScopeSamples:
+    """A row with no relevant documents cannot measure retrieval quality.
+
+    fq-015 is such a row: the right answer is a refusal. Precision is 0.0
+    however well the retriever behaves and recall is a free 1.0, so counting
+    either one reports the dataset's shape as if it were the pipeline's.
+    """
+
+    @pytest.mark.asyncio
+    async def test_precision_is_inapplicable_without_relevant_docs(self) -> None:
+        chunks = [_chunk("c1", "d1"), _chunk("c2", "d2")]
+        ms = await ContextPrecisionMetric().score("q", "a", "gen", chunks, [])
+        assert ms.applicable is False
+        assert ms.score == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_recall_is_inapplicable_without_relevant_docs(self) -> None:
+        chunks = [_chunk("c1", "d1")]
+        ms = await ContextRecallMetric().score("q", "a", "gen", chunks, [])
+        assert ms.applicable is False
+        assert ms.score == pytest.approx(1.0)
+
+    @pytest.mark.asyncio
+    async def test_empty_retrieval_with_real_targets_still_counts(self) -> None:
+        # Retrieving nothing when documents *do* exist is a genuine failure,
+        # not an undefined measurement — it must stay in the mean.
+        ms = await ContextPrecisionMetric().score("q", "a", "gen", [], ["d1"])
+        assert ms.applicable is True
+        assert ms.score == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_normal_rows_remain_applicable(self) -> None:
+        chunks = [_chunk("c1", "d1")]
+        for metric in (ContextPrecisionMetric(), ContextRecallMetric()):
+            ms = await metric.score("q", "a", "gen", chunks, ["d1"])
+            assert ms.applicable is True

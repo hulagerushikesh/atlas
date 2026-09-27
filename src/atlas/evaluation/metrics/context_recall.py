@@ -15,7 +15,8 @@ Design rationale:
     generous — in practice one chunk from a long document may be sufficient
     for the generator to answer the question.
 
-    Zero relevant_doc_ids → score=1.0 (vacuously true: nothing to recall).
+    Zero relevant_doc_ids → score=1.0, marked inapplicable (vacuously true:
+    nothing to recall, so nothing measured either).
     This handles questions in the eval dataset that are intentionally
     out-of-scope or have no associated documents.
 
@@ -49,10 +50,15 @@ class ContextRecallMetric(BaseMetric):
         relevant_doc_ids: list[str],
     ) -> MetricScore:
         if not relevant_doc_ids:
+            # Vacuously perfect, and therefore not a measurement: an
+            # out-of-scope row hands the mean a free 1.0 that no retrieval
+            # earned. Kept at 1.0 so a stray reader does not see a failure,
+            # but excluded from the aggregate in both directions.
             return MetricScore(
                 metric_name=self.name,
                 score=1.0,
                 reasoning="No relevant documents specified; recall is vacuously 1.0.",
+                applicable=False,
             )
 
         relevant_set = set(relevant_doc_ids)

@@ -201,26 +201,37 @@ noise floor.
 
 ### Headline numbers
 
-| Metric | Run 1 | Relabelled | `top_k` 5 | **Deployed** | What it measures |
-|---|---|---|---|---|---|
-| Context precision | 0.309 | 0.416 | 0.431 | **0.302** | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.778 | 0.778 | **0.900** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
-| Faithfulness | 1.000 | 1.000 | 1.000 | **1.000** | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.832 | 0.825 | **0.819** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Metric | Run 1 | Relabelled | `top_k` 5 | `top_k` 15 | **Current** | What it measures |
+|---|---|---|---|---|---|---|
+| Context precision | 0.309 | 0.416 | 0.431 | 0.302 | **0.319** | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.778 | 0.778 | 0.900 | **0.933** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Faithfulness | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** | Fraction of answer claims the judge found grounded in the retrieved context |
+| Answer relevance | 0.815 | 0.832 | 0.825 | 0.819 | **0.825** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
-*15 questions, ~15k tokens and ≈₹0.3 per run, 55–155 s wall clock at
-concurrency 4. Retrieval metrics are deterministic run to run; the LLM-judged
-one moves by about 0.01. Directional signal at this sample size, not a
-confidence interval.*
+*15 questions, 44k tokens and ≈₹0.86 per run, 55–155 s wall clock at
+concurrency 4. Retrieval metrics are deterministic run to run — the identical
+config a day apart reproduced three of them to four decimal places — and the
+LLM-judged one moves by about 0.01. Directional signal at this sample size,
+not a confidence interval.*
+
+One of the fifteen questions (`fq-015`) has no relevant document in the
+corpus — the correct answer is a refusal. Its context scores are structurally
+meaningless (precision 0 whatever the retriever does, recall a free 1.0), so
+both are excluded from the means above rather than averaged in. Over the 14
+answerable rows the current figures are precision 0.341 and recall 0.929; the
+comparison against the previous column holds either way.
 
 The "Relabelled" column is the **same pipeline, same index**, re-run after
 reading the two misses that were labelling errors (below) and fixing the
 dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
 
-"Deployed" is what `atlas.hulage.in` serves today: `reranker.top_k = 15`
-against the Qdrant Cloud index. Recall is up 0.122 on the column before it,
-six times the 0.02 significance floor, and faithfulness did not move.
-`eval_data/reports/topk15_*.json`.
+"Current" is what `atlas.hulage.in` serves today: `reranker.top_k = 15`
+against the Qdrant Cloud index, with a retry that accumulates context instead
+of replacing it. Widening the window bought recall 0.778 → 0.900; fixing the
+retry bought 0.900 → 0.933, and unusually took precision *up* with it, because
+the union of both retrieval attempts is re-ranked against the original
+question before it is cut back to one window.
+`eval_data/reports/retry-union_20260927-113120.json`.
 
 **Replicated.** The identical config re-run a day later returned precision
 0.3022, recall 0.9000 and faithfulness 1.0000 — the same to four decimal

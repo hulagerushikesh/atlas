@@ -351,3 +351,75 @@ Format: date — decision — alternatives — reason.
   the question is `simple` and never decomposes. It was optimistic because it
   has no grader and therefore no retry. The harness measures the pipeline
   without the stage that did the damage.
+- **2026-09-27** — **The non-destructive retry is confirmed end to end: recall
+  0.900 → 0.933, and the two samples that moved are exactly the two that
+  retry.** Full eval on `eval_data/fastapi_dataset.json`, 15 samples, 44,224
+  tokens, ≈₹0.86, compared against the `topk15-clean` replication. Both runs
+  were served entirely by `gemini-3.1-flash-lite` (102 calls each), so the
+  comparison is clean in the sense the 2026-09-24 outage taught us to check.
+
+  | Metric | topk15-clean | retry-union | Delta |
+  |---|---|---|---|
+  | context_recall | 0.9000 | 0.9333 | **+0.0333** |
+  | context_precision | 0.3022 | 0.3185 | +0.0163 *(ns)* |
+  | faithfulness | 1.0000 | 1.0000 | tie |
+  | answer_relevance | 0.8277 | 0.8253 | tie |
+
+  Precision rising *with* recall is the part worth noting: every earlier
+  attempt to raise recall paid for it in precision. Here the union is
+  re-ranked against the original query before it is cut, so the extra chunks
+  are ordered rather than merely appended.
+
+  Only `fq-007` changed score, 0.500 → 1.000 recall, and the trace says why:
+
+  ```
+  classification=complex  sub_queries=3   → attempt 1 returns 41 chunks
+  retrieval_graded  score=0.3  sufficient=False
+  retrieval_retry   attempt=1 … attempt=2
+  retry_union_reranked  kept=41  union=53
+  pipeline_complete  chunks=41  retries=2
+  ```
+
+  At the baseline that 41-chunk decomposed window was **replaced** by a single
+  reformulated query's 15 chunks, which is where the missing half of the
+  recall went. `fq-015` shows the same signature (15 → 38 chunks, score
+  unchanged). No other sample retries and no other sample moved, which is the
+  cleanest attribution available: the fix touches only the retry path and only
+  the retry path changed.
+
+- **2026-09-27** — **`window` is the first attempt's width, and for a
+  decomposed query that is 41 chunks, not 15.** Found while explaining the
+  chunk counts above, not by reading the code. `_retrieve_all` fuses
+  `sub_queries × top_k` and never truncates, so "one window" means whatever
+  attempt one happened to return. The generator was handed 41 chunks for
+  `fq-007`; tokens for the run rose 37,599 → 44,224 (+18%), which is the whole
+  of the cost increase. This is the uncapped-merge backlog item, now with a
+  price on it. Capping it is its own experiment: the cap is also what would
+  have kept `fq-007` at 15 chunks and, on this evidence, at 0.5 recall.
+
+- **2026-09-27** — **Context precision and recall were scoring an out-of-scope
+  row.** `fq-015` has `relevant_doc_ids: []` — the row whose correct answer is
+  a refusal. Precision counted 0/38 and recall counted a free 1.0, and both
+  reached the mean. That is the same defect as the refusal-faithfulness one
+  fixed two days earlier, in two more metrics: the number describes the shape
+  of the dataset, not the behaviour of the pipeline. Both are now
+  `applicable=False`, so the reporter annotates them `over 14 of 15; 1 n/a`.
+  Corrected headlines, recomputed over the 14 answerable rows:
+
+  | Metric | baseline | retry-union | Delta |
+  |---|---|---|---|
+  | context_precision | 0.3238 | 0.3412 | +0.0174 *(ns)* |
+  | context_recall | 0.8929 | 0.9286 | **+0.0357** |
+
+  The verdict is unchanged under either rule, which is the point of writing
+  both down rather than silently restating the headline.
+
+- **2026-09-27** — **The comparator will happily compare two different
+  datasets.** The first run today used the default `sample_dataset.json` (30
+  HR questions) against a FastAPI corpus by forgetting `--dataset`. Every
+  sample was routed out of scope, retrieved 0 chunks and scored 0. The
+  comparator then printed a confident `Overall winner: A` against a 15-sample
+  FastAPI baseline. Cost of the mistake was small (8,341 tokens, ≈₹0.16) but
+  the report it produced was not obviously wrong at a glance — only the token
+  count gave it away. A comparison across datasets is meaningless and the
+  comparator should refuse it. Logged in BACKLOG.
