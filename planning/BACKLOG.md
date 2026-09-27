@@ -70,12 +70,24 @@ Newest at the bottom of each section.
   the case for a Rs.6.45 re-ingest. Free to fix, and every precision number in
   the README depends on these labels being right.
 
-- **Ship the context headers to the `default` namespace.** They live in the
-  `headers` namespace only, so the eval measures them and nothing serves them.
-  Shipping is a re-ingest of the live collection at ~Rs.6.45 — the same work
-  again, because a Qdrant collection cannot be renamed into place and the
-  embeddings would have to be rewritten regardless. Needs a Rs. go-ahead and
-  a note that it mutates what `atlas.hulage.in` serves.
+- **Ship the context headers to the `default` namespace — BLOCKED, user must
+  run it.** Cost approved 2026-09-27; the auto-mode classifier refused the
+  write to the live collection, correctly. Two steps, and the order matters:
+
+      cd <repo root> && .venv/bin/python scripts/ingest.py data/corpus/fastapi --namespace default
+      cd <repo root> && ./scripts/deploy_gcp.sh
+
+  **Re-ingest first, deploy second.** The BM25 index is baked into the image
+  (`Dockerfile:34`, `ATLAS_INDEX_DIR=/app/data/index`), so the ingest has to
+  rewrite `data/index/default/bm25_index.json` *before* the build copies it.
+  Between the two steps production runs headers in the dense index, which is
+  live the moment the ingest finishes, against the old sparse index — a
+  mismatched hybrid until the deploy lands.
+
+  Rollback without re-embedding is only partial: the pre-header BM25 file is
+  kept at `data/index-backup/bm25_index.json` (gitignored, and outside the
+  path the image bakes), but the dense vectors are overwritten in place. A
+  full revert is `CHUNK_CONTEXT_HEADERS=false` plus another ~Rs.6.45 ingest.
 
 ## Ideas (research-backed, see learning/09)
 
