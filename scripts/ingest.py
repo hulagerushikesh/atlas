@@ -52,6 +52,7 @@ def _build_indexer(settings, chunker_type: str | None, namespace: str):
         embedder=embedder,
         dense_index=QdrantDenseIndex(settings.qdrant, embedder.dimensions),
         sparse_index=BM25SparseIndex(persist_path=sparse_index_path(namespace)),
+        context_headers=settings.chunking.context_headers,
     )
 
 

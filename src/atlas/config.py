@@ -61,6 +61,11 @@ class ChunkingConfig(BaseSettings):
     strategy: Literal["fixed", "recursive", "semantic"] = "recursive"
     size: int = 512
     overlap: int = 64
+    # Prepend each chunk's source path and heading trail to its indexed text.
+    # A flag rather than unconditional because turning it off is the only way
+    # to reproduce a pre-2026-09-27 index, and because it changes every
+    # content_hash in the corpus — flipping it means paying for a re-ingest.
+    context_headers: bool = True
 
 
 class RetrievalConfig(BaseSettings):

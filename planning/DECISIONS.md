@@ -462,3 +462,66 @@ Format: date — decision — alternatives — reason.
   window (`grader.py:82`) is now doing much less damage than it was when it
   was logged, and the case for widening it is weaker, not stronger. Leave it;
   it stays a latency item and a low one.
+- **2026-09-27** — **Deterministic context headers are the largest single
+  quality gain of the milestone, and my stated mechanism for them was wrong.**
+  Every chunk's indexed text now opens with its source path in words and the
+  heading trail above it (`tutorial query params str validations` /
+  `Query Parameters and String Validations > Default values`). Re-ingested
+  into a separate `headers` namespace so the live collection was never
+  touched: 4,020 chunks, 488,690 embedding tokens, **Rs.6.45**, against a
+  Rs.6.42 estimate priced beforehand by chunking locally.
+
+  | Metric | merge-capped | ctx-headers | Delta |
+  |---|---|---|---|
+  | context_precision | 0.3762 | **0.4524** | **+0.0762** |
+  | context_recall | 0.9286 | **0.9643** | **+0.0357** |
+  | faithfulness | 1.0000 | 1.0000 | tie |
+  | answer_relevance | 0.8271 | 0.8328 | tie |
+  | tokens | 35,928 | 39,461 | +10% (Rs.0.70 → Rs.0.77) |
+
+  Both runs exclude `fq-015`, so this A/B needs no restating. Nine of fifteen
+  samples improved precision. **`fq-012` is recalled for the first time**,
+  0.000 → 1.000 — the last outright miss in the set.
+
+  **The mechanism was not the one I argued for.** I predicted BM25 would find
+  `fq-012` because the sparse tokenizer splits `/` and `-`, so the path would
+  index as tutorial, query, params, str, validations. Measured: the target's
+  BM25 rank went the *wrong* way, 11 → 15, and it stayed absent from the
+  top 15 in the cheap harness on both namespaces. The question is "Does
+  FastAPI require you to use Pydantic for input validation, or can you skip
+  it entirely?" — it shares essentially no vocabulary with that path, so a
+  path-token argument never applied to it. What recovered `fq-012` was the
+  full pipeline: decomposition and the now-additive retry reaching the page
+  the cheap harness never sees. I bought the re-ingest partly on a reason
+  that turned out not to hold, and it paid off for a different one.
+
+- **2026-09-27** — **The retrieval-only harness has now mispredicted four
+  times running, and this time in both directions at once.** On the `headers`
+  namespace it reported recall *down* 0.9286 → 0.8929 and `fq-012` still
+  missing. The full eval returned recall *up* to 0.9643 with `fq-012`
+  recalled. It has no grader, no retry and no decomposition, so for anything
+  a complex or retried query touches it is not a cheap approximation of the
+  pipeline — it is a measurement of a different system. Keep it for one job
+  only: asking whether a document is reachable at all by a single-shot
+  retrieval. Do not let it veto or justify a change.
+
+- **2026-09-27** — **This is a swap, and it is worth saying why it is not the
+  swap that got `retrieval.top_k` 40 rejected.** `fq-007` fell 1.000 → 0.500
+  recall while `fq-012` rose 0.000 → 1.000. On 2026-09-24 an aggregate gain
+  of the same shape was rejected because it hid `fq-005` **breaking
+  outright**, 1.0 → 0.0, and precision fell at an unchanged window. Here the
+  losing sample still retrieves one of its two labelled documents and its own
+  precision rises 0.400 → 0.733, the gaining sample goes from nothing to
+  complete, and precision rises on nine of fifteen. The rule that rejected 40
+  was "do not buy an aggregate with a broken question", and no question is
+  broken here.
+
+- **2026-09-27** — **`fq-012`'s label is too narrow and has been steering
+  spend.** Its ground truth spans plain type hints, `Query()`/`Path()`/`Body()`
+  with basic constraints, *and* the claim that Pydantic models are needed only
+  for nested bodies. That is at least three pages —
+  `tutorial/query-params`, `tutorial/query-params-str-validations` and
+  `tutorial/body` — and it is labelled with one. It has been called "the last
+  outright miss" in three sessions of planning and was part of the case for
+  this Rs.6.45 re-ingest. Same class as the two labelling errors the
+  "Relabelled" column already fixed. Relabel before quoting it again.

@@ -157,6 +157,7 @@ class NamespaceRegistry:
             embedder=s.embedder,
             dense_index=QdrantDenseIndex(qdrant_cfg, s.embedder.dimensions),
             sparse_index=sparse,
+            context_headers=cfg.chunking.context_headers,
         )
 
         return NamespaceComponents(pipeline=pipeline, indexer=indexer, sparse_index=sparse)

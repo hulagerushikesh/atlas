@@ -39,7 +39,7 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live x10.** Current (`top_k` 15, non-destructive retry, capped merge): P 0.376 - R 0.929 - F 1.000 - AR 0.827 over the 14 answerable rows, all on `gemini-3.1-flash-lite`, ~Rs.0.70 a run. **Replicated 2026-09-24** to four decimal places, so a delta past the 0.02 floor is a real change and not run-to-run noise. Out-of-scope rows are excluded from the context metrics as well as faithfulness. Reports carry per-stage p50/p95 and the model that served the run. Retrieval-only harness at ~Rs.0.01 for cheap rejection, but it has no grader and therefore no retry - it measures reachability, not what survives | `eval_data/reports/merge-capped_20260927-114923.json` |
+| Evaluation (D) | **Run live x11.** Best measured (`headers` namespace): P 0.452 - R 0.964 - F 1.000 - AR 0.833 over the 14 answerable rows, ~Rs.0.77 a run, all on `gemini-3.1-flash-lite`. Live `default` namespace is one change behind (P 0.376 - R 0.929). Out-of-scope rows excluded from the context metrics. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/ctx-headers_20260927-120939.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -59,35 +59,38 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Latency | p50 ≈7 s uncached (Gemini flash-lite, 5–7 LLM calls); <1 ms cache hit; reranker cold start +5 s |
 | Cost | ≈₹0.03 per uncached query; ≈₹1.5 per 15-sample eval |
 
-## Measured (2026-09-27, `top_k` 15, non-destructive retry + capped merge)
+## Measured (2026-09-27, `top_k` 15, additive retry + capped merge + context headers)
 
 Context metrics are over the **14 answerable rows**; `fq-015` has no relevant
 document, so its precision is a structural 0.0 and its recall a free 1.0 and
-both are excluded. The two earlier columns are restated on the same basis.
+both are excluded. Earlier columns are restated on the same basis.
 
-| Metric | 2026-09-24 | retry fix | **capped merge** |
-|---|---|---|---|
-| Context precision | 0.3238 | 0.3412 | **0.3762** |
-| Context recall | 0.8929 | 0.9286 | **0.9286** |
-| Faithfulness | 1.0000 | 1.0000 | **1.0000** |
-| Answer relevance | 0.8277 | 0.8253 | **0.8271** |
-| Tokens / eval | 37,599 | 44,224 | **35,928** |
-| Cost / eval | ~Rs.0.73 | ~Rs.0.86 | **~Rs.0.70** |
-| Latency p50 | 15.0 s | 11.0 s | **10.0 s** |
+| Metric | 09-24 | retry fix | capped merge | **+ headers** |
+|---|---|---|---|---|
+| Context precision | 0.3238 | 0.3412 | 0.3762 | **0.4524** |
+| Context recall | 0.8929 | 0.9286 | 0.9286 | **0.9643** |
+| Faithfulness | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
+| Answer relevance | 0.8277 | 0.8253 | 0.8271 | **0.8328** |
+| Tokens / eval | 37,599 | 44,224 | 35,928 | **39,461** |
+| Cost / eval | ~Rs.0.73 | ~Rs.0.86 | ~Rs.0.70 | **~Rs.0.77** |
+| Latency p50 | 15.0 s | 11.0 s | 10.0 s | **9.7 s** |
 
-All three runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
-changes in the pipeline and not in the model. The retry fix bought recall
-(+0.036); the merge cap bought precision (+0.035) and gave the tokens back.
-Every sample now returns exactly 15 chunks.
+All four runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
+changes in the pipeline and not in the model. Precision has risen 0.324 →
+0.452 and recall 0.893 → 0.964 across the day, on three changes measured one
+at a time.
 
-`fq-012` is the only outright miss left: its target page,
-`tutorial/query-params-str-validations`, is never retrieved at all. That is a
-representation problem, not a ranking one, and no amount of reordering will
-reach it.
+**`fq-012` is recalled for the first time** (0.000 → 1.000), which removes the
+last outright miss. `fq-007` fell 1.000 → 0.500 in the same run while its own
+precision rose 0.400 → 0.733 — a swap, but not the kind that got
+`retrieval.top_k` 40 rejected, because no question broke outright.
+
+**The headers are not deployed and not even in the default namespace.** They
+were ingested into `headers` so the live collection was never touched;
+shipping them is another ~Rs.6.45 re-ingest. See BACKLOG.
 
 The "~7 s" in older notes is from 2026-09-20, measured differently, and is not
-a baseline this can be diffed against. Latency is six sequential LLM round
-trips; reducing it means removing a call, not narrowing the window.
+a baseline this can be diffed against.
 
 ## Known defects
 
@@ -174,15 +177,22 @@ daily spend cap, console markdown.
   `chunks[:5]` of 15, but once the top five are ranked against the original
   question it stopped mis-grading: `fq-007` went from three grader calls to
   one. It is a small latency item now, not a quality one.
-- **Deterministic chunk headers (~₹10, embeddings only, no LLM).** Prepend the
-  source path and section heading to each chunk's indexed text. Needs a
-  re-ingest of 4,020 chunks. Motivated now by `fq-012` alone — the page is
-  never retrieved at all, which is a representation problem and not a ranking
-  one.
+- ~~Deterministic chunk headers~~ **built and measured 2026-09-27, not
+  shipped.** Source path in words plus the heading trail, prepended to each
+  chunk's indexed text. Re-ingested into a `headers` namespace for Rs.6.45
+  (priced at Rs.6.42 beforehand by chunking locally). Precision 0.3762 →
+  0.4524 and recall 0.9286 → 0.9643 — the largest single gain of the
+  milestone — and `fq-012` is recalled for the first time. **Shipping it to
+  the live namespace is another ~Rs.6.45 re-ingest and needs a go-ahead.**
+  Note the reasoning that motivated it was wrong: BM25's rank for `fq-012`
+  got *worse*, 11 → 15, and what recovered the page was decomposition plus
+  the additive retry. See DECISIONS.
+- **Relabel `fq-012` (free).** Its ground truth spans three pages and it is
+  labelled with one. It has been quoted as the last outright miss for three
+  sessions.
 - LLM-written contextual headers — **re-price before starting.** The ~₹15
   figure in earlier notes does not survive arithmetic: 4,020 chunks x ~2.5k
   input tokens is ~10M tokens, nearer ₹200 without prompt caching.
-- `fq-012` is the last outright miss.
 
 ## Earlier plan (M3 as opened)
 
