@@ -39,7 +39,7 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live x11.** Best measured (`headers` namespace): P 0.467 - R 0.938 - F 1.000 - AR 0.833 over all 15 rows, ~Rs.0.77 a run, all on `gemini-3.1-flash-lite`. Live `default` namespace is one change behind (P 0.387 - R 0.933). Context metrics skip a row only when it has no relevant document, and after the 2026-09-27 audit no row does. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/ctx-headers_20260927-120939.json` |
+| Evaluation (D) | **Run live x11.** Best measured (`headers` namespace): P 0.467 - R 0.938 - F 1.000 - AR 0.833 over all 15 rows, ~Rs.0.77 a run, all on `gemini-3.1-flash-lite`. Live `default` namespace is one change behind (P 0.387 - R 0.933). Context metrics skip a row only when it has no relevant document, and after the 2026-09-27 audit no row does. The dataset is checked before a run is paid for (`atlas.evaluation.dataset`): every label must resolve to something the matcher could match, and an empty label set must carry `metadata.out_of_scope: true`. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/ctx-headers_20260927-120939.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -215,6 +215,13 @@ daily spend cap, console markdown.
   and the "`fq-012` recalled for the first time" headline were both artifacts
   of that sample's one-document label. Precision is what it actually bought.
   See DECISIONS.
+- ~~Dataset loader guards~~ **done 2026-09-27.** `atlas.evaluation.dataset`
+  refuses a dataset whose labels resolve to nothing, or whose empty label set
+  nobody declared, before `run_eval.py` builds the pipeline — so the fault
+  whose only symptom is a report full of plausible zeros now costs Rs.0 to
+  find. Caught one on its first run (`oos-001` in the HR sample set, real but
+  undeclared). Does not catch an incomplete label set or an unsupported
+  answer; those still need reading.
 - ~~Relabel `fq-012`~~ **done 2026-09-27**, and then the whole set was
   audited the same way: read each reference answer's claims back against the
   corpus, `grep` for each one. Nine of fifteen rows needed something —

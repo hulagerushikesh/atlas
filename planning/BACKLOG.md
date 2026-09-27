@@ -86,13 +86,26 @@ Newest at the bottom of each section.
   the denominator of every aggregate, so do it at a milestone boundary, not
   mid-comparison.
 
-- **Guard against the fault the audit found, in the dataset loader.** Two
-  cheap checks, both offline: every `relevant_doc_ids` entry must resolve to
-  a file in the corpus (catches a typo or a moved page silently scoring 0),
-  and a row whose `relevant_doc_ids` is empty must say so deliberately rather
-  than by omission. Neither catches an under-labelled row — only reading does
-  — but both catch the mechanical half, and a dataset that fails them should
-  fail loudly before a run is paid for.
+- ~~Guard against the fault the audit found, in the dataset loader.~~
+  **done 2026-09-27**, `atlas.evaluation.dataset`. Every label must resolve to
+  something `doc_match` could actually match — the checker builds its key set
+  the same way the matcher does, so the two cannot drift — and a row with an
+  empty `relevant_doc_ids` must carry `metadata.out_of_scope: true`.
+  `category: "out_of_scope"` deliberately does not count: `fq-015` carried
+  exactly that string while being answerable, so the category was the thing
+  that was wrong. `EvalDataset` gained a `corpus_root` field so a dataset says
+  what its paths are relative to; without one the resolution check is skipped
+  and says so, because skipping quietly is how this survives. Wired into
+  `run_eval.py` (before the pipeline is built, so a broken dataset costs
+  nothing), `eval_retrieval.py` and `replay_context_metrics.py`; override with
+  `--corpus`, bypass with `--allow-broken-dataset`.
+
+  It found one on the first run: `oos-001` in `sample_dataset.json` was
+  genuinely out of scope and had never said so. Declared.
+
+  Still not caught, and still needs a person: a label set that is *incomplete*
+  (`fq-012` named one real page of five) and a reference answer that names
+  things the corpus lacks (`fq-010`). Both resolve fine.
 
 - **Add a correctness metric, or say in the README that there isn't one.**
   `ground_truth_answer` is passed to every metric by `runner.py:171` and read

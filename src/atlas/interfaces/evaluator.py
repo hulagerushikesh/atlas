@@ -30,6 +30,16 @@ class EvalSample(BaseModel):
     question: str
     ground_truth_answer: str
     relevant_doc_ids: list[str]  # used for context_recall computation
+    # Free-form, but two keys are load-bearing and checked by
+    # atlas.evaluation.dataset:
+    #   out_of_scope: bool  — required when relevant_doc_ids is empty, because
+    #       an empty list silently removes the row from both context
+    #       aggregates. `category: "out_of_scope"` does not count: fq-015
+    #       carried exactly that string while being fully answerable from
+    #       advanced/websockets.md, so the category was the thing that was
+    #       wrong. The flag has to be a separate, deliberate act.
+    #   label_rationale: str — why this row's labels are what they are, for
+    #       rows where that was decided rather than obvious.
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -39,6 +49,14 @@ class EvalDataset(BaseModel):
     name: str
     description: str = ""
     samples: list[EvalSample]
+    # `relevant_doc_ids` are corpus-relative paths, and until this field
+    # existed the dataset never said relative to *what* — so a label naming a
+    # page that had been renamed, or never existed, scored 0.0 exactly like a
+    # retrieval failure and was indistinguishable from one. Naming the corpus
+    # here lets atlas.evaluation.dataset check every label resolves before a
+    # run is paid for. Optional because a dataset may be written against a
+    # corpus that is not on this machine; the check is skipped then, loudly.
+    corpus_root: str | None = None
 
 
 class MetricScore(BaseModel):

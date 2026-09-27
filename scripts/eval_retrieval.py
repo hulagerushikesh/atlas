@@ -35,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents  # noqa: E402
 from atlas.config import get_settings  # noqa: E402
+from atlas.evaluation.dataset import DatasetError, load_dataset  # noqa: E402
 from atlas.evaluation.doc_match import chunk_matches, recalled_ids  # noqa: E402
 from atlas.evaluation.overrides import apply_overrides, parse_override  # noqa: E402
 
@@ -66,7 +67,14 @@ async def main() -> int:
 
     registry = NamespaceRegistry(SharedComponents(settings))
     retriever = registry.get(args.namespace).pipeline._retriever
-    samples = json.loads(Path(args.dataset).read_text())["samples"]
+    try:
+        dataset, notes = load_dataset(Path(args.dataset))
+    except DatasetError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    for note in notes:
+        print(f"Warning: {note}", file=sys.stderr)
+    samples = [s.model_dump() for s in dataset.samples]
 
     precisions: list[float] = []
     recalls: list[float] = []

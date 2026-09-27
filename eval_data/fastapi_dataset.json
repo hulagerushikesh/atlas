@@ -1,6 +1,7 @@
 {
   "name": "fastapi_docs_v1",
   "description": "15 developer questions over the FastAPI official documentation (MIT license). Covers simple factual, multi-hop, negation constraint and partial scope categories. relevant_doc_ids are corpus-relative paths without extension (see atlas.evaluation.doc_match). Every row was read back against the corpus on 2026-09-27: each claim a ground_truth_answer makes must be findable on a labelled page, and no labelled page may be there without a claim resting on it. metadata.label_rationale records the outcome wherever that audit changed something. The set has no genuinely out-of-scope row -- see planning/BACKLOG.md.",
+  "corpus_root": "data/corpus/fastapi",
   "samples": [
     {
       "id": "fq-001",
