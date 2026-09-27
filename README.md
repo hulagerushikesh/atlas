@@ -203,12 +203,12 @@ noise floor.
 
 | Metric | Run 1 | Relabelled | `top_k` 5 | `top_k` 15 | **Current** | What it measures |
 |---|---|---|---|---|---|---|
-| Context precision | 0.309 | 0.416 | 0.431 | 0.302 | **0.319** | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.778 | 0.778 | 0.900 | **0.933** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Context precision | 0.309 | 0.416 | 0.431 | 0.302 | **0.376** | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.778 | 0.778 | 0.900 | **0.929** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
 | Faithfulness | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.832 | 0.825 | 0.819 | **0.825** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Answer relevance | 0.815 | 0.832 | 0.825 | 0.819 | **0.827** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
 
-*15 questions, 44k tokens and ≈₹0.86 per run, 55–155 s wall clock at
+*15 questions, 36k tokens and ≈₹0.70 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run — the identical
 config a day apart reproduced three of them to four decimal places — and the
 LLM-judged one moves by about 0.01. Directional signal at this sample size,
@@ -217,21 +217,37 @@ not a confidence interval.*
 One of the fifteen questions (`fq-015`) has no relevant document in the
 corpus — the correct answer is a refusal. Its context scores are structurally
 meaningless (precision 0 whatever the retriever does, recall a free 1.0), so
-both are excluded from the means above rather than averaged in. Over the 14
-answerable rows the current figures are precision 0.341 and recall 0.929; the
-comparison against the previous column holds either way.
+the **Current** column excludes it from both. The four columns before it do
+not, which is worth knowing before reading the row as a trend: on the same
+14-row basis the previous column is precision 0.324 and recall 0.893.
 
 The "Relabelled" column is the **same pipeline, same index**, re-run after
 reading the two misses that were labelling errors (below) and fixing the
 dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
 
-"Current" is what `atlas.hulage.in` serves today: `reranker.top_k = 15`
-against the Qdrant Cloud index, with a retry that accumulates context instead
-of replacing it. Widening the window bought recall 0.778 → 0.900; fixing the
-retry bought 0.900 → 0.933, and unusually took precision *up* with it, because
-the union of both retrieval attempts is re-ranked against the original
-question before it is cut back to one window.
-`eval_data/reports/retry-union_20260927-113120.json`.
+"Current" is `main` as it stands: `reranker.top_k = 15` against the Qdrant
+Cloud index, with a retry that accumulates context instead of replacing it
+and a sub-query merge that is cut back to one window. The last two are not on
+`atlas.hulage.in` yet — the live revision predates them and a deploy is a
+manual step. Three changes, measured one at a time, each against the run
+before it:
+
+- **Widening the window** (`reranker.top_k` 5 → 15) bought recall
+  0.778 → 0.900 and cost precision, which at one labelled document per
+  question is mostly a denominator effect.
+- **Making the retry additive** bought recall 0.893 → 0.929 on the 14-row
+  basis, and took precision *up* with it. A retry used to replace the window
+  it had, so a grader that wrongly called a window insufficient destroyed
+  documents already retrieved.
+- **Capping the sub-query merge** bought precision 0.341 → 0.376 at
+  identical recall, and gave back 19% of the tokens. A decomposed question
+  had been handing the generator `sub_queries × top_k` chunks — 41 for one
+  sample against a configured window of 15.
+
+Both of the last two re-rank against the *original* question rather than a
+sub-query or a reformulation, because those scores are each relative to a
+different question and cannot be interleaved as they stand.
+`eval_data/reports/merge-capped_20260927-114923.json`.
 
 **Replicated.** The identical config re-run a day later returned precision
 0.3022, recall 0.9000 and faithfulness 1.0000 — the same to four decimal

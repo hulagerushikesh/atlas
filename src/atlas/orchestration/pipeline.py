@@ -27,10 +27,13 @@ Design rationale:
     harness can inspect intermediate state (e.g. which reformulation fired,
     what the grader score was) without re-running the pipeline.
 
-    Deduplication after sub-query retrieval: the same chunk can surface in
-    multiple sub-query results. We deduplicate by chunk_id before grading and
+    Merging after sub-query retrieval: the same chunk can surface in multiple
+    sub-query results. We deduplicate by chunk_id before grading and
     generation to avoid inflating context with repeated text — which confuses
-    the generator's citation numbering.
+    the generator's citation numbering. The merge is round-robin across
+    sub-queries and then cut back to one window, because concatenating them
+    meant a decomposed question handed the generator `sub_queries x top_k`
+    chunks and buried every sub-question after the first.
 
     The retriever dependency is typed as a protocol-like duck type via
     HybridRetriever, but any object with a compatible retrieve() method works.
@@ -266,7 +269,7 @@ class RAGPipeline:
 
         while True:
             t0 = time.perf_counter()
-            retrieval = await self._retrieve_all(current_queries)
+            retrieval = await self._retrieve_all(current_queries, original_query)
             stage_ms["retrieval"] = stage_ms.get("retrieval", 0.0) + _elapsed_ms(t0)
             window = window or len(retrieval.chunks)
             for chunk in retrieval.chunks:
@@ -323,20 +326,67 @@ class RAGPipeline:
         logger.info("retry_union_reranked", union=len(union), kept=len(merged))
         return RetrievalPass(chunks=merged, evidence=latest.evidence)
 
-    async def _retrieve_all(self, queries: list[str]) -> RetrievalPass:
-        """Retrieve for each sub-query concurrently, deduplicate by chunk_id."""
+    async def _retrieve_all(self, queries: list[str], original_query: str) -> RetrievalPass:
+        """Retrieve for each sub-query concurrently, deduplicate, cut to one window.
+
+        Before the cut existed, a decomposed question handed the generator
+        `sub_queries x top_k` chunks: `fq-007` sent 41 and `fq-013` 30, against
+        a configured window of 15. That is not a wider window on purpose, it is
+        the absence of a decision about what a window means once a query has
+        been split.
+        """
         # Each call returns a HybridRetrievalResult (or duck-typed equivalent)
         results = await asyncio.gather(
             *[self._retriever.retrieve(q) for q in queries]
         )
+
+        # One window is what a single sub-query returns. Taking it from the
+        # results rather than from config keeps the two in step when a
+        # retriever returns fewer chunks than it was asked for.
+        window = max((len(r.chunks) for r in results), default=0)
+
+        # Round-robin across sub-queries rather than concatenating them. The
+        # old order was every chunk of sub-query one, then whatever sub-query
+        # two added, so a cut at `window` could delete the third sub-question
+        # outright — and even uncut it put the best chunk for sub-question two
+        # below the worst chunk for sub-question one, which is the position
+        # lost-in-the-middle says is worst.
         seen: set[str] = set()
         merged: list[RetrievedChunk] = []
-        for result in results:
-            for chunk in result.chunks:
+        for rank in range(window):
+            for result in results:
+                if rank >= len(result.chunks):
+                    continue
+                chunk = result.chunks[rank]
                 if chunk.chunk_id not in seen:
                     seen.add(chunk.chunk_id)
                     merged.append(chunk)
-        return RetrievalPass(chunks=merged, evidence=_collect_evidence(results, seen))
+
+        if len(merged) > window:
+            found = len(merged)
+            if self._reranker is None:
+                # Interleaved order is the only ranking available, and it is
+                # at least fair across sub-questions.
+                merged = merged[:window]
+            else:
+                # Scored against the original question, not the sub-queries:
+                # each sub-query's scores are relative to a different question,
+                # so the lists cannot be interleaved on score as they stand,
+                # and the caller's question is the only one all of them can be
+                # compared on. The risk this buys is that a chunk answering one
+                # narrow facet ranks low against the broad original — which is
+                # why this shipped behind a measurement rather than a guess.
+                merged = await self._reranker.rerank(original_query, merged, window)
+            logger.info(
+                "subquery_merge_capped",
+                queries=len(queries),
+                found=found,
+                kept=len(merged),
+                reranked=self._reranker is not None,
+            )
+
+        kept = {c.chunk_id for c in merged}
+        return RetrievalPass(chunks=merged, evidence=_collect_evidence(results, kept))
 
 
 def _elapsed_ms(t0: float) -> float:

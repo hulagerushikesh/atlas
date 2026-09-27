@@ -39,7 +39,7 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live x9.** Current (`top_k` 15, non-destructive retry): P 0.319 - R **0.933** - F 1.000 - AR 0.825, all on `gemini-3.1-flash-lite`. **Replicated 2026-09-24** to four decimal places, so a delta past the 0.02 floor is a real change and not run-to-run noise. Out-of-scope rows are now excluded from the context metrics as well as faithfulness. Reports carry per-stage p50/p95 and the model that served the run. Retrieval-only harness at ~Rs.0.01 for cheap rejection, but it has no grader and therefore no retry - it measures reachability, not what survives | `eval_data/reports/retry-union_20260927-113120.json` |
+| Evaluation (D) | **Run live x10.** Current (`top_k` 15, non-destructive retry, capped merge): P 0.376 - R 0.929 - F 1.000 - AR 0.827 over the 14 answerable rows, all on `gemini-3.1-flash-lite`, ~Rs.0.70 a run. **Replicated 2026-09-24** to four decimal places, so a delta past the 0.02 floor is a real change and not run-to-run noise. Out-of-scope rows are excluded from the context metrics as well as faithfulness. Reports carry per-stage p50/p95 and the model that served the run. Retrieval-only harness at ~Rs.0.01 for cheap rejection, but it has no grader and therefore no retry - it measures reachability, not what survives | `eval_data/reports/merge-capped_20260927-114923.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -59,27 +59,31 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Latency | p50 ≈7 s uncached (Gemini flash-lite, 5–7 LLM calls); <1 ms cache hit; reranker cold start +5 s |
 | Cost | ≈₹0.03 per uncached query; ≈₹1.5 per 15-sample eval |
 
-## Measured (2026-09-27, `top_k` 15, non-destructive retry)
+## Measured (2026-09-27, `top_k` 15, non-destructive retry + capped merge)
 
-| Metric | Value | vs 2026-09-24 |
-|---|---|---|
-| Context precision | 0.3185 (0.3412 over the 14 answerable rows) | +0.0163 *(ns)* |
-| Context recall | **0.9333** (0.9286 over 14) | **+0.0333** |
-| Faithfulness | 1.0000 | tie |
-| Answer relevance | 0.8253 | tie |
-| Model | `gemini-3.1-flash-lite`, 102 calls, no fallback | same as baseline |
-| Latency | p50 11.0 s / p95 18.6 s per sample; slowest stage is retrieval (3.0 s p50, 6.5 s p95) now that a retried query re-ranks its union | — |
-| Cost | ~Rs.0.085 per uncached query; **~Rs.0.86** per 15-sample eval (44.2k tokens, up from 37.6k) | +18% tokens |
+Context metrics are over the **14 answerable rows**; `fq-015` has no relevant
+document, so its precision is a structural 0.0 and its recall a free 1.0 and
+both are excluded. The two earlier columns are restated on the same basis.
 
-`fq-012` is the only outright miss left; `fq-007` went 0.5 → 1.0 recall and is
-the sample the retry fix was for. The token rise is entirely the uncapped
-sub-query merge: `fq-007` is decomposed into three sub-queries, so its window
-is 41 chunks rather than 15.
+| Metric | 2026-09-24 | retry fix | **capped merge** |
+|---|---|---|---|
+| Context precision | 0.3238 | 0.3412 | **0.3762** |
+| Context recall | 0.8929 | 0.9286 | **0.9286** |
+| Faithfulness | 1.0000 | 1.0000 | **1.0000** |
+| Answer relevance | 0.8277 | 0.8253 | **0.8271** |
+| Tokens / eval | 37,599 | 44,224 | **35,928** |
+| Cost / eval | ~Rs.0.73 | ~Rs.0.86 | **~Rs.0.70** |
+| Latency p50 | 15.0 s | 11.0 s | **10.0 s** |
 
-Both context metrics now exclude `fq-015`, which has no relevant documents —
-its precision was a structural 0.0 and its recall a free 1.0, and both were
-reaching the mean. The corrected figures are in the table above; the verdict
-is the same under either rule.
+All three runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
+changes in the pipeline and not in the model. The retry fix bought recall
+(+0.036); the merge cap bought precision (+0.035) and gave the tokens back.
+Every sample now returns exactly 15 chunks.
+
+`fq-012` is the only outright miss left: its target page,
+`tutorial/query-params-str-validations`, is never retrieved at all. That is a
+representation problem, not a ranking one, and no amount of reordering will
+reach it.
 
 The "~7 s" in older notes is from 2026-09-20, measured differently, and is not
 a baseline this can be diffed against. Latency is six sequential LLM round
@@ -161,17 +165,15 @@ daily spend cap, console markdown.
   was a retry that replaced context instead of adding to it — fixed in
   `68e1810` and **confirmed 2026-09-27**: recall 0.9000 → 0.9333, precision
   also up, only the retrying samples moved.
-- **Cap and globally rerank the sub-query merge — next, and now priced.**
-  `_retrieve_all` never truncates, so `window` is whatever attempt one
-  returned: 41 chunks for `fq-007`, which is +18% tokens on the run
-  (37,599 → 44,224, ₹0.73 → ₹0.86). But the cap is also what would hold
-  `fq-007` back to 15 chunks and, on today's evidence, to 0.5 recall — so this
-  is a real trade, not a cleanup. Cap **and** rerank across sub-queries
-  together, in one eval (₹0.86).
-- **Grader window** — `grader.py:82` still grades `chunks[:5]` of a 15-slot
-  window. No longer a correctness bug now that a retry cannot discard context;
-  it is a wasted round trip. Grading all 15 triples that prompt, so top-10 is
-  probably the trade. Needs its own eval.
+- ~~Cap and globally rerank the sub-query merge~~ **shipped 2026-09-27.**
+  Round-robin across sub-queries, then cut to one window re-ranked against the
+  original question. Precision 0.3412 → 0.3762, recall unchanged at 0.9286,
+  tokens 44,224 → 35,928 (Rs.0.86 → Rs.0.70). The predicted risk — that the cap
+  would take `fq-007` back to 0.5 recall — did not happen.
+- ~~Grader window~~ **de-prioritised 2026-09-27.** `grader.py:82` still grades
+  `chunks[:5]` of 15, but once the top five are ranked against the original
+  question it stopped mis-grading: `fq-007` went from three grader calls to
+  one. It is a small latency item now, not a quality one.
 - **Deterministic chunk headers (~₹10, embeddings only, no LLM).** Prepend the
   source path and section heading to each chunk's indexed text. Needs a
   re-ingest of 4,020 chunks. Motivated now by `fq-012` alone — the page is
