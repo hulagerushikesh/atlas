@@ -54,6 +54,11 @@ class ContextRecallMetric(BaseMetric):
             # out-of-scope row hands the mean a free 1.0 that no retrieval
             # earned. Kept at 1.0 so a stray reader does not see a failure,
             # but excluded from the aggregate in both directions.
+            #
+            # As with the same guard in context_precision, no row in the
+            # FastAPI set reaches this any more: `fq-015` was relabelled on
+            # 2026-09-27 once `advanced/websockets.md` turned out to be in the
+            # corpus. Kept for datasets that do carry an unanswerable row.
             return MetricScore(
                 metric_name=self.name,
                 score=1.0,

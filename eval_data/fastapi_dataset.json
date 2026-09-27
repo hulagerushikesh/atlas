@@ -1,6 +1,6 @@
 {
   "name": "fastapi_docs_v1",
-  "description": "15 developer questions over the FastAPI official documentation (MIT license). Covers simple factual, multi-hop, negation constraint, and out-of-scope categories. relevant_doc_ids are corpus-relative paths without extension (see atlas.evaluation.doc_match).",
+  "description": "15 developer questions over the FastAPI official documentation (MIT license). Covers simple factual, multi-hop, negation constraint and partial scope categories. relevant_doc_ids are corpus-relative paths without extension (see atlas.evaluation.doc_match). Every row was read back against the corpus on 2026-09-27: each claim a ground_truth_answer makes must be findable on a labelled page, and no labelled page may be there without a claim resting on it. metadata.label_rationale records the outcome wherever that audit changed something. The set has no genuinely out-of-scope row -- see planning/BACKLOG.md.",
   "samples": [
     {
       "id": "fq-001",
@@ -29,37 +29,40 @@
     {
       "id": "fq-003",
       "question": "How do you make a query parameter optional with a default value in FastAPI?",
-      "ground_truth_answer": "Declare the function argument with a default value, for example: def read_items(skip: int = 0, limit: int = 10). FastAPI treats any function argument not in the path as an optional query parameter when a default is provided. You can also use Optional[str] = None for nullable parameters.",
+      "ground_truth_answer": "Declare the function argument with a default value, for example: def read_items(skip: int = 0, limit: int = 10). FastAPI treats any function argument not in the path as an optional query parameter when a default is provided. You can also write str | None = None for nullable parameters, which the docs cover under \"Optional parameters\".",
       "relevant_doc_ids": [
         "tutorial/query-params"
       ],
       "metadata": {
         "category": "simple_factual",
-        "difficulty": "easy"
+        "difficulty": "easy",
+        "label_rationale": "Label correct: tutorial/query-params carries both the default-value rule and the Optional parameters section. Answer reworded 2026-09-27 -- it said Optional[str] = None, a spelling that occurs nowhere on that page."
       }
     },
     {
       "id": "fq-004",
       "question": "What decorator do you use to define a POST endpoint in FastAPI?",
-      "ground_truth_answer": "Use the @app.post() decorator to define a POST endpoint. For example: @app.post('/items/'). The router equivalents are @router.post().",
+      "ground_truth_answer": "Use the @app.post() decorator to define a POST endpoint. For example: @app.post('/items/'). It is one of the operation decorators FastAPI lists alongside @app.get(), @app.put() and @app.delete().",
       "relevant_doc_ids": [
         "tutorial/first-steps"
       ],
       "metadata": {
         "category": "simple_factual",
-        "difficulty": "easy"
+        "difficulty": "easy",
+        "label_rationale": "Label correct: tutorial/first-steps lists the operation decorators. Answer trimmed 2026-09-27 -- it claimed 'the router equivalents are @router.post()', and the string router.post occurs nowhere in the corpus (only @router.get, on tutorial/bigger-applications, which is not the subject of this question)."
       }
     },
     {
       "id": "fq-005",
       "question": "How does FastAPI validate request body data?",
-      "ground_truth_answer": "FastAPI uses Pydantic models for request body validation. You declare a class that inherits from BaseModel with typed fields, then use it as a type annotation on the endpoint function parameter. FastAPI automatically parses the JSON body, validates types and constraints, and returns a 422 Unprocessable Entity error with details if validation fails.",
+      "ground_truth_answer": "FastAPI uses Pydantic models for request body validation. You declare a class that inherits from BaseModel with typed fields, then use it as a type annotation on the endpoint function parameter. FastAPI reads the body as JSON, converts and validates the types, and if the data is invalid returns a clear error stating exactly where and what the incorrect data was.",
       "relevant_doc_ids": [
         "tutorial/body"
       ],
       "metadata": {
         "category": "simple_factual",
-        "difficulty": "medium"
+        "difficulty": "medium",
+        "label_rationale": "Label correct: tutorial/body carries the BaseModel declaration and the parse/validate/error behaviour. Answer reworded 2026-09-27 -- it named a '422 Unprocessable Entity' status that appears nowhere on that page (422 occurs only in release-notes.md and advanced/additional-responses.md)."
       }
     },
     {
@@ -67,11 +70,13 @@
       "question": "What is dependency injection in FastAPI and how do you use it?",
       "ground_truth_answer": "Dependency injection in FastAPI is done via the Depends() function. You define a callable (function or class) that returns some resource, then declare it as a default argument using Depends(your_dependency). FastAPI resolves and injects dependencies automatically, supporting sub-dependencies, async dependencies, and yield-based cleanup.",
       "relevant_doc_ids": [
-        "tutorial/dependencies/index"
+        "tutorial/dependencies/index",
+        "tutorial/dependencies/dependencies-with-yield"
       ],
       "metadata": {
         "category": "simple_factual",
-        "difficulty": "medium"
+        "difficulty": "medium",
+        "label_rationale": "Widened 2026-09-27. tutorial/dependencies/index carries Depends(), async dependencies and the statement that sub-dependencies are supported, so those claims need no extra page. It contains the string 'yield' zero times, and the answer promises yield-based cleanup, which is a page of its own."
       }
     },
     {
@@ -79,12 +84,14 @@
       "question": "How do you add authentication and then use the current user in a protected endpoint?",
       "ground_truth_answer": "Define an OAuth2PasswordBearer scheme and a get_current_user dependency that reads the token. In the protected endpoint, add current_user: User = Depends(get_current_user). FastAPI will call get_current_user on every request, decode the JWT or validate the token, and inject the resulting User object into the handler.",
       "relevant_doc_ids": [
+        "tutorial/security/first-steps",
         "tutorial/security/get-current-user",
         "tutorial/security/oauth2-jwt"
       ],
       "metadata": {
         "category": "multi_hop",
-        "difficulty": "hard"
+        "difficulty": "hard",
+        "label_rationale": "Widened 2026-09-27. OAuth2PasswordBearer appears on neither previously labelled page -- get-current-user refers back to 'the same oauth2_scheme we created before', and before is tutorial/security/first-steps. The Depends(get_current_user) claim is on get-current-user and the decode-and-verify claim on oauth2-jwt, so all three are load-bearing."
       }
     },
     {
@@ -93,24 +100,25 @@
       "ground_truth_answer": "Use StreamingResponse with a generator function. Define an async generator that yields chunks of the file, wrap it in StreamingResponse(generator(), media_type='application/octet-stream'), and FastAPI will stream the response without buffering the entire content in memory.",
       "relevant_doc_ids": [
         "advanced/stream-data",
-        "advanced/custom-response",
-        "tutorial/stream-json-lines"
+        "advanced/custom-response"
       ],
       "metadata": {
         "category": "multi_hop",
-        "difficulty": "hard"
+        "difficulty": "hard",
+        "label_rationale": "Narrowed 2026-09-27. tutorial/stream-json-lines was required and supports nothing the answer claims -- it contains no StreamingResponse, no Response and no media_type; it is a conceptual page about what a stream is and what JSON Lines are. The StreamingResponse-with-generator claim lives on advanced/stream-data and advanced/custom-response."
       }
     },
     {
       "id": "fq-009",
       "question": "How do you run startup and shutdown logic in a FastAPI application?",
-      "ground_truth_answer": "Use the lifespan context manager with @asynccontextmanager. Define an async function that yields after startup logic; code after yield runs on shutdown. Pass it as the lifespan parameter to FastAPI(). The older @app.on_event('startup') and @app.on_event('shutdown') decorators still work but are deprecated in favour of lifespan.",
+      "ground_truth_answer": "Use the lifespan context manager. Define an async function decorated with @asynccontextmanager that yields after the startup logic; code after the yield runs on shutdown. Pass it as the lifespan parameter to FastAPI(). The older startup and shutdown event handlers still work, but the docs mark them deprecated and warn that supplying lifespan stops them being called at all -- it is all lifespan or all events, not both.",
       "relevant_doc_ids": [
         "advanced/events"
       ],
       "metadata": {
         "category": "multi_hop",
-        "difficulty": "medium"
+        "difficulty": "medium",
+        "label_rationale": "Label correct: advanced/events carries the lifespan mechanism and an 'Alternative Events (deprecated)' section. Answer reworded 2026-09-27 -- it quoted @app.on_event('startup'), and on_event does not appear in that page's prose, only inside the docs_src code the page includes by reference."
       }
     },
     {
@@ -173,21 +181,26 @@
       "question": "How do you mount a sub-application or another ASGI app inside FastAPI?",
       "ground_truth_answer": "Use app.mount('/subpath', other_asgi_app). The mounted app handles all requests that start with that prefix. You can mount another FastAPI instance, a Starlette app, or any ASGI-compatible application, including StaticFiles for serving static assets.",
       "relevant_doc_ids": [
-        "advanced/sub-applications"
+        "advanced/sub-applications",
+        "tutorial/static-files"
       ],
       "metadata": {
         "category": "simple_factual",
-        "difficulty": "medium"
+        "difficulty": "medium",
+        "label_rationale": "Widened 2026-09-27. advanced/sub-applications covers mounting a FastAPI or ASGI app; the answer also claims StaticFiles, and that is tutorial/static-files, which is where 'What is Mounting' is actually explained."
       }
     },
     {
       "id": "fq-015",
       "question": "How does FastAPI handle real-time WebSocket connections with a React frontend?",
-      "ground_truth_answer": "This question is partially out of scope: FastAPI does support WebSockets natively via the websocket endpoint decorator and WebSocket object, but integrating with a specific React frontend is not covered by the FastAPI documentation.",
-      "relevant_doc_ids": [],
+      "ground_truth_answer": "Mostly in scope. FastAPI supports WebSockets natively: declare a parameter of type WebSocket on a websocket route, await messages and send them back, and use Depends, Security, Cookie, Header, Path and Query there as in a normal path operation; a client going away raises WebSocketDisconnect. On the React half the docs are deliberately brief: they say that in production you would have a frontend in React, Vue or Angular and would use that framework's own WebSocket utilities, and they demonstrate with a plain HTML and JavaScript client instead. There is no React-specific integration guide.",
+      "relevant_doc_ids": [
+        "advanced/websockets"
+      ],
       "metadata": {
-        "category": "out_of_scope",
-        "difficulty": "hard"
+        "category": "partial_scope",
+        "difficulty": "hard",
+        "label_rationale": "Relabelled 2026-09-27 and no longer out_of_scope. advanced/websockets is in the corpus and its 'WebSockets client' section names React by name. The empty label was scoring a perfect retrieval as a structural zero and then discarding it."
       }
     }
   ]
