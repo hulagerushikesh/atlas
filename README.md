@@ -201,12 +201,17 @@ noise floor.
 
 ### Headline numbers
 
-| Metric | Run 1 | Relabelled | `top_k` 5 | `top_k` 15 | **Current** | What it measures |
-|---|---|---|---|---|---|---|
-| Context precision | 0.309 | 0.416 | 0.431 | 0.302 | **0.376** | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.778 | 0.778 | 0.900 | **0.929** | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
-| Faithfulness | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.832 | 0.825 | 0.819 | **0.827** | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Metric | Run 1 | Relabelled | `top_k` 5 | `top_k` 15 | **Current** | *+ headers* | What it measures |
+|---|---|---|---|---|---|---|---|
+| Context precision | 0.309 | 0.416 | 0.431 | 0.302 | **0.376** | *0.452* | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.667 | 0.778 | 0.778 | 0.900 | **0.929** | *0.964* | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Faithfulness | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** | *1.000* | Fraction of answer claims the judge found grounded in the retrieved context |
+| Answer relevance | 0.815 | 0.832 | 0.825 | 0.819 | **0.827** | *0.833* | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+
+The italic column is measured but **not shipped**: context headers change every
+chunk's indexed text, so they live in a separate corpus namespace until a
+re-ingest of the live one is paid for. They are the largest single gain in the
+table and they recover the one question no configuration had ever retrieved.
 
 *15 questions, 36k tokens and ≈₹0.70 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run — the identical

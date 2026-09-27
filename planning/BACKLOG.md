@@ -63,6 +63,20 @@ Newest at the bottom of each section.
   `python scripts/run_eval.py` silently picks the wrong corpus. Either drop
   the default and require the flag, or point it at `fastapi_dataset.json`.
 
+- **Relabel `fq-012`, and re-read the rest of the set for the same fault.**
+  Its ground truth spans plain type hints, `Query()`/`Path()`/`Body()`
+  constraints and nested bodies; its `relevant_doc_ids` names one page. It has
+  been quoted as "the last outright miss" for three sessions and was part of
+  the case for a Rs.6.45 re-ingest. Free to fix, and every precision number in
+  the README depends on these labels being right.
+
+- **Ship the context headers to the `default` namespace.** They live in the
+  `headers` namespace only, so the eval measures them and nothing serves them.
+  Shipping is a re-ingest of the live collection at ~Rs.6.45 — the same work
+  again, because a Qdrant collection cannot be renamed into place and the
+  embeddings would have to be rewritten regardless. Needs a Rs. go-ahead and
+  a note that it mutates what `atlas.hulage.in` serves.
+
 ## Ideas (research-backed, see learning/09)
 
 - HyDE retriever behind a config flag.

@@ -198,6 +198,7 @@ def _build_components(settings):
         embedder=embedder,
         dense_index=QdrantDenseIndex(settings.qdrant, embedder.dimensions),
         sparse_index=sparse_index,
+        context_headers=settings.chunking.context_headers,
     )
 
     return pipeline, indexer

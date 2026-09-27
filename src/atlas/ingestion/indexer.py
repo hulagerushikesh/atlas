@@ -31,6 +31,7 @@ from pathlib import Path
 
 import structlog
 
+from atlas.ingestion.headers import apply_context_headers
 from atlas.ingestion.loaders.registry import get_loader, is_supported
 from atlas.interfaces.chunker import BaseChunker
 from atlas.interfaces.document import Document
@@ -71,20 +72,30 @@ class DocumentIndexer:
         dense_index: BaseIndex,
         sparse_index: BaseIndex,
         concurrency: int = 4,
+        context_headers: bool = False,
     ) -> None:
         self._chunker = chunker
         self._embedder = embedder
         self._dense = dense_index
         self._sparse = sparse_index
         self._sem = asyncio.Semaphore(concurrency)
+        # Off unless a caller passes settings through. An indexer built by
+        # hand in a test should not silently rewrite the text it was handed.
+        self._context_headers = context_headers
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def index_path(self, path: Path) -> IndexResult:
-        """Load and index a single file."""
+    async def index_path(self, path: Path, source_root: Path | None = None) -> IndexResult:
+        """Load and index a single file.
+
+        *source_root* is stripped from the source path in each chunk's context
+        header. It is threaded down from index_directory rather than inferred,
+        because only the caller knows which leading segments are the corpus
+        location and which are the document's own topic.
+        """
         loader = get_loader(path)
         documents = await loader.load(path)
-        return await self.index_documents(documents)
+        return await self.index_documents(documents, source_root)
 
     async def index_directory(
         self,
@@ -101,7 +112,7 @@ class DocumentIndexer:
             "indexing_directory", path=str(directory), file_count=len(paths), ignored=ignored
         )
 
-        tasks = [self.index_path(p) for p in paths]
+        tasks = [self.index_path(p, directory) for p in paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         combined = IndexResult()
@@ -124,16 +135,20 @@ class DocumentIndexer:
 
         return combined
 
-    async def index_documents(self, documents: list[Document]) -> IndexResult:
+    async def index_documents(
+        self, documents: list[Document], source_root: Path | None = None
+    ) -> IndexResult:
         """Chunk, embed, and index pre-loaded Document objects."""
         result = IndexResult()
-        tasks = [self._index_one(doc, result) for doc in documents]
+        tasks = [self._index_one(doc, result, source_root) for doc in documents]
         await asyncio.gather(*tasks)
         return result
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
-    async def _index_one(self, document: Document, result: IndexResult) -> None:
+    async def _index_one(
+        self, document: Document, result: IndexResult, source_root: Path | None = None
+    ) -> None:
         async with self._sem:
             log = logger.bind(doc_id=document.id, source=document.source)
 
@@ -142,6 +157,15 @@ class DocumentIndexer:
             if not chunks:
                 log.warning("no_chunks_produced")
                 return
+
+            # Headers go on before the hash comparison below, not after: both
+            # indexes skip on content_hash, so hashing the bare text would
+            # make this a no-op on an existing corpus.
+            if self._context_headers:
+                headed = apply_context_headers(
+                    document.content, chunks, str(source_root) if source_root else None
+                )
+                log.debug("context_headers_applied", chunks=headed)
 
             # Ask the dense index which chunks it already holds unchanged, so
             # a re-ingest of an unchanged corpus makes zero embedding calls.
