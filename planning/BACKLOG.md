@@ -63,12 +63,27 @@ Newest at the bottom of each section.
   `python scripts/run_eval.py` silently picks the wrong corpus. Either drop
   the default and require the flag, or point it at `fastapi_dataset.json`.
 
-- **Relabel `fq-012`, and re-read the rest of the set for the same fault.**
-  Its ground truth spans plain type hints, `Query()`/`Path()`/`Body()`
-  constraints and nested bodies; its `relevant_doc_ids` names one page. It has
-  been quoted as "the last outright miss" for three sessions and was part of
-  the case for a Rs.6.45 re-ingest. Free to fix, and every precision number in
-  the README depends on these labels being right.
+- ~~Relabel `fq-012`~~ **done 2026-09-27.** One document → five, one per
+  claim its ground-truth answer makes. STATUS, README and DECISIONS restated
+  from an offline replay of all twelve stored reports; the headers' recall
+  gain and the "last outright miss" framing were both withdrawn.
+
+- **Re-read the other fourteen labels for the same fault.** `fq-012` was
+  found by reading its ground-truth answer against its `relevant_doc_ids` and
+  noticing the answer made three claims the label covered one of. Nobody has
+  done that pass for the rest of the set. Free, and
+  `scripts/replay_context_metrics.py` shows the consequence of any candidate
+  label set against all twelve stored runs before committing to it.
+
+  Spot-checked while doing `fq-012`: `fq-011` is correctly labelled —
+  `tutorial/response-model` carries the filtering and validation claims on
+  its own. `fq-010` has the **opposite** fault and is worse: its
+  ground-truth answer prescribes `asyncio.run_in_executor` and Starlette's
+  `run_in_threadpool`, and *neither string appears anywhere in the corpus*
+  (`grep -rl run_in_threadpool data/corpus/fastapi` is empty). `async.md`
+  explains that a `def` endpoint is moved to a threadpool, but never names
+  the helper the answer tells you to call. So the row is scoring retrieval
+  against an answer the corpus cannot support. Fix the answer, not the label.
 
 - **Ship the context headers to the `default` namespace — BLOCKED, user must
   run it.** Cost approved 2026-09-27; the auto-mode classifier refused the
