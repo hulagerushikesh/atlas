@@ -31,6 +31,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from atlas.evaluation.dataset import DatasetError, load_dataset
 from atlas.interfaces.document import chunk_id, document_id
 
 # release-notes.md alone is well over a thousand chunks; the ceiling only has
@@ -64,8 +65,17 @@ def main() -> int:
     args = ap.parse_args()
 
     rev = build_reverse_map(args.corpus)
-    dataset = json.loads(args.dataset.read_text())
-    labels = {s["id"]: set(s["relevant_doc_ids"]) for s in dataset["samples"]}
+    try:
+        # Same checks the paid harness runs. A replay exists to say what a
+        # label set implies, so a label set that resolves to nothing is the one
+        # thing it must not quietly average in.
+        dataset, notes = load_dataset(args.dataset, args.corpus)
+    except DatasetError as exc:
+        print(f"Error: {exc}")
+        return 1
+    for note in notes:
+        print(f"Warning: {note}")
+    labels = {s.id: set(s.relevant_doc_ids) for s in dataset.samples}
     report: dict[str, Any] = json.loads(args.report.read_text())
 
     precisions: list[float] = []

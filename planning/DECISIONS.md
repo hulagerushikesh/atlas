@@ -661,3 +661,31 @@ Format: date — decision — alternatives — reason.
   Cost of the set no longer having an out-of-scope row: the refusal path is
   unmeasured end to end. It was already unmeasured — `fq-015` never triggered
   it — but that is now visible instead of assumed. BACKLOG.
+
+- **2026-09-27** — **The dataset checker agrees with the matcher by
+  construction, not by comment.** `atlas.evaluation.dataset.corpus_doc_keys`
+  builds the set of ids a corpus can present using the same four forms
+  `doc_match.chunk_doc_keys` builds them from — uuid, full source, stem,
+  corpus-relative-without-extension. Written any other way the checker would
+  drift from the matcher and start rejecting labels that score fine, or
+  passing labels that never match, which is worse than no checker. A label
+  outside that set cannot match any chunk, so calling it unresolved is exactly
+  true rather than a heuristic.
+
+- **2026-09-27** — **`category: "out_of_scope"` does not authorise an empty
+  label set; a separate flag does.** The obvious design was to accept the
+  category string already on the row, which would have let `oos-001` pass
+  untouched. Rejected: `fq-015` carried `category: "out_of_scope"` for three
+  milestones *while being fully answerable*, so the category was precisely the
+  field that was wrong. A category is a description of a row; the flag is an
+  assertion that someone checked the corpus. Making it a second, separate act
+  is the whole value. The cost is one line per genuinely out-of-scope row,
+  and there is currently one such row in the whole project.
+
+- **2026-09-27** — **The check runs before the pipeline is built.** In
+  `run_eval.py` the dataset is loaded and checked ahead of `_build_pipeline`,
+  so a broken dataset returns 1 having spent nothing. That ordering is the
+  point of the feature: the fault it catches is one whose symptom is a report
+  full of plausible zeros, which is only visible after the run is paid for.
+  `--allow-broken-dataset` exists for the case where someone wants the numbers
+  anyway, and says in its help what is wrong with them.

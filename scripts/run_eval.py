@@ -104,9 +104,9 @@ def _build_metrics(settings):
 async def main(args: argparse.Namespace) -> int:
     from atlas.config import get_settings
     from atlas.evaluation.comparator import compare
+    from atlas.evaluation.dataset import DatasetError, load_dataset
     from atlas.evaluation.reporter import print_report, save_report
     from atlas.evaluation.runner import EvalRunner
-    from atlas.interfaces.evaluator import EvalDataset
     from atlas.logging import configure_logging
 
     configure_logging(level="WARNING", json=False)
@@ -134,9 +134,21 @@ async def main(args: argparse.Namespace) -> int:
         print(f"Overrides   : {overrides}")
     print("─" * 55)
 
-    with open(dataset_path) as f:
-        raw = json.load(f)
-    dataset = EvalDataset.model_validate(raw)
+    # Before anything is spent: a label that resolves to nothing, or an empty
+    # label set nobody declared, scores a row as a miss and looks exactly like
+    # one. Both are free to catch and cost an eval run to notice.
+    try:
+        dataset, notes = load_dataset(
+            dataset_path,
+            Path(args.corpus) if args.corpus else None,
+            strict=not args.allow_broken_dataset,
+        )
+    except DatasetError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        print("\nRe-run with --allow-broken-dataset to measure anyway.", file=sys.stderr)
+        return 1
+    for note in notes:
+        print(f"Warning     : {note}")
     print(f"Samples     : {len(dataset.samples)}")
 
     pipeline = _build_pipeline(settings, args.namespace)
@@ -204,6 +216,21 @@ if __name__ == "__main__":
         "--namespace",
         default="default",
         help="Corpus namespace to evaluate against (default: default).",
+    )
+    parser.add_argument(
+        "--corpus",
+        help=(
+            "Directory the dataset's relevant_doc_ids are relative to, for checking "
+            "they resolve. Overrides the dataset's own corpus_root."
+        ),
+    )
+    parser.add_argument(
+        "--allow-broken-dataset",
+        action="store_true",
+        help=(
+            "Run even though the dataset failed its checks. The scores will be wrong "
+            "in the direction of looking like retrieval failures."
+        ),
     )
     parser.add_argument(
         "--run-name",
