@@ -116,13 +116,14 @@
     {
       "id": "fq-010",
       "question": "Can you use synchronous blocking database calls directly in a FastAPI async endpoint without any workaround?",
-      "ground_truth_answer": "No. Calling synchronous blocking I/O directly inside an async def endpoint blocks the event loop and degrades performance. The correct approach is to either use an async driver (e.g. asyncpg, motor) or run the blocking call in a thread pool via asyncio.run_in_executor or Starlette's run_in_threadpool helper.",
+      "ground_truth_answer": "No. A path operation declared with async def is called directly on the event loop, so blocking I/O inside it holds up the server. The documented fix is not a helper you call from inside the coroutine — it is the function declaration. Declare the path operation with plain def and FastAPI runs it in an external threadpool that it then awaits; the docs recommend exactly this for database libraries, most of which have no await support. Reserve async def for libraries you call with await. Dependencies and sub-dependencies follow the same rule: a def dependency is also run in the external threadpool. For mixing blocking code into async code you write yourself, FastAPI points at AnyIO, which Starlette and FastAPI are built on.",
       "relevant_doc_ids": [
         "async"
       ],
       "metadata": {
         "category": "negation_constraint",
-        "difficulty": "medium"
+        "difficulty": "medium",
+        "label_rationale": "One page is correct here: every claim above is made in async.md itself -- the def-to-threadpool mechanism and the 'as it would block the server' aside, the TL;DR's guidance for database libraries, the dependency and sub-dependency rules, and the AnyIO pointer. Answer rewritten 2026-09-27; the previous one prescribed asyncio.run_in_executor and Starlette's run_in_threadpool, and neither string occurs anywhere in the corpus."
       }
     },
     {
