@@ -65,10 +65,17 @@ Context metrics are over the **14 answerable rows**; `fq-015` has no relevant
 document, so its precision is a structural 0.0 and its recall a free 1.0 and
 both are excluded. Earlier columns are restated on the same basis.
 
+**All context numbers below were recomputed after `fq-012` was relabelled on
+2026-09-27** (one document → five; see DECISIONS). They are not the figures
+quoted earlier today. The recomputation is offline and exact —
+`scripts/replay_context_metrics.py` replays a stored report's chunk ids
+against any label set for Rs.0 — and it reproduces every unaffected sample in
+all twelve stored reports to four decimals.
+
 | Metric | 09-24 | retry fix | capped merge | **+ headers** |
 |---|---|---|---|---|
-| Context precision | 0.3238 | 0.3412 | 0.3762 | **0.4524** |
-| Context recall | 0.8929 | 0.9286 | 0.9286 | **0.9643** |
+| Context precision | 0.3333 | 0.3412 | 0.3762 | **0.4571** |
+| Context recall | 0.9071 | 0.9286 | 0.9286 | **0.9214** |
 | Faithfulness | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
 | Answer relevance | 0.8277 | 0.8253 | 0.8271 | **0.8328** |
 | Tokens / eval | 37,599 | 44,224 | 35,928 | **39,461** |
@@ -76,18 +83,31 @@ both are excluded. Earlier columns are restated on the same basis.
 | Latency p50 | 15.0 s | 11.0 s | 10.0 s | **9.7 s** |
 
 All four runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
-changes in the pipeline and not in the model. Precision has risen 0.324 →
-0.452 and recall 0.893 → 0.964 across the day, on three changes measured one
-at a time.
+changes in the pipeline and not in the model.
 
-**`fq-012` is recalled for the first time** (0.000 → 1.000), which removes the
-last outright miss. `fq-007` fell 1.000 → 0.500 in the same run while its own
-precision rose 0.400 → 0.733 — a swap, but not the kind that got
-`retrieval.top_k` 40 rejected, because no question broke outright.
+**Precision is the day's result: 0.3333 → 0.4571, +0.124, six times the 0.02
+floor.** Three changes, measured one at a time, each positive.
+
+**Recall is not: 0.9071 → 0.9214, +0.014, inside the floor.** The retry fix
+bought +0.022 and the headers gave −0.007 back. Read as: nothing today moved
+recall.
+
+**The "`fq-012` recalled for the first time" headline is withdrawn.** Under
+the corrected five-document label it goes 0.000 → 0.400 with the headers —
+two of the five pages its answer needs — and under the old single label it
+had already scored 1.000 back in the v1 runs of 2026-09-20. It was never the
+outright miss three sessions of planning called it. The headers' *precision*
+gain on it is real and doubled (0.0667 → 0.1333).
+
+`fq-007` fell 1.000 → 0.500 in the headers run while its own precision rose
+0.400 → 0.733 — a swap, but not the kind that got `retrieval.top_k` 40
+rejected, because no question broke outright. That one is unaffected by the
+relabel.
 
 **The headers are not deployed and not even in the default namespace.** They
 were ingested into `headers` so the live collection was never touched;
-shipping them is another ~Rs.6.45 re-ingest. See BACKLOG.
+shipping them is another ~Rs.6.45 re-ingest. See BACKLOG. The precision case
+for shipping stands; the recall case does not.
 
 The "~7 s" in older notes is from 2026-09-20, measured differently, and is not
 a baseline this can be diffed against.
@@ -156,7 +176,9 @@ daily spend cap, console markdown.
 - ~~`retrieval.top_k` 20 → 40~~ run 2026-09-24 and **rejected**: recall
   0.9000 → 0.9333 in aggregate, but per sample `fq-012` and `fq-007` were
   bought with `fq-005` breaking outright, and precision fell 0.3022 → 0.2711
-  at an unchanged window width.
+  at an unchanged window width. Still rejected after the 2026-09-27 relabel,
+  though `fq-012`'s gain there was larger than anyone knew: 0.200 → 0.600,
+  the best that sample has ever scored. A broken question still vetoes it.
 - ~~A stronger reranker~~ run 2026-09-25 and **rejected**. L-12 bought no
   recall end to end and put retrieval p50 at 18 s under concurrency;
   `bge-reranker-base` (278M) scored worse than the 23M model it would replace.
@@ -181,15 +203,18 @@ daily spend cap, console markdown.
   shipped.** Source path in words plus the heading trail, prepended to each
   chunk's indexed text. Re-ingested into a `headers` namespace for Rs.6.45
   (priced at Rs.6.42 beforehand by chunking locally). Precision 0.3762 →
-  0.4524 and recall 0.9286 → 0.9643 — the largest single gain of the
-  milestone — and `fq-012` is recalled for the first time. **Shipping it to
-  the live namespace is another ~Rs.6.45 re-ingest and needs a go-ahead.**
-  Note the reasoning that motivated it was wrong: BM25's rank for `fq-012`
-  got *worse*, 11 → 15, and what recovered the page was decomposition plus
-  the additive retry. See DECISIONS.
-- **Relabel `fq-012` (free).** Its ground truth spans three pages and it is
-  labelled with one. It has been quoted as the last outright miss for three
-  sessions.
+  0.4571, the largest single gain of the milestone. Recall 0.9286 → 0.9214,
+  i.e. slightly *down*. **Shipping it to the live namespace is another
+  ~Rs.6.45 re-ingest and needs a go-ahead.** Two things sold it that did not
+  hold: BM25's rank for `fq-012` got *worse*, 11 → 15, and the recall gain
+  and the "`fq-012` recalled for the first time" headline were both artifacts
+  of that sample's one-document label. Precision is what it actually bought.
+  See DECISIONS.
+- ~~Relabel `fq-012`~~ **done 2026-09-27.** One document → five, one per
+  claim the ground-truth answer makes. Every context number in STATUS and
+  README was recomputed offline against the new labels with
+  `scripts/replay_context_metrics.py` (Rs.0, no model calls). Nothing needs
+  re-running.
 - LLM-written contextual headers — **re-price before starting.** The ~₹15
   figure in earlier notes does not survive arithmetic: 4,020 chunks x ~2.5k
   input tokens is ~10M tokens, nearer ₹200 without prompt caching.

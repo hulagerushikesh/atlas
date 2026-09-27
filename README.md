@@ -201,17 +201,33 @@ noise floor.
 
 ### Headline numbers
 
-| Metric | Run 1 | Relabelled | `top_k` 5 | `top_k` 15 | **Current** | *+ headers* | What it measures |
-|---|---|---|---|---|---|---|---|
-| Context precision | 0.309 | 0.416 | 0.431 | 0.302 | **0.376** | *0.452* | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
-| Context recall | 0.667 | 0.778 | 0.778 | 0.900 | **0.929** | *0.964* | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
-| Faithfulness | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** | *1.000* | Fraction of answer claims the judge found grounded in the retrieved context |
-| Answer relevance | 0.815 | 0.832 | 0.825 | 0.819 | **0.827** | *0.833* | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+| Metric | Run 1 | BM25 tokeniser | `top_k` 15 | **Current** | *+ headers* | What it measures |
+|---|---|---|---|---|---|---|
+| Context precision | 0.460 | 0.476 | 0.333 | **0.376** | *0.457* | Of the chunks handed to the generator, the fraction from a labelled-relevant document |
+| Context recall | 0.719 | 0.776 | 0.907 | **0.929** | *0.921* | Of the labelled-relevant documents, the fraction with at least one chunk retrieved |
+| Faithfulness | 1.000 | 1.000 | 1.000 | **1.000** | *1.000* | Fraction of answer claims the judge found grounded in the retrieved context |
+| Answer relevance | 0.815 | 0.825 | 0.819 | **0.827** | *0.833* | Cosine similarity between the question and questions regenerated from the answer (RAGAS) |
+
+Every context number in that row is computed on the **14 answerable rows**
+(`fq-015` is excluded — see below) and against the label set as it stands
+today. Both of those differ from how this table read before 2026-09-27, when
+the columns mixed a 14-row and a 15-row basis and `fq-012` carried a label
+covering one of the three claims its answer makes. Relabelling it is free to
+account for: the stored reports hold their retrieved chunk ids, so
+`scripts/replay_context_metrics.py` replays any label set against every run
+ever recorded without a single model call. The table above is that replay.
+
+A column that used to sit here, "Relabelled", is gone. It was the same
+pipeline and the same index re-run after two labelling errors were fixed, so
+under one consistent label set it is the same measurement as Run 1 — which is
+what the replay shows. A labelling fix is not a result.
 
 The italic column is measured but **not shipped**: context headers change every
 chunk's indexed text, so they live in a separate corpus namespace until a
-re-ingest of the live one is paid for. They are the largest single gain in the
-table and they recover the one question no configuration had ever retrieved.
+re-ingest of the live one is paid for. It is the largest precision gain in the
+table. It is **not** a recall gain — recall goes very slightly down, and the
+claim it made earlier today, that headers recovered a question nothing had
+ever retrieved, was an artifact of `fq-012`'s old label and is withdrawn.
 
 *15 questions, 36k tokens and ≈₹0.70 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run — the identical
@@ -222,13 +238,9 @@ not a confidence interval.*
 One of the fifteen questions (`fq-015`) has no relevant document in the
 corpus — the correct answer is a refusal. Its context scores are structurally
 meaningless (precision 0 whatever the retriever does, recall a free 1.0), so
-the **Current** column excludes it from both. The four columns before it do
-not, which is worth knowing before reading the row as a trend: on the same
-14-row basis the previous column is precision 0.324 and recall 0.893.
-
-The "Relabelled" column is the **same pipeline, same index**, re-run after
-reading the two misses that were labelling errors (below) and fixing the
-dataset, not the code. `eval_data/reports/fastapi-v2-relabel_*.json`.
+every column excludes it from both. That is why the two leftmost columns read
+higher than they used to: they were printed over all fifteen rows, and a
+structural zero in the precision mean is not a measurement of anything.
 
 "Current" is `main` as it stands: `reranker.top_k = 15` against the Qdrant
 Cloud index, with a retry that accumulates context instead of replacing it
@@ -238,12 +250,13 @@ manual step. Three changes, measured one at a time, each against the run
 before it:
 
 - **Widening the window** (`reranker.top_k` 5 → 15) bought recall
-  0.778 → 0.900 and cost precision, which at one labelled document per
-  question is mostly a denominator effect.
-- **Making the retry additive** bought recall 0.893 → 0.929 on the 14-row
-  basis, and took precision *up* with it. A retry used to replace the window
-  it had, so a grader that wrongly called a window insufficient destroyed
-  documents already retrieved.
+  0.776 → 0.907 and cost precision, which at one or two labelled documents
+  per question is largely a denominator effect.
+- **Making the retry additive** bought recall 0.907 → 0.929, and took
+  precision *up* with it. A retry used to replace the window it had, so a
+  grader that wrongly called a window insufficient destroyed documents
+  already retrieved. This is the only change all day that moved recall past
+  the 0.02 significance floor.
 - **Capping the sub-query merge** bought precision 0.341 → 0.376 at
   identical recall, and gave back 19% of the tokens. A decomposed question
   had been handing the generator `sub_queries × top_k` chunks — 41 for one
@@ -297,6 +310,12 @@ meaning across a `top_k` change, and they went up, flat, flat.
   pages rather than stated on one. Query decomposition finds it at
   `top_k` 5 and the wider window does not. That shape needs
   decomposition or contextual chunk headers, not more slots.
+  *(Superseded 2026-09-27. "Finds it" was one page of five: the sample was
+  labelled with a single document when its answer rests on plain type hints,
+  `Query()`, `Path()`, singular-value `Body()` and the one place Pydantic is
+  genuinely required. It was never fully retrieved by any configuration and
+  never an outright miss either. The diagnosis of the question's shape was
+  right; the scoreboard reading it produced was not.)*
 - **Next experiments (M3):** `retrieval.top_k` 20 → 40 (the reranker
   currently keeps 15 of 20, so it barely filters — retrieval-only recall
   measures 0.964 there, unconfirmed end to end), HyDE query expansion,
@@ -305,13 +324,16 @@ meaning across a `top_k` change, and they went up, flat, flat.
   additions.** The identifier-aware BM25 tokeniser is worth +0.07 recall when
   the raw question goes straight to the retriever, which is what
   `scripts/eval_retrieval.py` measures. Through the full pipeline it is worth
-  nothing: recall is 0.778 either way. Per sample it is a swap, not a wash —
-  `fq-005` goes 0 → 1.0 and `fq-012` goes 1.0 → 0, both at the rank-5
-  boundary. Decomposition was already recovering what the tokeniser recovers,
-  so the two compete for the same five slots. It ships anyway, because the
-  router sends "simple" questions down a path that never decomposes, and that
-  path is measurably better with it — but the cheap harness over-credits any
-  retrieval change, and this is the correction.
+  little: recall 0.719 → 0.776 on the 14-row basis, +0.057, and most of that
+  is one sample. Per sample it is a swap, not a wash — `fq-005` goes 0 → 1.0
+  while `fq-012` goes 0.4 → 0.2, both at the rank-5 boundary. Decomposition
+  was already recovering what the tokeniser recovers, so the two compete for
+  the same five slots. It ships anyway, because the router sends "simple"
+  questions down a path that never decomposes, and that path is measurably
+  better with it — but the cheap harness over-credits any retrieval change,
+  and this is the correction. *(Numbers restated 2026-09-27 after `fq-012`
+  was relabelled; the original text read "0.778 either way" and "`fq-012`
+  goes 1.0 → 0", both of which were the old one-document label talking.)*
 
 ### Smoke test, same day
 

@@ -525,3 +525,47 @@ Format: date — decision — alternatives — reason.
   outright miss" in three sessions of planning and was part of the case for
   this Rs.6.45 re-ingest. Same class as the two labelling errors the
   "Relabelled" column already fixed. Relabel before quoting it again.
+
+- **2026-09-27** — **`fq-012` relabelled to five documents, and it costs the
+  headers their recall gain.** The new set is `tutorial/query-params` (plain
+  type hints are stated there to parse *and validate* without a model),
+  `tutorial/query-params-str-validations`, `tutorial/path-params-numeric-validations`
+  and `tutorial/body-multiple-params` (`Query()`, `Path()` and singular-value
+  `Body()` respectively), and `tutorial/body` (where Pydantic genuinely is
+  required). Each is the page a claim in the ground-truth answer rests on;
+  none was added to move a number.
+
+  What it does to the record, recomputed offline from the stored reports:
+
+  | run | `fq-012` recall, old label | corrected |
+  |---|---|---|
+  | v1, `top_k` 5 | 1.000 | 0.400 |
+  | BM25 tokeniser | 0.000 | 0.200 |
+  | `top_k` 15 | 0.000 | 0.200 |
+  | `top_k` 40 (rejected) | 1.000 | 0.600 |
+  | retry fix | 0.000 | 0.000 |
+  | capped merge (`main`) | 0.000 | 0.000 |
+  | **+ headers** | **1.000** | **0.400** |
+
+  So `fq-012` was never the outright miss it was described as, and the
+  headers did not recover it — they took it from nothing to two of its five
+  pages. Aggregate recall for the headers run falls 0.9643 → 0.9214, which
+  puts it *below* `main`'s 0.9286. **The headers' recall gain was the label
+  artifact; only the precision gain survives** (0.3762 → 0.4571, still the
+  largest of the day and still well over the 0.02 floor). Recall across the
+  whole day is now 0.9071 → 0.9214, inside the floor: no significant
+  movement.
+
+  This does not reverse the Rs.6.45 spend — precision is a real gain and the
+  money is spent either way — but the headline it was sold on is withdrawn.
+
+- **2026-09-27** — **A relabel must never again be priced as an eval run.**
+  Both context metrics are pure set arithmetic over doc ids, chunk ids are
+  `uuid5(document_id(source), chunk_index)`, and every report already stores
+  its retrieved chunk ids. So any label set can be replayed against every run
+  ever recorded for Rs.0 and no model calls: `scripts/replay_context_metrics.py`.
+  It checks itself by reproducing the stored scores for samples whose labels
+  did not change — it reproduced all twelve reports back to 2026-09-20 exactly,
+  which is why the table above can be trusted without re-running anything.
+  What it cannot replay is `faithfulness` and `answer_relevance`, and a label
+  change does not touch those.

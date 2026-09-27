@@ -142,11 +142,16 @@
       "question": "Does FastAPI require you to use Pydantic for input validation, or can you skip it entirely?",
       "ground_truth_answer": "Pydantic is optional per endpoint. You can declare parameters without Pydantic models — plain Python type hints (int, str, float) and Query()/Path()/Body() with basic constraints are supported. Pydantic models are required only for complex nested request bodies.",
       "relevant_doc_ids": [
-        "tutorial/query-params-str-validations"
+        "tutorial/query-params",
+        "tutorial/query-params-str-validations",
+        "tutorial/path-params-numeric-validations",
+        "tutorial/body-multiple-params",
+        "tutorial/body"
       ],
       "metadata": {
         "category": "negation_constraint",
-        "difficulty": "medium"
+        "difficulty": "medium",
+        "label_rationale": "The ground-truth answer makes three claims and the previous single label covered one of them. tutorial/query-params is where plain type hints are stated to parse and validate without a model; query-params-str-validations, path-params-numeric-validations and body-multiple-params carry Query(), Path() and singular-value Body() respectively; tutorial/body is where Pydantic is actually required. Widened 2026-09-27 -- see planning/DECISIONS.md."
       }
     },
     {
