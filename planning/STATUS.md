@@ -78,8 +78,8 @@ against any label set for Rs.0 — so no run was repeated to produce this.
 | Context recall | 0.9244 | 0.9333 | 0.9333 | 0.9378 | **0.9378** |
 | Faithfulness | 1.0000 | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
 | Answer relevance | 0.8277 | 0.8253 | 0.8271 | 0.8328 | **0.8347** |
-| Tokens / eval | 37,599 | 44,224 | 35,928 | 39,461 | **39,319** |
-| Cost / eval | ~Rs.0.73 | ~Rs.0.86 | ~Rs.0.70 | ~Rs.0.77 | **~Rs.0.77** |
+| Tokens / eval † | 37,599 | 44,224 | 35,928 | 39,461 | **39,319** |
+| Cost / eval † | ~Rs.0.73 | ~Rs.0.86 | ~Rs.0.70 | ~Rs.0.77 | **~Rs.0.77** |
 | Latency p50 | 15.0 s | 11.0 s | 10.0 s | 9.7 s | **10.3 s** |
 
 The last column is the first **measured** run against the audited dataset on
@@ -92,8 +92,19 @@ available check on the replay method: an offline recomputation predicted
 confirmed. It is also the first report to carry a dataset fingerprint, so
 every future comparison against it is checked rather than assumed.
 
-Tokens are generation-only; see BACKLOG. The stage latencies in that report
-are the honest per-sample p50, not the run's concurrency-wide wall clock.
+† **Generation calls only — every token and rupee figure in this table.**
+The same report records **101 model calls** for those 15 samples; fifteen
+were generation and the other eighty-six had their tokens dropped on the
+floor. The router, decomposer, grader, faithfulness checker, both judges and
+every embedding are missing from both rows, so the real cost of a run is
+several times what is written here. The ratios between columns hold — they
+all counted the same wrong thing — which is why nobody caught it.
+
+Fixed on 2026-09-28 (`atlas/usage.py`): tokens are counted on the provider,
+per model, and a report now carries a per-model breakdown with a price. The
+next paid run fills in a true row; nothing needs re-running to get it. The
+stage latencies in that report are the honest per-sample p50, not the run's
+concurrency-wide wall clock.
 
 All four runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
 changes in the pipeline and not in the model.

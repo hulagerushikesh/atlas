@@ -52,15 +52,23 @@ Newest at the bottom of each section.
   one window, the honest fix is in `_retrieve_all`, not in how much the
   grader is allowed to see.
 
-- **`total_tokens_used` counts only the generation call.** `runner.py:206`
-  stashes `generation.prompt_tokens + completion_tokens` and nothing else,
-  so the router, decomposer, grader and both judges have never been in a
-  report's token figure. The numbers are consistent across runs, so every
-  published comparison still holds — but they are not the run's cost, and
-  they have been read as one, including while pricing the grader window
-  above. Fix is to accumulate per-provider `model_calls` token counts the
-  way `model_calls` already accumulates call counts. Free, and it makes
-  every future "is this cheaper?" question answerable from the report.
+- ~~**`total_tokens_used` counts only the generation call.**~~ **Shipped
+  2026-09-28.** Counting now happens on the provider, per model, inside a
+  scope: `atlas/usage.py`. A report carries `token_usage` per model with an
+  estimated cost; the `/query` response and the daily spend cap carry the
+  whole request rather than its generation call. The same defect was
+  charging the cap about half of what a request cost. See DECISIONS
+  2026-09-28. **Every rupee figure recorded before that date is
+  generation-only**; the next paid run prints the real one.
+
+- **An exception mid-stream on `/query` truncates the SSE body silently.**
+  No error event, no status change — the client sees the stream stop and has
+  no way to tell a finished answer from a dead one. Found while testing the
+  streaming spend path: the fixture's grader was not awaitable and the
+  response simply ended at stage 4, with every assertion about the earlier
+  stages still passing. The fix is an `{"type":"error"}` event plus a log,
+  which is small; the reason it is filed rather than done is that it wants
+  its own test for each stage boundary.
 - ~~**Cap and rerank the sub-query merge.**~~ **Shipped 2026-09-27.**
   `_retrieve_all` now round-robins across sub-queries and cuts back to one
   window, re-ranked against the original question when a reranker exists.

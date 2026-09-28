@@ -43,6 +43,14 @@ Design rationale:
     than passed over: not knowing whether two runs match is a different state
     from knowing they do, and the whole class of fault here is the second
     being assumed from the first.
+
+    The same applies to the two reports' token totals, which is the other
+    number a reader diffs by eye. Before 2026-09-28 a report counted the
+    generation call and nothing else; after it, every call including the
+    judges and the embeddings. Reading one against the other makes the newer
+    configuration look about twice as expensive whatever it did. That is a
+    note rather than a refusal, because the metric deltas are still valid —
+    only the cost comparison is not.
 """
 
 from __future__ import annotations
@@ -136,18 +144,32 @@ def _check_comparable(result_a: EvalResult, result_b: EvalResult) -> list[str]:
             f"context metrics from a stored report for nothing."
         )
 
+    counted_a, counted_b = bool(result_a.token_usage), bool(result_b.token_usage)
+    if counted_a != counted_b and (result_a.total_tokens_used or result_b.total_tokens_used):
+        older = "A" if not counted_a else "B"
+        notes_on_tokens = [
+            f"Run {older}'s token total counts the generation call only — it "
+            f"predates per-model accounting (2026-09-28) — while the other "
+            f"counts every call and every embedding. The metric deltas below "
+            f"are unaffected; the two token figures are not a cost comparison "
+            f"and diffing them makes the newer run look ~2x more expensive "
+            f"whatever it did."
+        ]
+    else:
+        notes_on_tokens = []
+
     if not fp_a or not fp_b:
         if not fp_a and not fp_b:
             which = "Neither run carries"
         else:
             which = f"Run {'A' if not fp_a else 'B'} does not carry"
-        return [
+        return notes_on_tokens + [
             f"{which} a dataset fingerprint, so a relabelling between these "
             f"runs would not be detected. The sample ids match, which rules "
             f"out a different set of rows but not a different set of labels "
             f"on the same rows."
         ]
-    return []
+    return notes_on_tokens
 
 
 def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:

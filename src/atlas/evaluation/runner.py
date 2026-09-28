@@ -17,9 +17,15 @@ Design rationale:
     rather than silently dropping them. This matters for long (30+ sample) runs
     where a retry would be expensive.
 
-    Token tracking: the runner accumulates total_tokens_used across all pipeline
-    runs. This is surfaced in EvalResult so you can estimate the dollar cost of
-    one full eval pass — important for deciding how often to run evals in CI.
+    Token tracking: the run happens inside a `usage_scope()`, so every LLM
+    and embedding call made by the pipeline *or* by a judge is counted, per
+    model, wherever in the object graph the provider lives. Until 2026-09-28
+    this was one number read off `result.generation`, which meant the router,
+    the decomposer, the grader, the faithfulness checker, both judges and all
+    embeddings were missing from "total tokens" — roughly half the run, in a
+    field being read as its cost. Reports written before that date carry an
+    empty `token_usage` and a `total_tokens_used` that counts generation only;
+    the reporter says so rather than letting the two look alike.
 
     Timing: wall-clock duration of the full run is recorded in EvalResult.
     Combined with per-metric scores this lets you reason about the
@@ -31,7 +37,6 @@ from __future__ import annotations
 import asyncio
 import time
 from statistics import mean
-from typing import Any
 
 import structlog
 
@@ -45,41 +50,11 @@ from atlas.interfaces.evaluator import (
     SampleResult,
 )
 from atlas.interfaces.retriever import RetrievedChunk
+from atlas.usage import usage_scope
 
 logger = structlog.get_logger(__name__)
 
 _FAILED_SENTINEL = -1.0   # score value for a sample that errored
-
-
-def _find_providers(pipeline: object, metrics: list[BaseMetric]) -> list[Any]:
-    """Every distinct LLM provider reachable from the pipeline and the judges.
-
-    Deduplicated by identity, because the pipeline's stages usually share one
-    provider and counting it once per stage would report six times the calls.
-    """
-    found: list[Any] = []
-    seen: set[int] = set()
-
-    def walk(obj: object, depth: int) -> None:
-        # Depth 2 reaches a judge's own provider (metric._llm) and a pipeline
-        # stage's (pipeline._generator._llm). Deeper would start walking into
-        # the OpenAI client itself for nothing.
-        if depth < 0 or not hasattr(obj, "__dict__"):
-            return
-        for attr in vars(obj).values():
-            # isinstance, not hasattr: a Mock answers hasattr for every name,
-            # so attribute-presence duck-typing matched every test double and
-            # then tried to iterate a coroutine.
-            if isinstance(getattr(attr, "model_calls", None), dict):
-                if id(attr) not in seen:
-                    seen.add(id(attr))
-                    found.append(attr)
-            else:
-                walk(attr, depth - 1)
-
-    for holder in [pipeline, *metrics]:
-        walk(holder, 2)
-    return found
 
 
 class EvalRunner:
@@ -94,10 +69,6 @@ class EvalRunner:
         self._pipeline = pipeline
         self._metrics = metrics
         self._sem = asyncio.Semaphore(concurrency)
-        # Providers are found by duck-type rather than passed in: the pipeline
-        # and each judge may share one instance or hold their own, and the
-        # runner should not have to know which.
-        self._providers = _find_providers(pipeline, metrics)
 
     async def run(
         self,
@@ -114,8 +85,14 @@ class EvalRunner:
         start = time.monotonic()
         logger.info("eval_run_start", dataset=dataset.name, samples=len(dataset.samples))
 
-        tasks = [self._score_sample(s) for s in dataset.samples]
-        sample_results: list[SampleResult] = await asyncio.gather(*tasks)
+        # Everything the pipeline and the judges spend, counted where it is
+        # spent. The tasks below are created inside the scope, so each one
+        # inherits the same meter; a provider shared with something outside
+        # this run keeps its own lifetime totals and only this run's calls
+        # land here.
+        with usage_scope() as usage:
+            tasks = [self._score_sample(s) for s in dataset.samples]
+            sample_results: list[SampleResult] = await asyncio.gather(*tasks)
 
         # Aggregate: mean score per metric, ignoring failed samples
         aggregate: dict[str, float] = {}
@@ -130,9 +107,6 @@ class EvalRunner:
             ]
             aggregate[metric.name] = round(mean(valid_scores), 4) if valid_scores else 0.0
 
-        total_tokens = sum(
-            getattr(sr, "_tokens_used", 0) for sr in sample_results
-        )
         duration = round(time.monotonic() - start, 2)
 
         logger.info(
@@ -145,22 +119,18 @@ class EvalRunner:
             pipeline_config=config,
             sample_results=sample_results,
             aggregate_scores=aggregate,
-            total_tokens_used=total_tokens,
+            total_tokens_used=usage.total_tokens,
+            token_usage=usage.by_model,
             duration_seconds=duration,
-            model_calls=self._model_calls(),
+            # Chat only: the mixed-model warning fires on seeing more than one
+            # model, and the embedding model is always a second one.
+            model_calls=usage.calls_by_model(kind="chat"),
             # Recorded here rather than by the caller: every report needs it
             # for `compare` to mean anything, and a caller that forgets
             # produces a report that looks complete and compares wrongly.
             dataset_name=dataset.name,
             dataset_fingerprint=dataset_fingerprint(dataset),
         )
-
-    def _model_calls(self) -> dict[str, int]:
-        totals: dict[str, int] = {}
-        for provider in self._providers:
-            for model, n in provider.model_calls.items():
-                totals[model] = totals.get(model, 0) + n
-        return totals
 
     async def _score_sample(self, sample: object) -> SampleResult:
         async with self._sem:
@@ -200,11 +170,6 @@ class EvalRunner:
                     retrieved_chunk_ids=[c.chunk_id for c in chunks],
                     metrics=metric_scores,
                     stage_ms=dict(getattr(result, "stage_ms", {}) or {}),
-                )
-                # Stash token count as a private attr for aggregation above
-                gen = getattr(result, "generation", None)
-                sr._tokens_used = (  # type: ignore[attr-defined]
-                    (gen.prompt_tokens + gen.completion_tokens) if gen else 0
                 )
                 return sr
 

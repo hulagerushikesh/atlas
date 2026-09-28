@@ -8,7 +8,7 @@ Submodules:
     cache       — two-level (memory + Redis) query cache
     schemas     — request/response Pydantic models for the HTTP API
     dependencies — FastAPI DI accessors for AppState, pipeline, indexer, cache
-    cost        — token cost estimation per model
+    (prices live in atlas.cost, which is not API-specific)
 """
 
 from atlas.api.app import create_app

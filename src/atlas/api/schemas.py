@@ -93,6 +93,17 @@ class QueryResponse(BaseModel):
 
 
 class TokenUsage(BaseModel):
+    """Every token this request spent, not just the answer's.
+
+    Before 2026-09-28 these were the generation call's counts alone, so a
+    response understated its own cost by roughly half — the router, the
+    grader, the faithfulness check and the query embedding were all missing —
+    and `estimated_cost_usd` was what the daily spend cap was charged. The cap
+    was therefore admitting about twice the spend it was configured for.
+    Embedding tokens are counted in `prompt_tokens`; an embedding has no
+    completion.
+    """
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
