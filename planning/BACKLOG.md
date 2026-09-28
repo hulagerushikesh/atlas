@@ -60,12 +60,18 @@ Newest at the bottom of each section.
   warning naming the rows. `eval_retrieval.py` also had the ordering wrong
   and loaded the cross-encoder before reading the dataset; fixed.
 
-- **Make the comparator refuse two different datasets.** Narrower than it was
-  now that a run cannot start against the wrong namespace, but still open: a
-  `--compare` against a baseline produced from a *different dataset* is
-  unguarded, and that comparison is the part that prints `Overall winner`.
-  Record the dataset name and sample ids in `EvalResult` and have `compare()`
-  refuse when they disagree. Free.
+- ~~**Make the comparator refuse two different datasets.**~~ **done
+  2026-09-28.** `compare()` raises `DatasetMismatch` on differing sample ids
+  (derived from `sample_results`, so it works on the twelve stored reports),
+  on a differing `dataset_fingerprint`, and on a differing `dataset_name`.
+  The fingerprint is the one that matters: it catches a *relabelling*, which
+  neither the file name nor the sample ids do, and which is exactly what the
+  2026-09-27 audit did to every number recorded before it. A report written
+  before the field existed carries an empty fingerprint and gets an
+  **Unverified** note under the table rather than a refusal.
+
+  The module docstring had claimed this check existed since M1. It did not.
+  See DECISIONS 2026-09-28.
 
 - ~~Relabel `fq-012`~~ **done 2026-09-27.** One document → five, one per
   claim its ground-truth answer makes. STATUS, README and DECISIONS restated

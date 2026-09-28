@@ -854,3 +854,44 @@ Format: date — decision — alternatives — reason.
   was the dataset opened and checked. Same ordering principle as `run_eval.py`
   and the same fix: dataset first, registry second. A dataset that cannot
   score is worth finding out about before seconds of CPU, not after.
+
+- **2026-09-28** — **The comparator's docstring claimed a check that did not
+  exist.** `comparator.py` said "If the datasets differ, the comparison is
+  invalid and we raise ValueError." There was no check of any kind, and
+  `compare()` would declare an **Overall winner** between a 30-question HR
+  run and a 15-question FastAPI one. Worth recording separately from the fix:
+  the comment was the reason nobody looked, and a false comment is worse than
+  no comment because it answers the question that would have found the bug.
+
+- **2026-09-28** — **Three comparability checks, ordered by what they
+  prove.** `compare()` now raises `DatasetMismatch` on:
+
+  1. **Different sample ids.** Derived from `sample_results`, so it needs no
+     new field and applies to all twelve reports already in
+     `eval_data/reports`. Different rows means different denominators.
+  2. **Different dataset fingerprint.** The only one that catches a
+     *relabelling*. On 2026-09-27 nine of fifteen rows were relabelled while
+     the file kept its name and all fifteen ids — every number before that
+     edit stopped being comparable with every one after, and neither the
+     name nor the ids showed it.
+  3. **Different dataset name.** Weakest, and only used to make the error
+     message name the two files.
+
+  `dataset_fingerprint` covers the dataset name and, per sample, the id, the
+  question, the label set and the out-of-scope flag — the inputs the metrics
+  read. It excludes `ground_truth_answer` because no metric reads it, so
+  `fq-010`'s rewrite changed no score and must not invalidate a comparison.
+  There is a test asserting that exclusion, and it is the test that has to
+  change first if an answer-correctness judge is ever added.
+
+  The runner fills both fields rather than the caller, because a caller that
+  forgets produces a report that looks complete and compares wrongly.
+
+- **2026-09-28** — **A report that predates the fingerprint gets a note, not
+  a refusal.** Refusing would break comparison against all twelve stored
+  reports, none of which can be re-run for free. So an empty fingerprint
+  produces a note carried on `ComparisonResult` and printed under the table
+  as **Unverified**. Not knowing whether two runs match is a different state
+  from knowing they do, and this whole class of fault is the second being
+  assumed from the first — so it is said out loud in the artefact itself,
+  where the number gets quoted from, rather than in a log.

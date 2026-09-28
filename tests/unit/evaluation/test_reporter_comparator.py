@@ -9,9 +9,22 @@ from pathlib import Path
 
 import pytest
 
-from atlas.evaluation.comparator import _SIGNIFICANCE_THRESHOLD, compare, save_comparison
+from atlas.evaluation.comparator import (
+    _SIGNIFICANCE_THRESHOLD,
+    DatasetMismatch,
+    compare,
+    save_comparison,
+)
+from atlas.evaluation.dataset import dataset_fingerprint, load_dataset
 from atlas.evaluation.reporter import _md_latency, _md_table, save_report
-from atlas.interfaces.evaluator import EvalResult, MetricScore, PipelineConfig, SampleResult
+from atlas.interfaces.evaluator import (
+    EvalDataset,
+    EvalResult,
+    EvalSample,
+    MetricScore,
+    PipelineConfig,
+    SampleResult,
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -268,3 +281,151 @@ class TestServedModels:
 
     def test_old_reports_without_the_field_still_render(self) -> None:
         assert "Mixed models" not in _md_table(_result("cfg", {"faithfulness": 1.0}))
+
+
+# ── Comparability ─────────────────────────────────────────────────────────────
+
+def _provenance(
+    name: str,
+    scores: dict,
+    sample_ids: list[str],
+    fingerprint: str = "",
+    dataset_name: str = "",
+) -> EvalResult:
+    return EvalResult(
+        pipeline_config=PipelineConfig(name=name),
+        sample_results=[
+            SampleResult(
+                sample_id=sid, question="q", generated_answer="a",
+                retrieved_chunk_ids=["c1"],
+                metrics=[MetricScore(metric_name=k, score=v) for k, v in scores.items()],
+            )
+            for sid in sample_ids
+        ],
+        aggregate_scores=scores,
+        dataset_name=dataset_name,
+        dataset_fingerprint=fingerprint,
+    )
+
+
+class TestComparabilityGuard:
+    """`compare` prints **Overall winner**, which is the sentence a wrong
+    comparison gets quoted as. Until 2026-09-28 it would produce one between
+    a 30-question HR run and a 15-question FastAPI run, and the module
+    docstring claimed it raised ValueError in that case. It did not."""
+
+    def test_different_sample_sets_are_refused(self) -> None:
+        a = _provenance("a", {"context_precision": 0.9}, ["hr-1", "hr-2"])
+        b = _provenance("b", {"context_precision": 0.1}, ["fq-001"])
+
+        with pytest.raises(DatasetMismatch, match="different samples"):
+            compare(a, b)
+
+    def test_the_sample_check_works_without_any_new_field(self) -> None:
+        """Derived from sample_results, so it applies to reports written
+        before the provenance fields existed — including the twelve already
+        in eval_data/reports."""
+        a = _provenance("a", {"m": 0.5}, ["s1", "s2"])
+        b = _provenance("b", {"m": 0.5}, ["s1", "s2", "s3"])
+        assert a.dataset_fingerprint == ""
+
+        with pytest.raises(DatasetMismatch, match="2 and 3"):
+            compare(a, b)
+
+    def test_a_relabelling_is_refused_even_though_the_ids_match(self) -> None:
+        """The 2026-09-27 audit: nine of fifteen rows relabelled, same file
+        name, same fifteen ids, every prior number quietly incomparable."""
+        a = _provenance("a", {"m": 0.37}, ["fq-001"], fingerprint="before")
+        b = _provenance("b", {"m": 0.47}, ["fq-001"], fingerprint="after")
+
+        with pytest.raises(DatasetMismatch, match="labels changed"):
+            compare(a, b)
+
+    def test_the_error_names_the_datasets_when_they_differ(self) -> None:
+        a = _provenance("a", {"m": 0.5}, ["s1"], fingerprint="x", dataset_name="hr")
+        b = _provenance("b", {"m": 0.5}, ["s1"], fingerprint="y", dataset_name="fastapi")
+
+        with pytest.raises(DatasetMismatch, match="'hr' vs 'fastapi'"):
+            compare(a, b)
+
+    def test_matching_fingerprints_compare_cleanly(self) -> None:
+        a = _provenance("a", {"m": 0.30}, ["s1"], fingerprint="same")
+        b = _provenance("b", {"m": 0.50}, ["s1"], fingerprint="same")
+
+        comparison = compare(a, b)
+
+        assert comparison.notes == []
+        assert comparison.overall_winner == "B"
+
+    def test_a_missing_fingerprint_is_a_note_not_a_refusal(self) -> None:
+        """Not knowing whether two runs match is a different state from
+        knowing they do, and it is said out loud rather than assumed."""
+        a = _provenance("a", {"m": 0.30}, ["s1"])
+        b = _provenance("b", {"m": 0.50}, ["s1"], fingerprint="new")
+
+        comparison = compare(a, b)
+
+        assert len(comparison.notes) == 1
+        assert "Run A does not carry" in comparison.notes[0]
+        assert "Unverified" in comparison.as_markdown()
+
+    def test_neither_side_carrying_one_says_neither(self) -> None:
+        comparison = compare(
+            _provenance("a", {"m": 0.3}, ["s1"]), _provenance("b", {"m": 0.5}, ["s1"])
+        )
+        assert "Neither run carries" in comparison.notes[0]
+
+
+class TestDatasetFingerprint:
+    """What makes two runs the same measurement."""
+
+    @staticmethod
+    def _dataset(labels: list[str], question: str = "How?", name: str = "ds") -> EvalDataset:
+        return EvalDataset(
+            name=name,
+            samples=[
+                EvalSample(
+                    id="s1",
+                    question=question,
+                    ground_truth_answer="Like this.",
+                    relevant_doc_ids=labels,
+                )
+            ],
+        )
+
+    def test_the_same_dataset_fingerprints_the_same(self) -> None:
+        assert dataset_fingerprint(self._dataset(["a/b"])) == dataset_fingerprint(
+            self._dataset(["a/b"])
+        )
+
+    def test_a_relabelling_changes_it(self) -> None:
+        assert dataset_fingerprint(self._dataset(["a/b"])) != dataset_fingerprint(
+            self._dataset(["a/b", "c/d"])
+        )
+
+    def test_a_reworded_question_changes_it(self) -> None:
+        """The question is what the retriever is given, so it is part of the
+        measurement even when the labels are untouched."""
+        assert dataset_fingerprint(self._dataset(["a/b"])) != dataset_fingerprint(
+            self._dataset(["a/b"], question="How, exactly?")
+        )
+
+    def test_label_order_and_repeats_do_not_change_it(self) -> None:
+        """Recall works on a set, so neither is a different measurement."""
+        assert dataset_fingerprint(self._dataset(["a/b", "c/d"])) == dataset_fingerprint(
+            self._dataset(["c/d", "a/b", "a/b"])
+        )
+
+    def test_a_rewritten_reference_answer_does_not_change_it(self) -> None:
+        """No metric reads ground_truth_answer, so fq-010's rewrite changed
+        no score and must not invalidate a comparison. If a correctness judge
+        is ever added, this test is the one that has to change first."""
+        a = self._dataset(["a/b"])
+        b = self._dataset(["a/b"])
+        b.samples[0].ground_truth_answer = "Completely differently."
+        assert dataset_fingerprint(a) == dataset_fingerprint(b)
+
+    def test_the_shipped_datasets_fingerprint_differently(self) -> None:
+        fastapi, _ = load_dataset(Path("eval_data/fastapi_dataset.json"), strict=False)
+        sample, _ = load_dataset(Path("eval_data/sample_dataset.json"), strict=False)
+        assert dataset_fingerprint(fastapi) != dataset_fingerprint(sample)

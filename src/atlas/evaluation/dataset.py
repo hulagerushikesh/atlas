@@ -50,6 +50,7 @@ import contextlib
 import json
 from pathlib import Path
 
+from atlas.ingestion.hashing import hash_text
 from atlas.interfaces.document import document_id
 from atlas.interfaces.evaluator import EvalDataset
 
@@ -59,6 +60,40 @@ OUT_OF_SCOPE_FLAG = "out_of_scope"
 
 class DatasetError(ValueError):
     """A dataset that would silently mis-score if it were run."""
+
+
+def dataset_fingerprint(dataset: EvalDataset) -> str:
+    """Identity of a dataset *as a measurement*, not as a file.
+
+    Two runs are comparable when they asked the same questions and judged
+    them against the same labels. Neither the filename nor the sample ids
+    establish that: on 2026-09-27 nine of fifteen rows in
+    `fastapi_dataset.json` were relabelled, and the file kept its name and
+    every one of its ids. Every precision and recall number recorded before
+    that edit became incomparable with every one after it, and nothing in a
+    report said so.
+
+    Covers the dataset name, and per sample the id, the question text, the
+    label set and whether the row is declared out of scope — the inputs the
+    four metrics actually read.
+
+    Deliberately excludes `ground_truth_answer`: no metric reads it (see
+    planning/DECISIONS 2026-09-27), so `fq-010`'s rewrite changed no score
+    and should not invalidate a comparison. **If an answer-correctness judge
+    is ever added, it has to be added here too**, or the first thing it
+    measures will be silently comparable with runs that predate it.
+    """
+    parts = [dataset.name]
+    for sample in sorted(dataset.samples, key=lambda s: s.id):
+        parts.append(sample.id)
+        parts.append(sample.question)
+        # Sorted and deduplicated: recall works on a set, so a reordered or
+        # repeated label is the same measurement.
+        parts.extend(sorted(set(sample.relevant_doc_ids)))
+        parts.append(str(sample.metadata.get(OUT_OF_SCOPE_FLAG) is True))
+    # \x1f (unit separator) cannot occur in a path, an id or a question, so
+    # no arrangement of fields can be made to collide with another.
+    return hash_text("\x1f".join(parts))
 
 
 def doc_keys(source: str, corpus_root: Path | None = None) -> set[str]:

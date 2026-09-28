@@ -128,7 +128,7 @@ def _build_metrics(settings):
 async def main(args: argparse.Namespace) -> int:
     from atlas.api.namespaces import sparse_index_path
     from atlas.config import get_settings
-    from atlas.evaluation.comparator import compare
+    from atlas.evaluation.comparator import DatasetMismatch, compare
     from atlas.evaluation.dataset import (
         DatasetError,
         check_dataset_is_ingested,
@@ -259,9 +259,15 @@ async def main(args: argparse.Namespace) -> int:
             with open(baseline_path) as f:
                 baseline_raw = json.load(f)
             baseline = EvalResult.model_validate(baseline_raw)
-            comparison = compare(baseline, result)
-            print("\nA/B comparison (baseline → this run):")
-            print(comparison.as_markdown())
+            try:
+                comparison = compare(baseline, result)
+            except DatasetMismatch as exc:
+                # The run itself is finished and saved; only the comparison is
+                # refused. Exit 0 — nothing about the measurement went wrong.
+                print(f"\nNo A/B comparison: {exc}", file=sys.stderr)
+            else:
+                print("\nA/B comparison (baseline → this run):")
+                print(comparison.as_markdown())
 
     return 0
 
