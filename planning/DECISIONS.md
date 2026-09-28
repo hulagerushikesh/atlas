@@ -795,3 +795,22 @@ Format: date — decision — alternatives — reason.
   before indexing anything. Now `index_directory`. Found while auditing the
   other `index_path` call sites for the source-root fault; unrelated bug,
   same line of code.
+
+- **2026-09-28** — **The deploy refuses to bake an index it has not
+  checked.** `scripts/deploy_gcp.sh` runs `verify_index.py` over every
+  namespace under `data/index/` before `gcloud builds submit`, and exits
+  non-zero if any of them disagrees with its Qdrant collection.
+
+  The build is the last moment this is checkable. The BM25 file travels
+  inside the image; the dense vectors do not — they are live the instant an
+  ingest finishes. Two halves of one corpus, deployed by different mechanisms
+  at different times, and the state in between answers every query and scores
+  badly rather than failing. Twice now: an ingest to the wrong namespace on
+  the 27th, and 37 files lost to Qdrant timeouts on the 28th. Both looked
+  like successful runs.
+
+  It gates the build, not the deploy, because a deploy of an existing tag
+  cannot see inside that image — `SKIP_BUILD=1` therefore says the index was
+  not checked instead of pretending it was. `SKIP_VERIFY=1` exists and
+  announces itself. The check costs nothing to run, so the escape hatch is
+  for a reason, not for a hurry.

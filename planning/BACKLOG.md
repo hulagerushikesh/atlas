@@ -126,6 +126,13 @@ Newest at the bottom of each section.
   before and after every ingest. Found a half-finished ingest on its first
   run; see DECISIONS 2026-09-28.
 
+- ~~**Nothing stopped a deploy from baking a stale index.**~~
+  **fixed 2026-09-28.** `deploy_gcp.sh` runs `verify_index.py` over every
+  namespace under `data/index/` before `gcloud builds submit` and refuses on
+  a mismatch. Gates the build rather than the deploy, because `SKIP_BUILD=1`
+  cannot see inside an image built earlier and says so. `SKIP_VERIFY=1`
+  overrides, loudly.
+
 - ~~**A single file ingest baked the whole path into its context headers.**~~
   **fixed 2026-09-28.** `scripts/ingest.py` and the `/ingest` route default a
   bare file's source root to its parent instead of passing `None`;

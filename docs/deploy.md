@@ -78,12 +78,23 @@ gcloud projects add-iam-policy-binding $PROJECT --member serviceAccount:$SA --ro
 ```bash
 make deploy-gcp                          # PROJECT defaults to atlas-rag-rush
 SKIP_BUILD=1 IMAGE_TAG=0fdd0b2 scripts/deploy_gcp.sh   # roll an image already built
+SKIP_VERIFY=1 scripts/deploy_gcp.sh      # build without checking the index
 ```
 
 Builds with Cloud Build (free tier: 120 min/day, ~3 min per build), pushes to
 Artifact Registry, rolls a revision. The script pins model, provider and budget
 env vars; change them there, not in the console, so the deploy stays
 reproducible.
+
+Before it builds, the script runs `scripts/verify_index.py` over every
+namespace under `data/index/` — the ones `COPY data/index/` is about to bake —
+and refuses if the BM25 file disagrees with the Qdrant collection it is
+supposed to be half of. That state is not a build failure, it is worse: the
+image serves every query and scores badly. It has happened twice, once from an
+ingest that went to the wrong namespace and once from an ingest that lost 37
+files to Qdrant timeouts, and both runs looked like successes. The check is
+read-only and free. `SKIP_VERIFY=1` bypasses it; `SKIP_BUILD=1` skips it
+because nothing here can see inside an image built earlier.
 
 `.gcloudignore` is required, not optional: without it `gcloud builds submit`
 falls back to `.gitignore`, which excludes `data/`, and the build fails at
