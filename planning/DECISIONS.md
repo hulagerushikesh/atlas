@@ -937,3 +937,43 @@ Format: date — decision — alternatives — reason.
   therefore a generation-only number, which is consistent across runs and so
   still valid for comparison — but it is not the run's cost, and it was read
   as one. Filed in BACKLOG rather than fixed here.
+
+- **2026-09-28** — **The grader window A/B says the slice was right, and the
+  reasoning that changed it was wrong.** Two runs, Rs.1.57 the pair:
+
+  | window | precision | recall | faithfulness | answer relevance |
+  |---|---|---|---|---|
+  | 5 of 15 (kept) | **0.4667** | **0.9378** | **1.0000** | 0.8347 |
+  | all 15 | 0.4622 | 0.8778 | 0.9667 | 0.8387 |
+
+  Recall -0.060, three times the significance floor, and the whole of it two
+  rows: `fq-006` 1.000 → 0.500 and `fq-012` 0.400 → 0.000. Both are the
+  multi-document questions, and that is the mechanism.
+
+  A grader shown a slice is pessimistic. Pessimism triggers a retry. Since
+  the retry union shipped on 2026-09-27 a retry **accumulates** context
+  rather than replacing it. So the narrow window is how a question whose
+  answer spans five pages ever gets five pages in front of the generator.
+  Widening the grader suppressed the retries, the union never formed, and
+  `fq-012` went to zero — taking its faithfulness with it, 1.000 → 0.500,
+  because the answer was written from thinner context.
+
+  Reverted to 5, with the measurement in the docstring rather than the
+  argument. Two things worth keeping from this:
+
+  - **The change was reasoned, plausible and wrong.** "The grader should
+    judge what the generator gets" is sound in isolation and false in this
+    pipeline, because the grader's verdict is not only a verdict — it is
+    also the retry trigger, and the retry is a retrieval strategy. Nothing
+    about reading `grader.py` says that; it lives in `pipeline.py`.
+  - **It is load-bearing by accident.** The slice predates the retry union
+    by four days and was written for an unrelated reason. It stops being
+    correct the moment the union stops accumulating, so it is pinned by
+    tests and a config flag rather than left to be re-derived.
+
+- **2026-09-28** — **The replay method is confirmed against a paid run.**
+  `grader-window-5` returned context precision 0.4667 and recall 0.9378. The
+  offline replay of the 2026-09-27 label audit predicted 0.4667 and 0.9378 —
+  four decimals, both metrics, no model calls. Whatever else is uncertain
+  about this project's numbers, `scripts/replay_context_metrics.py` is not
+  guessing.
