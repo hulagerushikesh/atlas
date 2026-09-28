@@ -25,6 +25,7 @@ Design rationale:
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 import structlog
 from qdrant_client import AsyncQdrantClient
@@ -34,14 +35,30 @@ from qdrant_client.models import (
     PointStruct,
     VectorParams,
 )
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from atlas.config import QdrantConfig
 from atlas.interfaces.document import Chunk
 from atlas.interfaces.index import BaseIndex, IndexStats
+from atlas.retry_policy import is_transient_qdrant_error
 
 logger = structlog.get_logger(__name__)
 
 _UPSERT_BATCH = 100
+
+# Applied to the private methods that make exactly one HTTP call, never to a
+# public method that makes several. Retrying `upsert` as a whole would resend
+# the batches that already landed; retrying `_upsert_batch` resends only the
+# one that failed, which is why the split exists.
+#
+# reraise: the caller should see WriteTimeout, not tenacity's RetryError. The
+# indexer logs the exception text per file and that text is the diagnosis.
+_retry_transient = retry(
+    retry=retry_if_exception(is_transient_qdrant_error),
+    wait=wait_exponential(multiplier=1, min=1, max=20),
+    stop=stop_after_attempt(5),
+    reraise=True,
+)
 
 
 class QdrantDenseIndex(BaseIndex):
@@ -51,7 +68,9 @@ class QdrantDenseIndex(BaseIndex):
         self._config = config
         self._dimensions = dimensions
         api_key = config.api_key.get_secret_value() if config.api_key else None
-        self._client = AsyncQdrantClient(url=config.url, api_key=api_key)
+        self._client = AsyncQdrantClient(
+            url=config.url, api_key=api_key, timeout=config.timeout_seconds
+        )
         self._ensure_lock = asyncio.Lock()
         self._collection_ready = False
 
@@ -64,17 +83,10 @@ class QdrantDenseIndex(BaseIndex):
         async with self._ensure_lock:
             if self._collection_ready:
                 return
-            collections = await self._client.get_collections()
-            names = {c.name for c in collections.collections}
+            names = await self._list_collections()
             if self._config.collection_name not in names:
                 try:
-                    await self._client.create_collection(
-                        collection_name=self._config.collection_name,
-                        vectors_config=VectorParams(
-                            size=self._dimensions,
-                            distance=Distance.COSINE,
-                        ),
-                    )
+                    await self._create_collection()
                 except UnexpectedResponse as e:
                     if e.status_code != 409:  # created by another process
                         raise
@@ -86,6 +98,21 @@ class QdrantDenseIndex(BaseIndex):
             await self._ensure_payload_indexes()
             self._collection_ready = True
 
+    @_retry_transient
+    async def _list_collections(self) -> set[str]:
+        collections = await self._client.get_collections()
+        return {c.name for c in collections.collections}
+
+    @_retry_transient
+    async def _create_collection(self) -> None:
+        await self._client.create_collection(
+            collection_name=self._config.collection_name,
+            vectors_config=VectorParams(
+                size=self._dimensions,
+                distance=Distance.COSINE,
+            ),
+        )
+
     async def _ensure_payload_indexes(self) -> None:
         """Qdrant Cloud rejects filtered scroll/delete on unindexed payload
         keys (400 "Index required but not found"); local Qdrant tolerates it.
@@ -96,22 +123,30 @@ class QdrantDenseIndex(BaseIndex):
             ("doc_id", PayloadSchemaType.KEYWORD),
             ("chunk_index", PayloadSchemaType.INTEGER),
         ):
-            await self._client.create_payload_index(
-                collection_name=self._config.collection_name,
-                field_name=field,
-                field_schema=schema,
-            )
+            await self._create_payload_index(field, schema)
+
+    @_retry_transient
+    async def _create_payload_index(self, field: str, schema: Any) -> None:
+        await self._client.create_payload_index(
+            collection_name=self._config.collection_name,
+            field_name=field,
+            field_schema=schema,
+        )
+
+    @_retry_transient
+    async def _retrieve_hashes(self, ids: list[str]) -> list[Any]:
+        return await self._client.retrieve(
+            collection_name=self._config.collection_name,
+            ids=ids,
+            with_payload=["content_hash"],
+        )
 
     async def unchanged_ids(self, chunks: list[Chunk]) -> set[str]:
         await self.ensure_collection()
         if not chunks:
             return set()
         # Fetch existing content hashes for all incoming chunk IDs in one call
-        existing = await self._client.retrieve(
-            collection_name=self._config.collection_name,
-            ids=[c.id for c in chunks],
-            with_payload=["content_hash"],
-        )
+        existing = await self._retrieve_hashes([c.id for c in chunks])
         existing_hashes: dict[str, str] = {
             str(p.id): (p.payload or {}).get("content_hash", "") for p in existing
         }
@@ -151,14 +186,19 @@ class QdrantDenseIndex(BaseIndex):
 
         # Batch upserts to stay within Qdrant's recommended payload size
         for i in range(0, len(points), _UPSERT_BATCH):
-            await self._client.upsert(
-                collection_name=self._config.collection_name,
-                points=points[i : i + _UPSERT_BATCH],
-            )
+            await self._upsert_batch(points[i : i + _UPSERT_BATCH])
 
         logger.info("dense_index_upserted", count=len(to_write))
         return len(to_write)
 
+    @_retry_transient
+    async def _upsert_batch(self, points: list[PointStruct]) -> None:
+        await self._client.upsert(
+            collection_name=self._config.collection_name,
+            points=points,
+        )
+
+    @_retry_transient
     async def delete(self, chunk_ids: list[str]) -> int:
         from qdrant_client.models import PointIdsList
         await self._client.delete(
@@ -182,14 +222,7 @@ class QdrantDenseIndex(BaseIndex):
         stale_ids: list[str] = []
         offset = None
         while True:
-            points, offset = await self._client.scroll(
-                collection_name=self._config.collection_name,
-                scroll_filter=stale_filter,
-                limit=256,
-                offset=offset,
-                with_payload=False,
-                with_vectors=False,
-            )
+            points, offset = await self._scroll_page(stale_filter, offset)
             stale_ids.extend(str(p.id) for p in points)
             if offset is None:
                 break
@@ -199,6 +232,18 @@ class QdrantDenseIndex(BaseIndex):
         logger.info("dense_index_pruned", doc_id=doc_id, count=len(stale_ids))
         return len(stale_ids)
 
+    @_retry_transient
+    async def _scroll_page(self, scroll_filter: Any, offset: Any) -> tuple[list[Any], Any]:
+        return await self._client.scroll(
+            collection_name=self._config.collection_name,
+            scroll_filter=scroll_filter,
+            limit=256,
+            offset=offset,
+            with_payload=False,
+            with_vectors=False,
+        )
+
+    @_retry_transient
     async def stats(self) -> IndexStats:
         info = await self._client.get_collection(self._config.collection_name)
         return IndexStats(

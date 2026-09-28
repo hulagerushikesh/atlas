@@ -31,6 +31,12 @@ class QdrantConfig(BaseSettings):
     url: str = "http://localhost:6333"
     collection_name: str = "atlas_chunks"
     api_key: SecretStr | None = None
+    # qdrant-client passes no timeout to httpx unless given one, so the
+    # default was httpx's 5s. An upsert batch is 100 points of 1536 floats,
+    # several documents go at once, and Qdrant Cloud is a region away: 5s is
+    # under the honest round trip, not a margin over it. 37 of 155 files
+    # failed that way on 2026-09-28.
+    timeout_seconds: int = 60
 
 
 class RedisConfig(BaseSettings):

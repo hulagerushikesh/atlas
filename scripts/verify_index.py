@@ -395,7 +395,11 @@ async def main(args: argparse.Namespace) -> int:
         api_key = (
             settings.qdrant.api_key.get_secret_value() if settings.qdrant.api_key else None
         )
-        client = AsyncQdrantClient(url=settings.qdrant.url, api_key=api_key)
+        client = AsyncQdrantClient(
+            url=settings.qdrant.url,
+            api_key=api_key,
+            timeout=settings.qdrant.timeout_seconds,
+        )
 
     index_root = Path(os.environ.get("ATLAS_INDEX_DIR", "data/index"))
     corpus = Path(args.corpus) if args.corpus else None
