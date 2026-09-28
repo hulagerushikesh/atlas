@@ -107,6 +107,7 @@ def _build_pipeline(settings, namespace: str = "default"):
 
 
 def _build_metrics(settings):
+    from atlas.evaluation.metrics.answer_correctness import AnswerCorrectnessMetric
     from atlas.evaluation.metrics.answer_relevance import AnswerRelevanceMetric
     from atlas.evaluation.metrics.context_precision import ContextPrecisionMetric
     from atlas.evaluation.metrics.context_recall import ContextRecallMetric
@@ -117,11 +118,16 @@ def _build_metrics(settings):
     llm = OpenAILLMProvider(settings.openai)
     embedder = OpenAIEmbedder(settings.openai)
 
+    # Cheap and deterministic first, judged last. AnswerCorrectnessMetric is
+    # the only one that reads the reference answer; a run carrying it is not
+    # comparable with one graded against different reference answers, which
+    # the comparator checks on `answers_fingerprint`.
     return [
         ContextPrecisionMetric(),
         ContextRecallMetric(),
         FaithfulnessMetric(llm),
         AnswerRelevanceMetric(llm, embedder),
+        AnswerCorrectnessMetric(llm),
     ]
 
 

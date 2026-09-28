@@ -144,17 +144,20 @@ Newest at the bottom of each section.
   (`fq-012` named one real page of five) and a reference answer that names
   things the corpus lacks (`fq-010`). Both resolve fine.
 
-- **Add a correctness metric, or say in the README that there isn't one.**
-  `ground_truth_answer` is passed to every metric by `runner.py:171` and read
-  by none of them — precision and recall score `relevant_doc_ids`,
-  faithfulness scores the answer against the retrieved chunks, answer
-  relevance scores the question against questions regenerated from the
-  answer. So the harness cannot tell a right answer from a confidently wrong
-  one that cites its sources correctly, and a wrong reference answer is
-  invisible to it, which is how `fq-010` survived three milestones. Either
-  wire up an answer-correctness judge (reference vs generated, one extra LLM
-  call per sample, ~+15% eval cost) or state the gap next to the table.
-  Stating it is free and honest; the judge is the real fix.
+- ~~**Add a correctness metric, or say in the README that there isn't
+  one.**~~ **Shipped 2026-09-28** — both halves. `AnswerCorrectnessMetric`
+  grades the generated answer against the reference (facts present, missing
+  or contradicted; a contradiction costs twice an omission), and the README
+  states that no correctness *number* exists yet. **Wired but never run: a
+  first figure costs a full eval pass.** Reference answers are fingerprinted
+  separately from the rest of the dataset, because only this metric reads
+  them. See DECISIONS 2026-09-28.
+
+- **Run the harness once with the correctness metric in it.** Everything is
+  in place and no number has been produced, which is the one state that
+  looks like progress and is not. It also prints the first true token and
+  rupee figure for a run, so it settles two open questions at once. Needs a
+  paid run.
 
 - ~~**Verify what is actually in an index.**~~ **done 2026-09-28**,
   `scripts/verify_index.py`. Reads both halves of every namespace and compares

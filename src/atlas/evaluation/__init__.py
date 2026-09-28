@@ -2,7 +2,8 @@
 Module D — Evaluation harness.
 
 Submodules:
-    metrics     — faithfulness, answer_relevance, context_precision, context_recall
+    metrics     — context_precision, context_recall, faithfulness,
+                  answer_relevance, answer_correctness
     runner      — executes full pipeline over an EvalDataset, emits EvalResult
     reporter    — formats EvalResult as JSON + markdown table
     comparator  — diffs two EvalResults for A/B comparison
@@ -10,6 +11,7 @@ Submodules:
 
 from atlas.evaluation.comparator import ComparisonResult, MetricDelta, compare, save_comparison
 from atlas.evaluation.metrics import (
+    AnswerCorrectnessMetric,
     AnswerRelevanceMetric,
     BaseMetric,
     ContextPrecisionMetric,
@@ -26,6 +28,7 @@ __all__ = [
     "ContextRecallMetric",
     "FaithfulnessMetric",
     "AnswerRelevanceMetric",
+    "AnswerCorrectnessMetric",
     # Runner
     "EvalRunner",
     # Reporter

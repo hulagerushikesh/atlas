@@ -109,6 +109,13 @@ concurrency-wide wall clock.
 All four runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
 changes in the pipeline and not in the model.
 
+**A fifth metric exists as of 2026-09-28 and has never been run.**
+`answer_correctness` grades the generated answer against the reference —
+the first metric to read `ground_truth_answer`, which until today nothing
+did. There is no correctness column above and will not be one until an eval
+pass is paid for. A metric in the code is not a result, and the README says
+the same.
+
 **Precision is still the day's result, +0.093, and it is no longer monotone.**
 The retry fix *costs* precision, 0.3733 → 0.3477: it widens the window, and
 two rows that the old labels scored as structural zeros or near-zeros —

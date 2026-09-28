@@ -120,6 +120,11 @@ class EvalResult(BaseModel):
     # assuming they match.
     dataset_name: str = ""
     dataset_fingerprint: str = ""
+    # The reference answers, fingerprinted apart from the rest. Only
+    # `answer_correctness` reads them, so a rewrite of one has to invalidate
+    # a correctness comparison and must not touch a precision one. Empty on
+    # every report written before 2026-09-28.
+    answers_fingerprint: str = ""
     # Every token this run spent, per model, chat and embedding alike.
     # `total_tokens_used` is their sum — but only on a report that carries
     # this field. An empty `token_usage` with a non-zero total is a report

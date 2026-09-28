@@ -1,8 +1,9 @@
 """
-Tests for all four evaluation metrics.
+Tests for all five evaluation metrics.
 
 Programmatic metrics (precision, recall) need no mocks — pure computation.
-LLM-as-judge metrics (faithfulness, answer_relevance) mock the LLM and embedder.
+LLM-as-judge metrics (faithfulness, answer_relevance, answer_correctness)
+mock the LLM and embedder.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from atlas.evaluation.metrics import (
+    AnswerCorrectnessMetric,
     AnswerRelevanceMetric,
     ContextPrecisionMetric,
     ContextRecallMetric,
@@ -278,3 +280,121 @@ class TestOutOfScopeSamples:
         for metric in (ContextPrecisionMetric(), ContextRecallMetric()):
             ms = await metric.score("q", "a", "gen", chunks, ["d1"])
             assert ms.applicable is True
+
+
+# ── AnswerCorrectnessMetric ───────────────────────────────────────────────────
+
+def _facts(*verdicts: str) -> str:
+    return json.dumps({
+        "facts": [{"fact": f"fact {i}", "verdict": v} for i, v in enumerate(verdicts)]
+    })
+
+
+class TestAnswerCorrectnessMetric:
+    """The first metric to read `ground_truth_answer`. Everything before it
+    could score a grounded, on-topic, wrong answer as perfect."""
+
+    @pytest.mark.asyncio
+    async def test_all_reference_facts_present_is_one(self) -> None:
+        ms = await AnswerCorrectnessMetric(
+            _llm(_facts("present", "present"))
+        ).score("q", "ref", "gen", [], ["d1"])
+        assert ms.score == pytest.approx(1.0)
+        assert ms.applicable is True
+
+    @pytest.mark.asyncio
+    async def test_a_missing_fact_costs_its_share(self) -> None:
+        ms = await AnswerCorrectnessMetric(
+            _llm(_facts("present", "present", "present", "missing"))
+        ).score("q", "ref", "gen", [], ["d1"])
+        assert ms.score == pytest.approx(0.75)
+
+    @pytest.mark.asyncio
+    async def test_a_contradiction_costs_twice_an_omission(self) -> None:
+        """An incomplete answer and a wrong one are different failures, and
+        a metric that scored them alike would be no use for deciding whether
+        a configuration is safe to ship."""
+        omitted = await AnswerCorrectnessMetric(
+            _llm(_facts("present", "present", "present", "missing"))
+        ).score("q", "ref", "gen", [], ["d1"])
+        wrong = await AnswerCorrectnessMetric(
+            _llm(_facts("present", "present", "present", "contradicted"))
+        ).score("q", "ref", "gen", [], ["d1"])
+
+        assert omitted.score == pytest.approx(0.75)
+        assert wrong.score == pytest.approx(0.50)
+
+    @pytest.mark.asyncio
+    async def test_score_never_goes_below_zero(self) -> None:
+        ms = await AnswerCorrectnessMetric(
+            _llm(_facts("contradicted", "contradicted"))
+        ).score("q", "ref", "gen", [], ["d1"])
+        assert ms.score == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_contradicted_facts_are_named_in_the_reasoning(self) -> None:
+        ms = await AnswerCorrectnessMetric(
+            _llm(_facts("present", "contradicted"))
+        ).score("q", "ref", "gen", [], ["d1"])
+        assert "Contradicted:" in ms.reasoning
+        assert "fact 1" in ms.reasoning
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_on_an_answerable_row_is_wrong(self) -> None:
+        """Unlike faithfulness, which has nothing to audit and abstains: a
+        refusal covers none of the reference's facts, and the dataset says
+        this row is answerable."""
+        llm = _llm(_facts("present"))
+        ms = await AnswerCorrectnessMetric(llm).score("q", "ref", REFUSAL, [], ["d1"])
+        assert ms.score == pytest.approx(0.0)
+        assert ms.applicable is True
+        llm.generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_on_an_out_of_scope_row_is_right(self) -> None:
+        """No labels means a declared out-of-scope row. This is the only
+        metric that can score the refusal path at all — precision and recall
+        skip the row, faithfulness abstains, answer relevance returns noise."""
+        llm = _llm(_facts("present"))
+        ms = await AnswerCorrectnessMetric(llm).score("q", "ref", REFUSAL, [], [])
+        assert ms.score == pytest.approx(1.0)
+        assert ms.applicable is True
+        llm.generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_answering_an_out_of_scope_row_is_wrong(self) -> None:
+        ms = await AnswerCorrectnessMetric(_llm(_facts("present"))).score(
+            "q", "ref", "Here is a confident answer.", [], []
+        )
+        assert ms.score == pytest.approx(0.0)
+
+    @pytest.mark.asyncio
+    async def test_no_reference_answer_is_inapplicable_not_zero(self) -> None:
+        """The dataset is incomplete there; that is not the pipeline's
+        failure to carry into the mean."""
+        ms = await AnswerCorrectnessMetric(_llm(_facts("present"))).score(
+            "q", "   ", "gen", [], ["d1"]
+        )
+        assert ms.applicable is False
+
+    @pytest.mark.asyncio
+    async def test_a_judge_that_extracts_nothing_is_inapplicable(self) -> None:
+        ms = await AnswerCorrectnessMetric(_llm(json.dumps({"facts": []}))).score(
+            "q", "ref", "gen", [], ["d1"]
+        )
+        assert ms.applicable is False
+
+    @pytest.mark.asyncio
+    async def test_extra_correct_detail_is_not_penalised(self) -> None:
+        """`fq-012`'s correct answer spans five pages where the reference
+        names one. Scoring extra material as a false positive would measure
+        how closely the answer matched the length of a hand-written summary."""
+        metric = AnswerCorrectnessMetric(_llm(_facts("present", "present")))
+        ms = await metric.score(
+            "q", "Short reference.", "A much longer answer with more true detail.",
+            [], ["d1"],
+        )
+        assert ms.score == pytest.approx(1.0)
+
+    def test_metric_name(self) -> None:
+        assert AnswerCorrectnessMetric(AsyncMock()).name == "answer_correctness"

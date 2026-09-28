@@ -77,11 +77,14 @@ def dataset_fingerprint(dataset: EvalDataset) -> str:
     label set and whether the row is declared out of scope — the inputs the
     four metrics actually read.
 
-    Deliberately excludes `ground_truth_answer`: no metric reads it (see
-    planning/DECISIONS 2026-09-27), so `fq-010`'s rewrite changed no score
-    and should not invalidate a comparison. **If an answer-correctness judge
-    is ever added, it has to be added here too**, or the first thing it
-    measures will be silently comparable with runs that predate it.
+    Deliberately excludes `ground_truth_answer`, and still does now that
+    `answer_correctness` reads it. Four of the five metrics do not, so
+    folding the reference answers in here would declare every stored report
+    incomparable with every future one over a field their scores cannot
+    depend on — a guard that cries wolf is one that gets bypassed. The
+    reference answers have their own fingerprint, `dataset_answers_fingerprint`,
+    which the comparator checks only between two runs that both measured
+    correctness.
     """
     parts = [dataset.name]
     for sample in sorted(dataset.samples, key=lambda s: s.id):
@@ -93,6 +96,28 @@ def dataset_fingerprint(dataset: EvalDataset) -> str:
         parts.append(str(sample.metadata.get(OUT_OF_SCOPE_FLAG) is True))
     # \x1f (unit separator) cannot occur in a path, an id or a question, so
     # no arrangement of fields can be made to collide with another.
+    return hash_text("\x1f".join(parts))
+
+
+def dataset_answers_fingerprint(dataset: EvalDataset) -> str:
+    """Identity of the dataset's *reference answers*.
+
+    Separate from `dataset_fingerprint` because it answers a different
+    question. That one asks "were these the same questions and labels?",
+    which is what the four retrieval-and-grounding metrics depend on. This
+    one asks "were these the same reference answers?", which only
+    `answer_correctness` depends on.
+
+    Keeping them apart is what lets the 2026-09-27 rewrite of `fq-010` stay
+    irrelevant to a precision comparison while being decisive for a
+    correctness one. Folding both into a single value would have made every
+    report in `eval_data/reports/` incomparable with everything written
+    after today, over a field that could not have moved any of their scores.
+    """
+    parts = [dataset.name]
+    for sample in sorted(dataset.samples, key=lambda s: s.id):
+        parts.append(sample.id)
+        parts.append(sample.ground_truth_answer)
     return hash_text("\x1f".join(parts))
 
 
