@@ -767,3 +767,31 @@ Format: date — decision — alternatives — reason.
   `httpx.TransportError`, `OSError` — is a transport fault and retries. The
   `OSError` arm is there for `socket.gaierror`, which arrives unwrapped and
   is what a home resolver does when several TLS connections open at once.
+
+- **2026-09-28** — **A single file cannot work out its own corpus root, so
+  the callers pass one.** `index_path(path)` with no `source_root` puts the
+  whole path into every context header: a file ingested on its own got
+  "data corpus fastapi tutorial body" where the same file ingested with its
+  directory got "tutorial body".
+
+  The wasted tokens are not the problem. A different header is a different
+  `content_hash`, so re-ingesting one file of an existing corpus re-embeds it
+  with headers none of its neighbours have, and the corpus quietly disagrees
+  with itself. From the ingest's side it looks like a file that changed.
+
+  `index_path` still honours `None`, because a caller that means it should
+  get it — the fix belongs in the two places that passed `None` only because
+  there was nothing else to pass. `scripts/ingest.py` and the `/ingest` route
+  now default a bare file to its parent, `index_directory` takes a
+  `source_root` override for the case where a subtree is being re-indexed
+  into a corpus rooted higher up, and the script prints the root it chose on
+  every run including `--dry-run`. Printing it is the actual fix: the default
+  is right for a file that stands alone and wrong for one deep in a tree, and
+  only the person running it knows which.
+
+- **2026-09-28** — **`seed_demo.py` handed a directory to `index_path`.**
+  `index_path` calls `get_loader`, which dispatches on suffix, and a
+  directory has none — so `make demo` raised `No loader registered for ''`
+  before indexing anything. Now `index_directory`. Found while auditing the
+  other `index_path` call sites for the source-root fault; unrelated bug,
+  same line of code.

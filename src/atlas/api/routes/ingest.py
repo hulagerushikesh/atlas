@@ -47,11 +47,18 @@ async def ingest(
     logger.info("ingest_request", path=body.path, namespace=body.namespace, glob=body.glob)
     start = time.perf_counter()
 
+    # A single file's parent, not None. None puts the whole path into every
+    # context header, so re-indexing one file of a corpus gave it headers its
+    # neighbours did not have and quietly re-embedded it out of agreement.
+    source_root = Path(body.source_root) if body.source_root else None
+
     try:
         if path.is_dir():
-            result = await indexer.index_directory(path, glob=body.glob)
+            result = await indexer.index_directory(
+                path, glob=body.glob, source_root=source_root
+            )
         else:
-            result = await indexer.index_path(path)
+            result = await indexer.index_path(path, source_root or path.parent)
     except Exception as exc:
         logger.error("ingest_failed", error=str(exc))
         raise HTTPException(status_code=500, detail=str(exc)) from exc

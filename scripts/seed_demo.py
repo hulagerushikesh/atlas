@@ -206,7 +206,10 @@ def _build_components(settings):
 
 async def run_ingest(indexer, doc_dir: Path) -> None:
     print("\nIndexing documents…")
-    result = await indexer.index_path(doc_dir)
+    # index_directory, not index_path: index_path calls get_loader on what it
+    # is given, and a directory has no suffix, so this raised "No loader
+    # registered for ''" before it indexed anything.
+    result = await indexer.index_directory(doc_dir)
     print(f"  Documents processed : {result.documents_processed}")
     print(f"  Chunks indexed      : {result.chunks_indexed}")
     print(f"  Total tokens        : {result.total_tokens:,}")

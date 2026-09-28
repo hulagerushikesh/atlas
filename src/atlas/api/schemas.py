@@ -107,6 +107,15 @@ class IngestRequest(BaseModel):
         "default", min_length=1, max_length=64, description="Corpus namespace to index into"
     )
     glob: str = Field("**/*", description="Glob pattern when path is a directory")
+    source_root: str | None = Field(
+        None,
+        description=(
+            "Prefix stripped from each chunk's context header. Defaults to the "
+            "directory itself, or a single file's parent. Set it explicitly when "
+            "adding to a corpus that was ingested from a higher directory, so the "
+            "new chunks get the same headers as the ones already indexed."
+        ),
+    )
 
 
 class IngestResponse(BaseModel):
