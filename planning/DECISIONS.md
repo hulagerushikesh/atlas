@@ -689,3 +689,42 @@ Format: date — decision — alternatives — reason.
   full of plausible zeros, which is only visible after the run is paid for.
   `--allow-broken-dataset` exists for the case where someone wants the numbers
   anyway, and says in its help what is wrong with them.
+
+- **2026-09-28** — **An index's state is a thing you check, not a thing you
+  infer.** `scripts/verify_index.py` reads both halves of a namespace and
+  compares them: chunk counts, chunk ids, content hashes, and whether each
+  chunk carries the context header the current config asks for, recomputed
+  from the corpus with the same `context_header()` the ingest calls.
+
+  Built because an ingest reported success and changed nothing. Every
+  content hash matched, both indexes skipped every chunk, the run finished
+  in seconds looking exactly like a fast success, and the only evidence
+  against it was a file mtime. An ingest cannot tell you it wrote the wrong
+  namespace, because from inside the run nothing went wrong.
+
+  Three properties made it worth writing rather than re-doing by hand:
+
+  1. **It costs nothing.** Qdrant scrolls and a local JSON read; no
+     embeddings, no LLM. So there is no reason not to run it, which is the
+     only way a check actually gets run.
+  2. **It names the mismatched hybrid.** Between `ingest.py` and
+     `deploy_gcp.sh` production serves new dense vectors against the
+     pre-header BM25 file baked into the live image. That state answers
+     queries and scores badly instead of erroring. Comparing content hashes
+     across the two halves is the only thing that sees it.
+  3. **`chunking.context_headers` decides what passing means**, in both
+     directions. Headers missing when the config says on, and headers left
+     behind when it says off, are the same drift.
+
+  The corpus root is inferred from the common prefix of the indexed sources,
+  because that is what `index_directory` strips. Guessing is safe here: a
+  wrong root predicts a wrong header and fails loudly, rather than passing a
+  wrong index.
+
+- **2026-09-28** — **First run found a half-finished ingest, live.** Against
+  `default`: dense 2090/4020 chunks with headers, sparse 3950/4020, and 1860
+  content hashes differing between the two halves. Both counts are 4020 and
+  the id sets match exactly, so every cheaper check — point count, file
+  size, "did it run today" — reports this as fine. It is not fine: it is a
+  mismatched hybrid serving production, and roughly half the dense index is
+  still pre-header. See STATUS for the re-run.

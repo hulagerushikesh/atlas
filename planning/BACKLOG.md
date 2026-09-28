@@ -119,9 +119,22 @@ Newest at the bottom of each section.
   call per sample, ~+15% eval cost) or state the gap next to the table.
   Stating it is free and honest; the judge is the real fix.
 
-- **Ship the context headers to the `default` namespace — BLOCKED, user must
-  run it.** Cost approved 2026-09-27; the auto-mode classifier refused the
-  write to the live collection, correctly. Two steps, and the order matters:
+- ~~**Verify what is actually in an index.**~~ **done 2026-09-28**,
+  `scripts/verify_index.py`. Reads both halves of every namespace and compares
+  chunk counts, chunk ids, content hashes, and header coverage against what
+  `chunking.context_headers` asks for. Read-only and free, so it can run
+  before and after every ingest. Found a half-finished ingest on its first
+  run; see DECISIONS 2026-09-28.
+
+- **Ship the context headers to the `default` namespace — PARTIALLY DONE and
+  currently inconsistent.** Cost approved 2026-09-27; the auto-mode classifier
+  refused the write to the live collection, correctly, so the user runs it.
+  The 2026-09-28 run landed 3950/4020 sparse chunks but only 2090/4020 dense,
+  leaving 1860 content hashes differing between the two halves — a mismatched
+  hybrid serving production now. Re-run the same ingest; the content-hash
+  dedupe means only the ~1930 missing dense chunks are re-embedded, so it is
+  roughly Rs.3.10 rather than Rs.6.45. Confirm with `verify_index.py` before
+  deploying. Two steps, and the order matters:
 
       cd <repo root> && .venv/bin/python scripts/ingest.py data/corpus/fastapi --namespace default
       cd <repo root> && ./scripts/deploy_gcp.sh
