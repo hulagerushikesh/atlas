@@ -814,3 +814,43 @@ Format: date — decision — alternatives — reason.
   not checked instead of pretending it was. `SKIP_VERIFY=1` exists and
   announces itself. The check costs nothing to run, so the escape hatch is
   for a reason, not for a hurry.
+
+- **2026-09-28** — **`--dataset` has no default, because no default is
+  correct.** `run_eval.py` defaulted to `eval_data/sample_dataset.json`, the
+  30-question HR set. A bare run in this repo scored those questions against
+  the FastAPI index and produced a full, well-formatted report of zeros, then
+  a confident `Overall winner` against a 15-sample FastAPI baseline. Nothing
+  in the output looked broken. Only the token count did.
+
+  Pointing the default at `fastapi_dataset.json` instead would have moved the
+  trap rather than removed it — the right dataset depends on what was
+  ingested into the namespace, which a default cannot know. So the flag is
+  required, and the error lists the datasets in `eval_data/`: the fault was
+  someone getting the wrong one without ever choosing.
+
+- **2026-09-28** — **The dataset is checked against the namespace, not just
+  against a corpus.** `check_dataset` asks whether labels name real files.
+  That is a different question from whether those files are in the index
+  about to be queried, and a dataset can pass the first perfectly while being
+  pointed at the wrong namespace.
+
+  `indexed_doc_keys` reads the namespace's BM25 file and builds the same key
+  set `corpus_doc_keys` builds from disk — there is a test asserting the two
+  agree, because a checker that disagrees with the matcher rejects labels
+  that would have scored. Zero labelled rows resolving is a hard error: that
+  is the wrong corpus, not a corpus with gaps. Some resolving is a warning
+  naming the rows, because a partly-ingested corpus still measures something.
+
+  It reads the JSON rather than constructing `BM25SparseIndex`, whose
+  constructor re-tokenises every chunk to rebuild the ranker. The check needs
+  one field and runs before anything is spent; it should not cost seconds of
+  CPU to answer. `None` for a missing file is deliberately distinct from an
+  empty set — nothing ingested here is not the same claim as a namespace that
+  holds other documents.
+
+- **2026-09-28** — **`eval_retrieval.py` loaded the cross-encoder before it
+  read the dataset.** `NamespaceRegistry(SharedComponents(settings))` was
+  built first, which pulls the reranker weights into memory, and only then
+  was the dataset opened and checked. Same ordering principle as `run_eval.py`
+  and the same fix: dataset first, registry second. A dataset that cannot
+  score is worth finding out about before seconds of CPU, not after.

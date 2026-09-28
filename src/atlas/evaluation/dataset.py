@@ -24,8 +24,17 @@ Why this exists:
         unfalsifiable by construction — precision and recall have nothing to
         disagree with — so the *intent* has to be stated, not inferred.
 
-    Both checks run before any model is called, so a broken dataset fails for
-    free rather than after an eval run has been paid for.
+      - A dataset run against a namespace that does not hold its corpus.
+        `run_eval.py` used to default `--dataset` to the 30-question HR set,
+        so a bare invocation in this repo scored those questions against the
+        FastAPI index and printed a full, well-formatted report of zeros —
+        then a confident `Overall winner` against a 15-sample FastAPI
+        baseline. Nothing about the report looked broken. Only the token
+        count did. The namespace's own index says which documents it holds,
+        so this is answerable locally and for nothing.
+
+    All three checks run before any model is called, so a broken dataset
+    fails for free rather than after an eval run has been paid for.
 
 What this cannot check:
     Whether a label set is *complete*. `fq-012` named one real page when its
@@ -37,6 +46,7 @@ What this cannot check:
 
 from __future__ import annotations
 
+import contextlib
 import json
 from pathlib import Path
 
@@ -51,27 +61,89 @@ class DatasetError(ValueError):
     """A dataset that would silently mis-score if it were run."""
 
 
-def corpus_doc_keys(corpus_root: Path) -> set[str]:
-    """Every id a chunk of this corpus can present to `doc_match`.
+def doc_keys(source: str, corpus_root: Path | None = None) -> set[str]:
+    """Every id a chunk of *source* can present to `doc_match`.
 
     Deliberately built the same way `doc_match.chunk_doc_keys` builds a
     chunk's keys, because agreeing with the matcher is the whole point: a
     label outside this set cannot match any chunk, whatever it looks like.
     """
+    path = Path(source)
+    no_ext = path.with_suffix("") if path.suffix else path
+    keys = {document_id(source), source, no_ext.name, str(no_ext)}
+    if corpus_root is not None:
+        # A source from outside the root has no corpus-relative form; the
+        # other four keys still stand, so this is skipped rather than fatal.
+        with contextlib.suppress(ValueError):
+            keys.add(no_ext.relative_to(corpus_root).as_posix())
+    return keys
+
+
+def corpus_doc_keys(corpus_root: Path) -> set[str]:
+    """Keys for every document on disk under *corpus_root*."""
     keys: set[str] = set()
     for path in sorted(corpus_root.rglob("*")):
-        if not path.is_file():
-            continue
-        source = str(path)
-        no_ext = path.with_suffix("") if path.suffix else path
-        keys |= {
-            document_id(source),
-            source,
-            no_ext.name,
-            str(no_ext),
-            no_ext.relative_to(corpus_root).as_posix(),
-        }
+        if path.is_file():
+            keys |= doc_keys(str(path), corpus_root)
     return keys
+
+
+def indexed_doc_keys(sparse_index: Path, corpus_root: Path | None = None) -> set[str] | None:
+    """Keys for the documents a namespace's BM25 index actually holds.
+
+    `None` when there is no index file, which is a different statement from
+    an empty set: nothing has been ingested into this namespace *here*, as
+    opposed to a namespace holding documents the dataset does not name.
+
+    Read straight off the JSON rather than through `BM25SparseIndex`, whose
+    constructor re-tokenises every chunk to rebuild the ranker. This needs
+    the `source` field and nothing else, and it runs before an eval has spent
+    anything, so it should not cost seconds of CPU to answer.
+    """
+    if not sparse_index.is_file():
+        return None
+    try:
+        entries = json.loads(sparse_index.read_text())
+    except json.JSONDecodeError:
+        return None
+    keys: set[str] = set()
+    for source in {e.get("metadata", {}).get("source", "") for e in entries}:
+        if source:
+            keys |= doc_keys(source, corpus_root)
+    return keys
+
+
+def check_dataset_is_ingested(
+    dataset: EvalDataset, known: set[str] | None, where: str
+) -> list[str]:
+    """Problems from running *dataset* against an index that lacks its corpus.
+
+    Separate from `check_dataset` because it asks a different question. That
+    one asks whether the labels name real files; this one asks whether those
+    files are in the thing about to be queried. A dataset can be perfect and
+    still be pointed at the wrong namespace.
+    """
+    labelled = [s for s in dataset.samples if s.relevant_doc_ids]
+    if not labelled or known is None:
+        return []
+
+    missing = [s.id for s in labelled if not any(i in known for i in s.relevant_doc_ids)]
+    if not missing:
+        return []
+
+    if len(missing) == len(labelled):
+        # Every labelled row. Not a corpus with gaps — the wrong corpus.
+        return [
+            f"none of the {len(labelled)} labelled samples name a document in {where}. "
+            f"This dataset and this namespace are about different corpora, and the run "
+            f"would score every row a miss and report it as a retrieval failure."
+        ]
+    return [
+        f"{len(missing)} of {len(labelled)} labelled samples name no document in "
+        f"{where} ({', '.join(missing[:5])}"
+        f"{', …' if len(missing) > 5 else ''}), so those rows score a miss whatever "
+        f"retrieval does. Ingest the missing pages or drop the rows."
+    ]
 
 
 def check_dataset(dataset: EvalDataset, corpus_root: Path | None = None) -> list[str]:

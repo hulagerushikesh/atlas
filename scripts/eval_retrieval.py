@@ -14,8 +14,12 @@ Why this exists alongside run_eval.py:
     instead of once per sub-question. Compare its numbers with its own, never
     with a published full-eval score.
 
+--dataset is required and has no default, for the same reason it has none
+in run_eval.py: which set is right depends on what was ingested into the
+namespace, so the script asks rather than guessing, and then checks the answer
+against the namespace's own index.
+
 Usage:
-    .venv/bin/python scripts/eval_retrieval.py
     .venv/bin/python scripts/eval_retrieval.py --dataset eval_data/fastapi_dataset.json
     .venv/bin/python scripts/eval_retrieval.py --set retrieval.top_k=30
 """
@@ -33,16 +37,28 @@ import structlog
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from atlas.api.namespaces import NamespaceRegistry, SharedComponents  # noqa: E402
+from atlas.api.namespaces import (  # noqa: E402
+    NamespaceRegistry,
+    SharedComponents,
+    sparse_index_path,  # noqa: E402
+)
 from atlas.config import get_settings  # noqa: E402
-from atlas.evaluation.dataset import DatasetError, load_dataset  # noqa: E402
+from atlas.evaluation.dataset import (  # noqa: E402
+    DatasetError,
+    check_dataset_is_ingested,
+    indexed_doc_keys,
+    load_dataset,
+)
 from atlas.evaluation.doc_match import chunk_matches, recalled_ids  # noqa: E402
 from atlas.evaluation.overrides import apply_overrides, parse_override  # noqa: E402
 
 
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
-    p.add_argument("--dataset", default="eval_data/fastapi_dataset.json")
+    p.add_argument(
+        "--dataset",
+        help="Path to EvalDataset JSON. Required; no default on purpose.",
+    )
     p.add_argument("--namespace", default="default")
     p.add_argument(
         "--set", dest="overrides", action="append", default=[],
@@ -51,6 +67,16 @@ def _parse_args() -> argparse.Namespace:
     )
     p.add_argument("--json", action="store_true", help="Print the report as JSON only.")
     return p.parse_args()
+
+
+def _print_available_datasets() -> None:
+    found = sorted(Path("eval_data").glob("*.json"))
+    if not found:
+        print("No datasets found under eval_data/.", file=sys.stderr)
+        return
+    print("\nAvailable datasets:", file=sys.stderr)
+    for path in found:
+        print(f"  --dataset {path}", file=sys.stderr)
 
 
 async def main() -> int:
@@ -65,15 +91,41 @@ async def main() -> int:
     if args.overrides:
         settings = apply_overrides(settings, dict(parse_override(o) for o in args.overrides))
 
-    registry = NamespaceRegistry(SharedComponents(settings))
-    retriever = registry.get(args.namespace).pipeline._retriever
+    # Dataset first, registry second. SharedComponents loads the cross-encoder
+    # weights, which is seconds of CPU before a single question is asked, and
+    # a dataset that cannot score is worth finding out about before that.
+    if not args.dataset:
+        print("Error: --dataset is required.", file=sys.stderr)
+        _print_available_datasets()
+        return 1
+    dataset_path = Path(args.dataset)
+    if not dataset_path.exists():
+        print(f"Error: dataset not found: {dataset_path}", file=sys.stderr)
+        _print_available_datasets()
+        return 1
+
     try:
-        dataset, notes = load_dataset(Path(args.dataset))
+        dataset, notes = load_dataset(dataset_path)
     except DatasetError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
+
+    root = Path(dataset.corpus_root) if dataset.corpus_root else None
+    mismatch = check_dataset_is_ingested(
+        dataset,
+        indexed_doc_keys(sparse_index_path(args.namespace), root),
+        f"namespace '{args.namespace}'",
+    )
+    if mismatch:
+        for problem in mismatch:
+            print(f"Error: {problem}", file=sys.stderr)
+        return 1
+
     for note in notes:
         print(f"Warning: {note}", file=sys.stderr)
+
+    registry = NamespaceRegistry(SharedComponents(settings))
+    retriever = registry.get(args.namespace).pipeline._retriever
     samples = [s.model_dump() for s in dataset.samples]
 
     precisions: list[float] = []
