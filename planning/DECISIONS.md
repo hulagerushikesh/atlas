@@ -895,3 +895,45 @@ Format: date — decision — alternatives — reason.
   from knowing they do, and this whole class of fault is the second being
   assumed from the first — so it is said out loud in the artefact itself,
   where the number gets quoted from, rather than in a log.
+
+- **2026-09-28** — **The grader now judges what the generator will be
+  handed.** `grader.py` sliced `chunks[:5]` under the comment "more adds
+  noise", which was true when `reranker.top_k` was also 5 and the slice was
+  the whole window. `top_k` went to 15 on 2026-09-23 and the slice did not,
+  so for five days the grader answered "is the top 5 sufficient?" while the
+  pipeline acted on the answer as though it were "is the context
+  sufficient?" — and the generator received all 15 either way.
+
+  The asymmetry is the argument. A grader shown less than the generator
+  cannot call a window sufficient that is not, because everything it saw is
+  really there. It calls a window insufficient whenever the answer sits
+  below the slice, which is a retry the pipeline did not need. `fq-005`
+  triggered one while `tutorial/body` was already in the window. Since the
+  retry union shipped on 2026-09-27 that costs a round trip rather than a
+  document, so this is a cost and latency item, not a correctness one.
+
+  `grader.context_chunks` defaults to None, meaning the whole window.
+  `--set grader.context_chunks=5` reproduces the old behaviour exactly, and
+  there is a test asserting it does, because that flag is the A/B.
+
+- **2026-09-28** — **Widening it is not obviously cheaper, so it has to be
+  measured.** At this corpus's mean chunk length (484 characters, ≈121
+  tokens over 4,020 chunks) going from 5 chunks to 15 adds roughly 1,200
+  prompt tokens per grade call. Against that, every prevented retry saves a
+  full retrieval plus another grade call — 2 to 6 seconds of the grading
+  stage in the stored reports, which accumulate across retries.
+
+  There is also a real risk in the other direction: a grader shown fifteen
+  chunks of which one is relevant may score *lower* through dilution than
+  the same grader shown five. That is an empirical question about the
+  prompt, and arguing it from first principles is how the original `[:5]`
+  got its comment. Default changed, A/B flag provided, run it.
+
+- **2026-09-28** — **`total_tokens_used` only counts the generation call.**
+  Noticed while pricing the above: `runner.py:206` stashes
+  `generation.prompt_tokens + completion_tokens` and nothing else, so the
+  router, decomposer, grader and both judges have never appeared in a
+  report's token figure. Every "tokens" number in STATUS and DECISIONS is
+  therefore a generation-only number, which is consistent across runs and so
+  still valid for comparison — but it is not the run's cost, and it was read
+  as one. Filed in BACKLOG rather than fixed here.

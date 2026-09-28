@@ -18,7 +18,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve .env relative to this file (src/atlas/config.py → project root)
@@ -89,6 +89,38 @@ class RouterConfig(BaseSettings):
     domain: str = "the documents that have been ingested into this knowledge base"
 
 
+class GraderConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="GRADER_", env_file=_ENV_FILE, extra="ignore")
+
+    threshold: float = 0.5
+    # How many retrieved chunks the grader is shown. None means all of them.
+    #
+    # It was a hardcoded 5, with the comment "more adds noise" — true when
+    # `reranker.top_k` was also 5 and the slice was the whole window. top_k
+    # went to 15 on 2026-09-23 and the slice did not, so the grader has since
+    # been answering "is the top 5 sufficient?" while the pipeline acts on the
+    # answer as though it were "is the context sufficient?". The generator is
+    # handed all 15.
+    #
+    # That gap only fails one way: the grader cannot call a window sufficient
+    # when it is not, but it calls it insufficient whenever the answer sits at
+    # rank 6 or below. `fq-005` triggered a retry that way while
+    # `tutorial/body` was already in the window.
+    context_chunks: int | None = None
+
+    @field_validator("context_chunks", mode="before")
+    @classmethod
+    def _blank_means_all(cls, value: object) -> object:
+        """`GRADER_CONTEXT_CHUNKS=` in a .env is "no cap", not a parse error.
+
+        Blank is how every other optional in .env.example says "unset"
+        (`QDRANT_API_KEY=`), and an int field rejects it outright — so a line
+        copied from the example crashed `get_settings()` at import, before
+        anything could report which variable was at fault.
+        """
+        return None if isinstance(value, str) and not value.strip() else value
+
+
 class RerankerConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="RERANKER_", env_file=_ENV_FILE, extra="ignore")
 
@@ -148,6 +180,7 @@ class Settings(BaseSettings):
     redis: RedisConfig = Field(default_factory=RedisConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
+    grader: GraderConfig = Field(default_factory=GraderConfig)
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)
     router: RouterConfig = Field(default_factory=RouterConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)

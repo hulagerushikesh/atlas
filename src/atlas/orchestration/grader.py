@@ -22,12 +22,37 @@ Design rationale:
     Beyond 2 retries, the grader accepts the best context seen rather than
     looping indefinitely — a retrieval failure is better communicated as low
     confidence in the answer than as an HTTP timeout to the end user.
+
+    How much context it grades: all of it, by default. This was a hardcoded
+    `chunks[:5]` carrying the comment "more adds noise", which was true when
+    `reranker.top_k` was 5 and the slice was the whole window. `top_k` became
+    15 on 2026-09-23 and the slice stayed at 5, so for five days the grader
+    answered "is the top 5 sufficient?" while the pipeline acted on the answer
+    as if it were "is the context sufficient?" — and the generator was handed
+    all 15 either way.
+
+    A grader that sees less than the generator can only be wrong in one
+    direction. It cannot call a window sufficient that is not, because
+    everything it saw is really there. It calls a window insufficient whenever
+    the answer sits below the slice, which is a retry the pipeline did not
+    need: `fq-005` triggered one while `tutorial/body` was already in the
+    window. Since 2026-09-27 a retry can no longer discard context, so the
+    consequence is a wasted round trip rather than a lost document — cost and
+    latency, not correctness.
+
+    `grader.context_chunks` caps it for anyone who wants the old behaviour or
+    something between. Widening the window is not free: at this corpus's mean
+    chunk length it adds roughly 1,200 prompt tokens per grade call, against
+    a saving of one retrieval plus one grade call for every retry it prevents.
+    Which way that nets out is an empirical question and has to be measured,
+    not argued: `--set grader.context_chunks=5` reproduces the old default.
 """
 
 from __future__ import annotations
 
 import structlog
 
+from atlas.config import GraderConfig
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.llm import parse_json_response
@@ -62,9 +87,10 @@ def _format_context(chunks: list[RetrievedChunk]) -> str:
 class RetrievalGrader:
     """LLM-based judge: is the retrieved context good enough to generate from?"""
 
-    def __init__(self, llm: BaseLLMProvider, threshold: float = _THRESHOLD) -> None:
+    def __init__(self, llm: BaseLLMProvider, config: GraderConfig | None = None) -> None:
         self._llm = llm
-        self._threshold = threshold
+        self._config = config or GraderConfig()
+        self._threshold = self._config.threshold
 
     async def grade(
         self, query: str, chunks: list[RetrievedChunk]
@@ -79,7 +105,10 @@ class RetrievalGrader:
         if not chunks:
             return False, 0.0, query
 
-        context = _format_context(chunks[:5])  # grade on top-5 only; more adds noise
+        # Judge what the generator will be handed, unless told otherwise.
+        cap = self._config.context_chunks
+        graded = chunks if cap is None else chunks[:cap]
+        context = _format_context(graded)
         request = GenerationRequest(
             messages=[
                 Message(role="system", content=_SYSTEM_PROMPT),
@@ -104,5 +133,9 @@ class RetrievalGrader:
             query=query[:60],
             score=score,
             sufficient=sufficient,
+            # Both, because a verdict from a slice is a different claim from
+            # a verdict on the window, and only the pair says which it was.
+            graded_chunks=len(graded),
+            available_chunks=len(chunks),
         )
         return bool(sufficient), score, reformulated

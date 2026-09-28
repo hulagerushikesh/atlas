@@ -150,7 +150,7 @@ class NamespaceRegistry:
             retriever=hybrid,
             router=QueryRouter(s.llm, cfg.router),
             decomposer=QueryDecomposer(s.llm),
-            grader=RetrievalGrader(s.llm),
+            grader=RetrievalGrader(s.llm, cfg.grader),
             generator=AnswerGenerator(s.llm),
             faithfulness=FaithfulnessChecker(s.llm),
             reranker=s.reranker,

@@ -33,15 +33,35 @@ Newest at the bottom of each section.
 - ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
 - Streaming errors after first byte become events; document the event
   schema in `docs/api.md`.
-- **The grader reads a third of the window it is judging.**
-  `grader.py:82` is `_format_context(chunks[:5])`, commented "more adds
-  noise" — true when `reranker.top_k` was 5 and the slice was the whole
-  window. At 15 the grader calls a retrieval insufficient while the answer
-  sits at rank 6, which is how `fq-005` triggered the retry that lost it.
-  Now that a retry can no longer discard context the consequence is only a
-  wasted round trip, so this is a cost and latency item rather than a
-  correctness one. Grading all 15 triples the grader prompt; grading the
-  top 10 might be the trade. Needs a full eval either way.
+- ~~**The grader reads a third of the window it is judging.**~~ **changed
+  2026-09-28, NOT YET MEASURED.** `grader.context_chunks` defaults to None,
+  so the grader is shown the whole window the generator will get.
+  `--set grader.context_chunks=5` reproduces the old slice exactly.
+
+  **This is a default change that no eval has confirmed.** Two things could
+  happen and only a run distinguishes them: fewer needless retries (the
+  point), or a *lower* grader score through dilution when fifteen chunks
+  carry one relevant document. Roughly +1,200 prompt tokens per grade call
+  against a saved retrieval plus grade call per prevented retry. The A/B:
+
+      .venv/bin/python scripts/run_eval.py --dataset eval_data/fastapi_dataset.json \
+        --run-name grader-window-15
+      .venv/bin/python scripts/run_eval.py --dataset eval_data/fastapi_dataset.json \
+        --set grader.context_chunks=5 --run-name grader-window-5 \
+        --compare eval_data/reports/grader-window-15_<stamp>.json
+
+  Two runs, ~Rs.1.6 the pair. Watch the grading stage in the latency table
+  as much as the scores — the prize here is round trips, not precision.
+
+- **`total_tokens_used` counts only the generation call.** `runner.py:206`
+  stashes `generation.prompt_tokens + completion_tokens` and nothing else,
+  so the router, decomposer, grader and both judges have never been in a
+  report's token figure. The numbers are consistent across runs, so every
+  published comparison still holds — but they are not the run's cost, and
+  they have been read as one, including while pricing the grader window
+  above. Fix is to accumulate per-provider `model_calls` token counts the
+  way `model_calls` already accumulates call counts. Free, and it makes
+  every future "is this cheaper?" question answerable from the report.
 - ~~**Cap and rerank the sub-query merge.**~~ **Shipped 2026-09-27.**
   `_retrieve_all` now round-robins across sub-queries and cuts back to one
   window, re-ranked against the original question when a reranker exists.
