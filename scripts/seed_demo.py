@@ -188,7 +188,7 @@ def _build_components(settings):
         retriever=hybrid,
         router=QueryRouter(llm, settings.router),
         decomposer=QueryDecomposer(llm),
-        grader=RetrievalGrader(llm),
+        grader=RetrievalGrader(llm, settings.grader),
         generator=AnswerGenerator(llm),
         faithfulness=FaithfulnessChecker(llm),
     )
