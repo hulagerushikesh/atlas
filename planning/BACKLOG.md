@@ -126,6 +126,16 @@ Newest at the bottom of each section.
   before and after every ingest. Found a half-finished ingest on its first
   run; see DECISIONS 2026-09-28.
 
+- ~~**A single file ingest baked the whole path into its context headers.**~~
+  **fixed 2026-09-28.** `scripts/ingest.py` and the `/ingest` route default a
+  bare file's source root to its parent instead of passing `None`;
+  `index_directory` gained a `source_root` override for re-indexing a subtree
+  of a corpus rooted higher up; `--source-root` and an always-printed
+  `Source root:` line make the choice visible. The real hazard was not the
+  wasted tokens but the `content_hash` change: a re-ingest of one file gave
+  it headers its neighbours lacked. Also fixed `seed_demo.py`, which passed a
+  directory to `index_path` and raised before indexing anything.
+
 - ~~**Nothing retried a Qdrant fault, and the client had no timeout.**~~
   **fixed 2026-09-28.** `QdrantConfig.timeout_seconds` (default 60) is passed
   to every `AsyncQdrantClient`; before this qdrant-client handed httpx no

@@ -5,10 +5,15 @@ ingest.py — index a file or directory into Atlas from the command line.
 Builds the full ingestion pipeline from settings (same components as the API)
 and calls DocumentIndexer.index_path(). Progress is streamed to stdout.
 
+The source root printed at the top is what gets stripped from every
+chunk's context header; see _resolve_source_root for why a single file
+cannot work it out and what goes wrong when it guesses.
+
 Usage:
     python scripts/ingest.py /path/to/docs
     python scripts/ingest.py /path/to/docs --glob "**/*.pdf"
     python scripts/ingest.py /path/to/report.pdf --chunker recursive
+    python scripts/ingest.py docs/a/b.md --source-root docs   # match a corpus
     python scripts/ingest.py /path/to/docs --dry-run   # count files, don't index
 """
 
@@ -56,6 +61,33 @@ def _build_indexer(settings, chunker_type: str | None, namespace: str):
     )
 
 
+def _resolve_source_root(target: Path, override: str | None) -> Path:
+    """What gets stripped from the front of every chunk's context header.
+
+    A directory ingest answers this itself — the directory is the corpus, and
+    that is what `index_directory` has always used. A single file cannot:
+    nothing in `data/corpus/fastapi/tutorial/body.md` says which leading
+    segments are where the corpus lives and which are the document's own
+    topic. The old answer was to pass nothing, which put all of it in the
+    header: "data corpus fastapi tutorial body", three tokens of the ingest's
+    working directory embedded into every chunk of that file.
+
+    The damage is not the wasted tokens. Re-ingesting one file of a corpus
+    that was ingested as a directory gives that file a header none of its
+    neighbours have, which changes its content_hash, which re-embeds it into
+    a corpus it now disagrees with — and nothing reports that, because from
+    the ingest's side it looks like a file that changed.
+
+    So the default is the file's own parent, which is right when the file
+    stands alone and wrong when it sits deep in a tree that was indexed from
+    above. Which of those it is, only the caller knows, so the choice is
+    printed every run and --source-root overrides it.
+    """
+    if override:
+        return Path(override)
+    return target if target.is_dir() else target.parent
+
+
 def _collect_files(path: Path, glob: str) -> list[Path]:
     if path.is_file():
         return [path]
@@ -82,7 +114,18 @@ async def main(args: argparse.Namespace) -> int:
         print(f"No files matched glob '{args.glob}' under {target}")
         return 0
 
+    # Resolved before the dry-run branch: a dry run is exactly when someone
+    # is checking what this is about to do, and the source root is the part
+    # of that they cannot see any other way.
+    source_root = _resolve_source_root(target, args.source_root)
+
     print(f"Atlas ingest — {len(files)} file(s) found under {target}")
+    print(f"Source root: {source_root}  (stripped from context headers)")
+    if target.is_file() and not args.source_root:
+        print(
+            "  note: adding to a corpus indexed from a higher directory? "
+            "pass --source-root so the headers match."
+        )
     if args.dry_run:
         for f in files:
             print(f"  {f}")
@@ -100,9 +143,11 @@ async def main(args: argparse.Namespace) -> int:
     # index_path loads a single file and takes no glob; directories must go
     # through index_directory. Passing glob= to index_path raised TypeError.
     if target.is_file():
-        result = await indexer.index_path(target)
+        result = await indexer.index_path(target, source_root)
     else:
-        result = await indexer.index_directory(target, glob=args.glob)
+        result = await indexer.index_directory(
+            target, glob=args.glob, source_root=source_root
+        )
     elapsed = time.perf_counter() - t0
 
     print("─" * 50)
@@ -133,6 +178,14 @@ if __name__ == "__main__":
         "--glob",
         default="**/*",
         help="Glob pattern when path is a directory (default: **/*)",
+    )
+    parser.add_argument(
+        "--source-root",
+        help=(
+            "Prefix stripped from each chunk's context header. Defaults to the "
+            "directory itself, or a single file's parent. Set it when adding to "
+            "a corpus that was ingested from a higher directory."
+        ),
     )
     parser.add_argument(
         "--chunker",

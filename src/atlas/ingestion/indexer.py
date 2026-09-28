@@ -92,6 +92,14 @@ class DocumentIndexer:
         header. It is threaded down from index_directory rather than inferred,
         because only the caller knows which leading segments are the corpus
         location and which are the document's own topic.
+
+        Passing None is a real choice, not a convenience: the header then
+        carries the whole path. For a single file that is almost never what
+        the caller wants, and re-indexing one file of an existing corpus that
+        way gives it a header none of its neighbours have — a different
+        content_hash, a re-embed, and a corpus that disagrees with itself.
+        `scripts/ingest.py` and the /ingest route both pass the file's parent
+        rather than nothing, and both let the caller say otherwise.
         """
         loader = get_loader(path)
         documents = await loader.load(path)
@@ -101,8 +109,17 @@ class DocumentIndexer:
         self,
         directory: Path,
         glob: str = "**/*",
+        source_root: Path | None = None,
     ) -> IndexResult:
-        """Recursively index all supported files under *directory*."""
+        """Recursively index all supported files under *directory*.
+
+        *source_root* defaults to *directory*, which is the right answer
+        whenever the directory is the corpus. It is separable for the case
+        where it is not — re-indexing one subtree of a corpus that was
+        ingested whole has to strip the same prefix the whole ingest did, or
+        the headers disagree and the chunks re-embed against their own
+        neighbours.
+        """
         files = [p for p in directory.glob(glob) if p.is_file()]
         # A corpus dir usually carries a manifest or README sidecar; ignoring
         # unknown extensions up front keeps them out of the error list.
@@ -112,7 +129,7 @@ class DocumentIndexer:
             "indexing_directory", path=str(directory), file_count=len(paths), ignored=ignored
         )
 
-        tasks = [self.index_path(p, directory) for p in paths]
+        tasks = [self.index_path(p, source_root or directory) for p in paths]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         combined = IndexResult()

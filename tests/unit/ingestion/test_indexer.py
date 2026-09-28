@@ -273,3 +273,86 @@ class TestIdempotency:
         assert result.documents_processed == 1
         assert result.documents_skipped == 0
 
+
+
+class TestSourceRoot:
+    """The prefix stripped from every chunk's context header.
+
+    `index_path` accepts None and honours it, which is right for a caller
+    that means it. The bug was that `scripts/ingest.py` and the /ingest route
+    passed None for a single file because there was nothing else to pass, so
+    a file ingested on its own got "data corpus fastapi tutorial body" as its
+    header while the same file ingested with its directory got "tutorial
+    body". Different header, different content_hash, and the file re-embeds
+    into a corpus that no longer agrees with it.
+    """
+
+    @pytest.fixture
+    def headed_indexer(
+        self, mock_embedder: MagicMock, mock_dense: MagicMock, mock_sparse: MagicMock
+    ) -> DocumentIndexer:
+        return DocumentIndexer(
+            chunker=FixedSizeChunker(size=200, overlap=0),
+            embedder=mock_embedder,
+            dense_index=mock_dense,
+            sparse_index=mock_sparse,
+            context_headers=True,
+        )
+
+    @staticmethod
+    def _first_header(mock_sparse: MagicMock) -> str:
+        chunks = mock_sparse.upsert.await_args.args[0]
+        return chunks[0].content.split("\n\n")[0]
+
+    @pytest.mark.asyncio
+    async def test_a_directory_strips_itself_by_default(
+        self, tmp_path: Path, headed_indexer: DocumentIndexer, mock_sparse: MagicMock
+    ) -> None:
+        (tmp_path / "tutorial").mkdir()
+        (tmp_path / "tutorial" / "body.md").write_text("# Body\n\ncontent " * 20)
+
+        await headed_indexer.index_directory(tmp_path)
+
+        assert self._first_header(mock_sparse).startswith("tutorial body")
+
+    @pytest.mark.asyncio
+    async def test_a_directory_can_be_told_to_strip_something_else(
+        self, tmp_path: Path, headed_indexer: DocumentIndexer, mock_sparse: MagicMock
+    ) -> None:
+        """Re-indexing one subtree of a corpus indexed from above."""
+        corpus = tmp_path / "corpus"
+        (corpus / "tutorial").mkdir(parents=True)
+        (corpus / "tutorial" / "body.md").write_text("# Body\n\ncontent " * 20)
+
+        await headed_indexer.index_directory(corpus / "tutorial", source_root=corpus)
+
+        # Not "body" — the same header the whole-corpus ingest would write.
+        assert self._first_header(mock_sparse).startswith("tutorial body")
+
+    @pytest.mark.asyncio
+    async def test_one_file_with_its_parent_matches_the_directory_ingest(
+        self, tmp_path: Path, headed_indexer: DocumentIndexer, mock_sparse: MagicMock
+    ) -> None:
+        """What `scripts/ingest.py` now passes for a bare file."""
+        target = tmp_path / "body.md"
+        target.write_text("# Body\n\ncontent " * 20)
+
+        await headed_indexer.index_path(target, target.parent)
+
+        assert self._first_header(mock_sparse).startswith("body")
+
+    @pytest.mark.asyncio
+    async def test_no_source_root_puts_the_whole_path_in_the_header(
+        self, tmp_path: Path, headed_indexer: DocumentIndexer, mock_sparse: MagicMock
+    ) -> None:
+        """The old behaviour, kept and pinned: passing None is honoured, so
+        the fix belongs in the callers rather than in a guess here."""
+        nested = tmp_path / "corpus" / "tutorial"
+        nested.mkdir(parents=True)
+        target = nested / "body.md"
+        target.write_text("# Body\n\ncontent " * 20)
+
+        await headed_indexer.index_path(target)
+
+        header = self._first_header(mock_sparse)
+        assert "corpus tutorial body" in header
