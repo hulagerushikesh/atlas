@@ -6,8 +6,16 @@ Loads an EvalDataset from a JSON file, runs every sample through the live
 RAG pipeline (requires Qdrant + Redis + OpenAI), scores on all four metrics,
 saves a JSON + Markdown report to eval_data/reports/, and prints a summary table.
 
+--dataset is required and deliberately has no default. It used to default
+to the 30-question HR set, so a bare run in this repo scored those questions
+against the FastAPI index and printed a full report of zeros, then a confident
+`Overall winner` against a 15-sample FastAPI baseline. Nothing in the output
+looked broken; only the token count did. No default is correct here, because
+which dataset is right depends on what was ingested into the namespace — so
+the script asks, and then checks the answer against the namespace's index.
+
 Usage:
-    python scripts/run_eval.py
+    python scripts/run_eval.py --dataset eval_data/fastapi_dataset.json
     python scripts/run_eval.py --dataset eval_data/sample_dataset.json
     python scripts/run_eval.py --run-name my_experiment --concurrency 2
     python scripts/run_eval.py --compare eval_data/reports/baseline.json
@@ -29,8 +37,24 @@ from pathlib import Path
 
 sys.path.insert(0, "src")
 
-DEFAULT_DATASET = Path("eval_data/sample_dataset.json")
 REPORTS_DIR = Path("eval_data/reports")
+
+
+def _print_available_datasets() -> None:
+    """Naming the alternatives is the point: the fault this replaces was
+    someone getting the wrong one without ever choosing."""
+    found = sorted(Path("eval_data").glob("*.json"))
+    if not found:
+        print("No datasets found under eval_data/.", file=sys.stderr)
+        return
+    print("\nAvailable datasets:", file=sys.stderr)
+    for path in found:
+        print(f"  --dataset {path}", file=sys.stderr)
+
+
+def _dataset_corpus_root(dataset) -> Path | None:
+    """The root the dataset writes its labels relative to, if it says."""
+    return Path(dataset.corpus_root) if dataset.corpus_root else None
 
 
 def _build_pipeline(settings, namespace: str = "default"):
@@ -102,9 +126,15 @@ def _build_metrics(settings):
 
 
 async def main(args: argparse.Namespace) -> int:
+    from atlas.api.namespaces import sparse_index_path
     from atlas.config import get_settings
     from atlas.evaluation.comparator import compare
-    from atlas.evaluation.dataset import DatasetError, load_dataset
+    from atlas.evaluation.dataset import (
+        DatasetError,
+        check_dataset_is_ingested,
+        indexed_doc_keys,
+        load_dataset,
+    )
     from atlas.evaluation.reporter import print_report, save_report
     from atlas.evaluation.runner import EvalRunner
     from atlas.logging import configure_logging
@@ -121,9 +151,15 @@ async def main(args: argparse.Namespace) -> int:
         print(f"Error: bad --set: {exc}", file=sys.stderr)
         return 1
 
+    if not args.dataset:
+        print("Error: --dataset is required.", file=sys.stderr)
+        _print_available_datasets()
+        return 1
+
     dataset_path = Path(args.dataset)
     if not dataset_path.exists():
         print(f"Error: dataset not found: {dataset_path}", file=sys.stderr)
+        _print_available_datasets()
         return 1
 
     print("Atlas evaluation harness")
@@ -147,6 +183,31 @@ async def main(args: argparse.Namespace) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         print("\nRe-run with --allow-broken-dataset to measure anyway.", file=sys.stderr)
         return 1
+    # The dataset can be internally perfect and still be pointed at a
+    # namespace holding a different corpus, which is the shape the old
+    # default produced. The namespace's own BM25 file names every document
+    # it holds, so this is answerable here, locally, before anything is spent.
+    mismatch = check_dataset_is_ingested(
+        dataset,
+        indexed_doc_keys(
+            sparse_index_path(args.namespace),
+            Path(args.corpus) if args.corpus else _dataset_corpus_root(dataset),
+        ),
+        f"namespace '{args.namespace}'",
+    )
+    if mismatch and not args.allow_broken_dataset:
+        for problem in mismatch:
+            print(f"Error: {problem}", file=sys.stderr)
+        print(
+            "\nCheck --dataset and --namespace agree, or ingest the corpus:\n"
+            "  .venv/bin/python scripts/verify_index.py "
+            f"--namespace {args.namespace}\n"
+            "Re-run with --allow-broken-dataset to measure anyway.",
+            file=sys.stderr,
+        )
+        return 1
+    notes.extend(mismatch)
+
     for note in notes:
         print(f"Warning     : {note}")
     print(f"Samples     : {len(dataset.samples)}")
@@ -209,8 +270,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run the Atlas evaluation harness.")
     parser.add_argument(
         "--dataset",
-        default=str(DEFAULT_DATASET),
-        help=f"Path to EvalDataset JSON (default: {DEFAULT_DATASET})",
+        help=(
+            "Path to EvalDataset JSON. Required, and no default on purpose — "
+            "which set is right depends on what is in the namespace."
+        ),
     )
     parser.add_argument(
         "--namespace",

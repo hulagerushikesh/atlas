@@ -19,7 +19,9 @@ import pytest
 from atlas.evaluation.dataset import (
     DatasetError,
     check_dataset,
+    check_dataset_is_ingested,
     corpus_doc_keys,
+    indexed_doc_keys,
     load_dataset,
 )
 from atlas.interfaces.evaluator import EvalDataset, EvalSample
@@ -212,3 +214,119 @@ class TestTheShippedDataset:
         dataset, notes = load_dataset(Path("eval_data/sample_dataset.json"))
         assert len(dataset.samples) == 30
         assert len(notes) == 1 and "not checked" in notes[0]
+
+
+def _bm25_file(tmp_path: Path, sources: list[str]) -> Path:
+    """A BM25 persistence file holding one chunk per source.
+
+    Shaped the way `BM25SparseIndex._save_to_disk` writes it, because the
+    checker reads that file directly rather than through the class — so a
+    convenient stand-in shape would test nothing about the real one.
+    """
+    path = tmp_path / "index" / "bm25_index.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            [
+                {
+                    "chunk_id": f"c{i}",
+                    "content": "text",
+                    "content_hash": f"h{i}",
+                    "metadata": {"source": source, "doc_id": f"d{i}", "chunk_index": 0},
+                }
+                for i, source in enumerate(sources)
+            ]
+        )
+    )
+    return path
+
+
+class TestIndexedDocKeys:
+    def test_a_missing_index_is_none_not_empty(self, tmp_path: Path) -> None:
+        """Different statements: nothing ingested here, versus a namespace
+        that holds documents this dataset does not name. Only the second is
+        a problem, so they cannot collapse to the same value."""
+        assert indexed_doc_keys(tmp_path / "nope" / "bm25_index.json") is None
+
+    def test_a_corrupt_index_is_none_rather_than_a_crash(self, tmp_path: Path) -> None:
+        path = tmp_path / "bm25_index.json"
+        path.write_text("{ not json")
+        assert indexed_doc_keys(path) is None
+
+    def test_keys_match_what_a_label_is_written_as(self, tmp_path: Path) -> None:
+        root = _corpus(tmp_path)
+        path = _bm25_file(tmp_path, [str(root / "tutorial" / "path-params.md")])
+        keys = indexed_doc_keys(path, root)
+        assert keys is not None
+        # The corpus-relative form is what datasets actually use.
+        assert "tutorial/path-params" in keys
+
+    def test_the_index_and_the_corpus_agree(self, tmp_path: Path) -> None:
+        """The checker is only worth anything if its key set matches the one
+        built from disk; otherwise it rejects labels that would have scored."""
+        root = _corpus(tmp_path)
+        sources = [str(p) for p in sorted(root.rglob("*")) if p.is_file()]
+        assert indexed_doc_keys(_bm25_file(tmp_path, sources), root) == corpus_doc_keys(root)
+
+
+class TestDatasetMatchesTheNamespace:
+    """The trap: `run_eval.py` defaulted --dataset to the 30-question HR set,
+    so a bare run in this repo scored those against the FastAPI index and
+    printed a full report of zeros with a confident overall winner."""
+
+    def test_a_completely_different_corpus_is_refused(self, tmp_path: Path) -> None:
+        root = _corpus(tmp_path)
+        index = _bm25_file(tmp_path, [str(root / "async.md")])
+        dataset = EvalDataset(
+            name="hr",
+            samples=[_sample("hr-1", ["policies/leave"]), _sample("hr-2", ["policies/pay"])],
+        )
+
+        problems = check_dataset_is_ingested(
+            dataset, indexed_doc_keys(index, root), "namespace 'default'"
+        )
+
+        assert len(problems) == 1
+        assert "none of the 2 labelled samples" in problems[0]
+
+    def test_a_matching_corpus_is_clean(self, tmp_path: Path) -> None:
+        root = _corpus(tmp_path)
+        sources = [str(p) for p in sorted(root.rglob("*")) if p.is_file()]
+        dataset = EvalDataset(name="ok", samples=[_sample("a", ["tutorial/path-params"])])
+
+        assert (
+            check_dataset_is_ingested(
+                dataset, indexed_doc_keys(_bm25_file(tmp_path, sources), root), "ns"
+            )
+            == []
+        )
+
+    def test_a_partly_ingested_corpus_names_the_rows(self, tmp_path: Path) -> None:
+        """Distinct from the wrong corpus: those rows score a miss whatever
+        retrieval does, but the rest of the run is still meaningful."""
+        root = _corpus(tmp_path)
+        index = _bm25_file(tmp_path, [str(root / "async.md")])
+        dataset = EvalDataset(
+            name="partial",
+            samples=[_sample("a", ["async"]), _sample("b", ["tutorial/path-params"])],
+        )
+
+        problems = check_dataset_is_ingested(
+            dataset, indexed_doc_keys(index, root), "namespace 'default'"
+        )
+
+        assert len(problems) == 1
+        assert "1 of 2 labelled samples" in problems[0]
+        assert "b" in problems[0]
+
+    def test_no_index_means_no_opinion(self, tmp_path: Path) -> None:
+        dataset = EvalDataset(name="x", samples=[_sample("a", ["anything"])])
+        assert check_dataset_is_ingested(dataset, None, "ns") == []
+
+    def test_an_all_out_of_scope_dataset_is_not_a_mismatch(self, tmp_path: Path) -> None:
+        """No labelled rows to disagree with, so there is nothing to say."""
+        root = _corpus(tmp_path)
+        index = _bm25_file(tmp_path, [str(root / "async.md")])
+        dataset = EvalDataset(name="oos", samples=[_sample("a", [], out_of_scope=True)])
+
+        assert check_dataset_is_ingested(dataset, indexed_doc_keys(index, root), "ns") == []

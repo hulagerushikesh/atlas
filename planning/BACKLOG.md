@@ -50,18 +50,22 @@ Newest at the bottom of each section.
   later sub-questions outright. Precision 0.3412 -> 0.3762, recall unchanged,
   tokens -19%. See DECISIONS 2026-09-27.
 
-- **Make the comparator refuse two different datasets.** `run_eval.py`
-  defaults `--dataset` to `sample_dataset.json` (30 HR questions). Running it
-  in a FastAPI-corpus repo produces a full, well-formatted report of zeros and
-  then a confident `Overall winner` against a 15-sample FastAPI baseline. The
-  report does not look broken; only the token count does. Record the dataset
-  name and sample ids in `EvalResult` and have `compare()` refuse when they
-  disagree. Free, and it removes a whole class of wasted run.
+- ~~**The `--dataset` default is a trap.**~~ **fixed 2026-09-28.** The flag
+  is required on both `run_eval.py` and `eval_retrieval.py`, and the error
+  lists what is in `eval_data/`. Pointing the default at
+  `fastapi_dataset.json` would have moved the trap, not removed it: which set
+  is right depends on what was ingested. On top of that the dataset is now
+  checked against the namespace's own BM25 index before the pipeline is
+  built — zero labelled rows resolving is a hard error, some resolving is a
+  warning naming the rows. `eval_retrieval.py` also had the ordering wrong
+  and loaded the cross-encoder before reading the dataset; fixed.
 
-- **The `--dataset` default is a trap.** Same root cause as above, cheaper
-  fix: `make eval` passes `$(EVAL_DATA)` correctly, but a bare
-  `python scripts/run_eval.py` silently picks the wrong corpus. Either drop
-  the default and require the flag, or point it at `fastapi_dataset.json`.
+- **Make the comparator refuse two different datasets.** Narrower than it was
+  now that a run cannot start against the wrong namespace, but still open: a
+  `--compare` against a baseline produced from a *different dataset* is
+  unguarded, and that comparison is the part that prints `Overall winner`.
+  Record the dataset name and sample ids in `EvalResult` and have `compare()`
+  refuse when they disagree. Free.
 
 - ~~Relabel `fq-012`~~ **done 2026-09-27.** One document → five, one per
   claim its ground-truth answer makes. STATUS, README and DECISIONS restated
