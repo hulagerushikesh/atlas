@@ -1088,3 +1088,54 @@ Format: date — decision — alternatives — reason.
   for. The README's correctness paragraph now describes a metric that
   exists and states plainly that there is no correctness figure anywhere in
   the repo yet. A metric in the code is not a result.
+
+- **2026-09-28** — **First correctness run: 0.7440, against faithfulness
+  1.0000.** `correctness-first_20260928-211522`. The other four metrics
+  reproduced the baseline exactly (precision 0.4667, recall 0.9378,
+  faithfulness 1.0000; answer relevance -0.0071, inside its noise), so the
+  fifth number arrived against an unchanged pipeline. Every answer stayed
+  inside the context it was given and roughly a quarter of what the
+  references assert did not survive the trip. That gap is the thing the
+  README has been describing in prose since the 27th.
+
+  Two rows scored 0.000 and they fail in different ways:
+
+  - **`fq-002` — a cited, grounded, confidently wrong answer.** "What Python
+    version does FastAPI require?" The pipeline answered **"Python 3.8 or
+    above [2]"**. The corpus's own release notes, newest first, record
+    dropping 3.9 (line 880), dropping 3.8 (line 1199), and — 3,000 lines
+    further down, in 2023 — "Drop support for Python 3.7, require Python 3.8
+    or above" (line 4009). The pipeline retrieved the oldest of the three and
+    quoted a superseded fact with a citation. Recall was **1.000**: the right
+    *document* was retrieved. Faithfulness was **1.000**: the claim is in the
+    context. Only correctness, which has an external reference to check
+    against, could see it.
+
+  - **`fq-012` — retrieval failure showing up as a wrong answer.** "Does
+    FastAPI require Pydantic, or can you skip it?" Reference: optional per
+    endpoint. Answer: effectively required, and built on Pydantic. Precision
+    0.13, recall 0.400 — it retrieved the Pydantic pages rather than the
+    query-params pages, then answered faithfully from them. The metric
+    scored 0/4 facts present. This is the same row that has been the hardest
+    in the set since the label audit.
+
+- **2026-09-28** — **Document-level recall cannot see the wrong chunk of the
+  right page.** `fq-002` scored recall 1.000 while answering from a
+  three-year-old line of the same file that the label names. Recall asks
+  whether the document was retrieved; nothing asks whether the retrieved
+  *part* of it is the current one. On a reverse-chronological changelog every
+  superseded statement is still literally true of some past version, so
+  nothing in the pipeline or the harness marks it stale. Filed.
+
+- **2026-09-28** — **The true cost of a run is 4.3x what was recorded.**
+  167,740 tokens over 160 calls, about Rs.5.92 — against the 39,319 tokens
+  and Rs.0.77 the same shape of run reported this morning. The ratio is the
+  correction to apply to every rupee figure written in this repo before
+  today, including the grader-window A/B, which cost about Rs.6.6 rather
+  than the Rs.1.57 quoted at the time.
+
+- **2026-09-28** — **Both new comparator guards fired on real reports.**
+  Diffing the morning's baseline against this run printed
+  `answer_correctness | — | 0.7440 | — | not measured in A` with a note, and
+  a second note that the two token totals are not a cost comparison. Under
+  the old code the same diff would have read `+0.8500, winner B`.

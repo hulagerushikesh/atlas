@@ -72,18 +72,19 @@ quoted earlier today, twice. The recomputation is offline and exact —
 `scripts/replay_context_metrics.py` replays a stored report's chunk ids
 against any label set for Rs.0 — so no run was repeated to produce this.
 
-| Metric | 09-24 | retry fix | capped merge | + headers | **live 09-28** |
-|---|---|---|---|---|---|
-| Context precision | 0.3733 | 0.3477 | 0.3867 | 0.4667 | **0.4667** |
-| Context recall | 0.9244 | 0.9333 | 0.9333 | 0.9378 | **0.9378** |
-| Faithfulness | 1.0000 | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
-| Answer relevance | 0.8277 | 0.8253 | 0.8271 | 0.8328 | **0.8347** |
-| Tokens / eval † | 37,599 | 44,224 | 35,928 | 39,461 | **39,319** |
-| Cost / eval † | ~Rs.0.73 | ~Rs.0.86 | ~Rs.0.70 | ~Rs.0.77 | **~Rs.0.77** |
-| Latency p50 | 15.0 s | 11.0 s | 10.0 s | 9.7 s | **10.3 s** |
+| Metric | 09-24 | retry fix | capped merge | + headers | live 09-28 | **+ correctness** |
+|---|---|---|---|---|---|---|
+| Context precision | 0.3733 | 0.3477 | 0.3867 | 0.4667 | 0.4667 | **0.4667** |
+| Context recall | 0.9244 | 0.9333 | 0.9333 | 0.9378 | 0.9378 | **0.9378** |
+| Faithfulness | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
+| Answer relevance | 0.8277 | 0.8253 | 0.8271 | 0.8328 | 0.8347 | **0.8276** |
+| **Answer correctness** | — | — | — | — | — | **0.7440** |
+| Tokens / eval | 37,599 † | 44,224 † | 35,928 † | 39,461 † | 39,319 † | **167,740** |
+| Cost / eval | ~Rs.0.73 † | ~Rs.0.86 † | ~Rs.0.70 † | ~Rs.0.77 † | ~Rs.0.77 † | **~Rs.5.92** |
+| Latency p50 | 15.0 s | 11.0 s | 10.0 s | 9.7 s | 10.3 s | **10.8 s** |
 
-The last column is the first **measured** run against the audited dataset on
-the shipped `default` namespace —
+The `live 09-28` column is the first **measured** run against the audited
+dataset on the shipped `default` namespace —
 `eval_data/reports/grader-window-5_20260928-160041.json`. It reproduces the
 replayed precision and recall to four decimals, which is the strongest
 available check on the replay method: an offline recomputation predicted
@@ -92,7 +93,25 @@ available check on the replay method: an offline recomputation predicted
 confirmed. It is also the first report to carry a dataset fingerprint, so
 every future comparison against it is checked rather than assumed.
 
-† **Generation calls only — every token and rupee figure in this table.**
+The `+ correctness` column is the same pipeline again
+(`correctness-first_20260928-211522.json`), with the fifth metric added and
+nothing else changed. Precision, recall and faithfulness came back
+identical to four decimals for the third time; answer relevance moved
+-0.0071, inside its own noise. That makes it a clean baseline for the
+correctness number rather than a second variable.
+
+**Faithfulness 1.0000 and correctness 0.7440 in the same column is the whole
+point of the fifth metric.** Every answer stayed inside the context it was
+given; roughly a quarter of what the references assert did not survive the
+trip. Four metrics said this pipeline was doing well and one says a quarter
+of the substance is missing or wrong — see DECISIONS 2026-09-28 for the two
+rows that scored 0.000, one of which is a cited, grounded, confidently wrong
+answer about a Python version.
+
+The last column's token and rupee figures are **real**. Every other column's
+are marked †.
+
+† **Generation calls only.**
 The same report records **101 model calls** for those 15 samples; fifteen
 were generation and the other eighty-six had their tokens dropped on the
 floor. The router, decomposer, grader, faithfulness checker, both judges and
@@ -102,19 +121,19 @@ all counted the same wrong thing — which is why nobody caught it.
 
 Fixed on 2026-09-28 (`atlas/usage.py`): tokens are counted on the provider,
 per model, and a report now carries a per-model breakdown with a price. The
-next paid run fills in a true row; nothing needs re-running to get it. The
-stage latencies in that report are the honest per-sample p50, not the run's
-concurrency-wide wall clock.
+first run under it measured **167,740 tokens across 160 calls — 4.3x the
+generation-only figure** — so a run costs about Rs.5.9, not Rs.0.77. Every
+rupee figure recorded in this repo before 2026-09-28 understates by roughly
+that factor. The stage latencies in these reports are the honest per-sample
+p50, not the run's concurrency-wide wall clock.
 
 All four runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
 changes in the pipeline and not in the model.
 
-**A fifth metric exists as of 2026-09-28 and has never been run.**
-`answer_correctness` grades the generated answer against the reference —
-the first metric to read `ground_truth_answer`, which until today nothing
-did. There is no correctness column above and will not be one until an eval
-pass is paid for. A metric in the code is not a result, and the README says
-the same.
+`answer_correctness` grades the generated answer against the reference and
+is the first metric to read `ground_truth_answer`. First run 2026-09-28:
+**0.7440**, on a run whose other four numbers reproduced the baseline
+exactly.
 
 **Precision is still the day's result, +0.093, and it is no longer monotone.**
 The retry fix *costs* precision, 0.3733 → 0.3477: it widens the window, and
