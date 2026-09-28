@@ -35,6 +35,7 @@ from typing import Any
 
 import structlog
 
+from atlas.evaluation.dataset import dataset_fingerprint
 from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import (
     EvalDataset,
@@ -147,6 +148,11 @@ class EvalRunner:
             total_tokens_used=total_tokens,
             duration_seconds=duration,
             model_calls=self._model_calls(),
+            # Recorded here rather than by the caller: every report needs it
+            # for `compare` to mean anything, and a caller that forgets
+            # produces a report that looks complete and compares wrongly.
+            dataset_name=dataset.name,
+            dataset_fingerprint=dataset_fingerprint(dataset),
         )
 
     def _model_calls(self) -> dict[str, int]:

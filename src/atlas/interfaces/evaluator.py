@@ -109,6 +109,15 @@ class EvalResult(BaseModel):
     pipeline_config: PipelineConfig
     sample_results: list[SampleResult]
     aggregate_scores: dict[str, float]  # metric_name → mean score
+    # What was measured, so a later comparison can refuse two runs that
+    # measured different things. The name is for the error message; the
+    # fingerprint is the check, because a dataset can be relabelled without
+    # its name or its sample ids changing — which is exactly what happened on
+    # 2026-09-27 and voided every number recorded before it. Empty on reports
+    # written before this field existed; `compare` says so rather than
+    # assuming they match.
+    dataset_name: str = ""
+    dataset_fingerprint: str = ""
     total_tokens_used: int = 0
     duration_seconds: float = 0.0
     # Which chat model actually served the calls in this run, summed over the
