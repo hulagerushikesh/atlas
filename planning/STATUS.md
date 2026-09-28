@@ -72,15 +72,28 @@ quoted earlier today, twice. The recomputation is offline and exact —
 `scripts/replay_context_metrics.py` replays a stored report's chunk ids
 against any label set for Rs.0 — so no run was repeated to produce this.
 
-| Metric | 09-24 | retry fix | capped merge | **+ headers** |
-|---|---|---|---|---|
-| Context precision | 0.3733 | 0.3477 | 0.3867 | **0.4667** |
-| Context recall | 0.9244 | 0.9333 | 0.9333 | **0.9378** |
-| Faithfulness | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
-| Answer relevance | 0.8277 | 0.8253 | 0.8271 | **0.8328** |
-| Tokens / eval | 37,599 | 44,224 | 35,928 | **39,461** |
-| Cost / eval | ~Rs.0.73 | ~Rs.0.86 | ~Rs.0.70 | **~Rs.0.77** |
-| Latency p50 | 15.0 s | 11.0 s | 10.0 s | **9.7 s** |
+| Metric | 09-24 | retry fix | capped merge | + headers | **live 09-28** |
+|---|---|---|---|---|---|
+| Context precision | 0.3733 | 0.3477 | 0.3867 | 0.4667 | **0.4667** |
+| Context recall | 0.9244 | 0.9333 | 0.9333 | 0.9378 | **0.9378** |
+| Faithfulness | 1.0000 | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
+| Answer relevance | 0.8277 | 0.8253 | 0.8271 | 0.8328 | **0.8347** |
+| Tokens / eval | 37,599 | 44,224 | 35,928 | 39,461 | **39,319** |
+| Cost / eval | ~Rs.0.73 | ~Rs.0.86 | ~Rs.0.70 | ~Rs.0.77 | **~Rs.0.77** |
+| Latency p50 | 15.0 s | 11.0 s | 10.0 s | 9.7 s | **10.3 s** |
+
+The last column is the first **measured** run against the audited dataset on
+the shipped `default` namespace —
+`eval_data/reports/grader-window-5_20260928-160041.json`. It reproduces the
+replayed precision and recall to four decimals, which is the strongest
+available check on the replay method: an offline recomputation predicted
+0.4667 / 0.9378 and a paid run returned 0.4667 / 0.9378. Every figure in the
+`+ headers` column was earned without spending anything, and now it is
+confirmed. It is also the first report to carry a dataset fingerprint, so
+every future comparison against it is checked rather than assumed.
+
+Tokens are generation-only; see BACKLOG. The stage latencies in that report
+are the honest per-sample p50, not the run's concurrency-wide wall clock.
 
 All four runs served entirely by `gemini-3.1-flash-lite`, so the deltas are
 changes in the pipeline and not in the model.

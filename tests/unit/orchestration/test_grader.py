@@ -82,13 +82,15 @@ class TestRetrievalGrader:
 
 
 class TestGradedWindow:
-    """How much of the retrieval the grader is actually shown.
+    """How much of the retrieval the grader is shown, and why it is a slice.
 
-    It was a hardcoded `chunks[:5]`, correct while `reranker.top_k` was also
-    5 and the slice was the whole window. top_k went to 15 on 2026-09-23 and
-    the slice did not, so the grader answered "is the top 5 sufficient?"
-    while the pipeline treated the answer as "is the context sufficient?" —
-    and the generator got all 15 regardless.
+    Measured on 2026-09-28. Grading all 15 instead of the top 5 cost 0.060
+    context recall, all of it fq-006 and fq-012 — the two multi-document
+    questions. A grader shown a slice is pessimistic, pessimism triggers a
+    retry, and a retry accumulates context, so the slice is how a
+    five-document question collects five documents. These tests pin the
+    default that measurement produced, because the shape of the code argues
+    for the other one.
     """
 
     @staticmethod
@@ -98,29 +100,29 @@ class TestGradedWindow:
         return request.messages[1].content
 
     @pytest.mark.asyncio
-    async def test_the_whole_window_is_graded_by_default(self) -> None:
+    async def test_only_the_top_five_are_graded_by_default(self) -> None:
         llm = _llm_returning(True, 0.9)
         grader = RetrievalGrader(llm)
 
         await grader.grade("q", [_chunk(f"c{i}") for i in range(15)])
 
         sent = self._passages(llm)
-        assert "[15]" in sent
-        # The chunk that used to be invisible: rank 6, where fq-005's answer sat.
-        assert "[6]" in sent
+        assert "[5]" in sent
+        assert "[6]" not in sent
 
     @pytest.mark.asyncio
-    async def test_the_old_behaviour_is_one_setting_away(self) -> None:
-        """`--set grader.context_chunks=5` is the A/B against the new default,
-        so it has to reproduce the slice exactly."""
+    async def test_the_whole_window_is_one_setting_away(self) -> None:
+        """`--set grader.context_chunks=15`, or None, re-runs the 2026-09-28
+        experiment without editing the source — which is how it came to be
+        changed on reasoning alone the first time."""
         llm = _llm_returning(True, 0.9)
-        grader = RetrievalGrader(llm, GraderConfig(context_chunks=5))
+        grader = RetrievalGrader(llm, GraderConfig(context_chunks=None))
 
         await grader.grade("q", [_chunk(f"c{i}") for i in range(15)])
 
         sent = self._passages(llm)
-        assert "[5]" in sent
-        assert "[6]" not in sent
+        assert "[15]" in sent
+        assert "[6]" in sent
 
     @pytest.mark.asyncio
     async def test_a_cap_larger_than_the_window_is_not_an_error(self) -> None:
@@ -131,9 +133,20 @@ class TestGradedWindow:
 
         assert "[2]" in self._passages(llm)
 
+    @pytest.mark.asyncio
+    async def test_a_short_window_is_graded_whole(self) -> None:
+        """The cap is a maximum, not a requirement — a retrieval that came
+        back with three chunks is graded on three."""
+        llm = _llm_returning(True, 0.9)
+        grader = RetrievalGrader(llm)
+
+        await grader.grade("q", [_chunk(f"c{i}") for i in range(3)])
+
+        assert "[3]" in self._passages(llm)
+
 
 class TestGraderConfigFromEnv:
-    def test_a_blank_env_var_means_no_cap(
+    def test_a_blank_env_var_means_grade_everything(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """Blank is how .env.example says "unset" for every other optional.

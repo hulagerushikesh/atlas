@@ -95,18 +95,28 @@ class GraderConfig(BaseSettings):
     threshold: float = 0.5
     # How many retrieved chunks the grader is shown. None means all of them.
     #
-    # It was a hardcoded 5, with the comment "more adds noise" — true when
-    # `reranker.top_k` was also 5 and the slice was the whole window. top_k
-    # went to 15 on 2026-09-23 and the slice did not, so the grader has since
-    # been answering "is the top 5 sufficient?" while the pipeline acts on the
-    # answer as though it were "is the context sufficient?". The generator is
-    # handed all 15.
+    # 5, against a 15-chunk window, and deliberately. The obvious reading is
+    # that this is a bug — the generator is handed all 15, so the grader is
+    # answering "is the top 5 sufficient?" while the pipeline treats the
+    # answer as "is the context sufficient?". It was changed to None on that
+    # reasoning on 2026-09-28 and the A/B put it straight back:
     #
-    # That gap only fails one way: the grader cannot call a window sufficient
-    # when it is not, but it calls it insufficient whenever the answer sits at
-    # rank 6 or below. `fq-005` triggered a retry that way while
-    # `tutorial/body` was already in the window.
-    context_chunks: int | None = None
+    #     window          precision   recall   faithfulness
+    #     5  (this)          0.4667   0.9378         1.0000
+    #     15 (all)           0.4622   0.8778         0.9667
+    #
+    # Recall -0.060, three times the significance floor, and all of it two
+    # rows: fq-006 1.000 -> 0.500 and fq-012 0.400 -> 0.000. Both are the
+    # multi-document questions, which is the mechanism. A grader shown a
+    # slice is pessimistic; pessimism triggers a retry; and since the retry
+    # union shipped on 2026-09-27 a retry *accumulates* context instead of
+    # replacing it. So the narrow window is how a question whose answer
+    # spans five pages ever collects five pages. Widening it suppressed the
+    # retries and the union never formed.
+    #
+    # Keep this at 5 unless the retry union changes. `--set
+    # grader.context_chunks=15` re-runs the experiment.
+    context_chunks: int | None = 5
 
     @field_validator("context_chunks", mode="before")
     @classmethod

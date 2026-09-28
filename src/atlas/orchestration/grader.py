@@ -23,29 +23,38 @@ Design rationale:
     looping indefinitely — a retrieval failure is better communicated as low
     confidence in the answer than as an HTTP timeout to the end user.
 
-    How much context it grades: all of it, by default. This was a hardcoded
-    `chunks[:5]` carrying the comment "more adds noise", which was true when
-    `reranker.top_k` was 5 and the slice was the whole window. `top_k` became
-    15 on 2026-09-23 and the slice stayed at 5, so for five days the grader
-    answered "is the top 5 sufficient?" while the pipeline acted on the answer
-    as if it were "is the context sufficient?" — and the generator was handed
-    all 15 either way.
+    How much context it grades: the top 5 of a 15-chunk window, on purpose,
+    and this is the part of the file most likely to look like a bug.
 
-    A grader that sees less than the generator can only be wrong in one
-    direction. It cannot call a window sufficient that is not, because
-    everything it saw is really there. It calls a window insufficient whenever
-    the answer sits below the slice, which is a retry the pipeline did not
-    need: `fq-005` triggered one while `tutorial/body` was already in the
-    window. Since 2026-09-27 a retry can no longer discard context, so the
-    consequence is a wasted round trip rather than a lost document — cost and
-    latency, not correctness.
+    The generator is handed all 15. So the grader answers "is the top 5
+    sufficient?" while the pipeline acts on the answer as if it were "is the
+    context sufficient?", and it will call a window insufficient whenever the
+    answer sits at rank 6 or below. That reads as an oversight left behind
+    when `reranker.top_k` went 5 -> 15 on 2026-09-23, and on 2026-09-28 it
+    was changed to grade the whole window for exactly that reason.
 
-    `grader.context_chunks` caps it for anyone who wants the old behaviour or
-    something between. Widening the window is not free: at this corpus's mean
-    chunk length it adds roughly 1,200 prompt tokens per grade call, against
-    a saving of one retrieval plus one grade call for every retry it prevents.
-    Which way that nets out is an empirical question and has to be measured,
-    not argued: `--set grader.context_chunks=5` reproduces the old default.
+    The A/B put it straight back:
+
+        window          precision   recall   faithfulness
+        5  (this)          0.4667   0.9378         1.0000
+        15 (all)           0.4622   0.8778         0.9667
+
+    The entire recall loss was two rows — fq-006 1.000 -> 0.500 and fq-012
+    0.400 -> 0.000 — and both are the multi-document questions. That is the
+    mechanism, which the "fix" had backwards: a grader shown a slice is
+    pessimistic, pessimism triggers a retry, and since the retry union
+    shipped on 2026-09-27 a retry *accumulates* context rather than replacing
+    it. The narrow window is how a question whose answer spans five pages
+    ever ends up with five pages in front of the generator. Widening the
+    grader suppressed the retries, the union never formed, and fq-012 went
+    to zero.
+
+    This is load-bearing by accident rather than by design, and therefore
+    fragile: it stops being true the moment the retry union stops
+    accumulating. `grader.context_chunks` exists so the experiment can be
+    re-run in one flag — `--set grader.context_chunks=15` — rather than
+    re-argued from the shape of the code, which is how it got changed once
+    already.
 """
 
 from __future__ import annotations

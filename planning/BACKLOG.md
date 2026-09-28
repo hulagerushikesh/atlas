@@ -33,25 +33,24 @@ Newest at the bottom of each section.
 - ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
 - Streaming errors after first byte become events; document the event
   schema in `docs/api.md`.
-- ~~**The grader reads a third of the window it is judging.**~~ **changed
-  2026-09-28, NOT YET MEASURED.** `grader.context_chunks` defaults to None,
-  so the grader is shown the whole window the generator will get.
-  `--set grader.context_chunks=5` reproduces the old slice exactly.
+- ~~**The grader reads a third of the window it is judging.**~~ **measured
+  2026-09-28, and the slice was right.** Grading all 15 instead of the top 5
+  cost 0.060 context recall and 0.033 faithfulness; precision and answer
+  relevance did not move. The entire recall loss was `fq-006` and `fq-012`,
+  the two multi-document questions.
 
-  **This is a default change that no eval has confirmed.** Two things could
-  happen and only a run distinguishes them: fewer needless retries (the
-  point), or a *lower* grader score through dilution when fifteen chunks
-  carry one relevant document. Roughly +1,200 prompt tokens per grade call
-  against a saved retrieval plus grade call per prevented retry. The A/B:
+  The mechanism the "fix" had backwards: a grader shown a slice is
+  pessimistic, pessimism triggers a retry, and since the retry union shipped
+  on 2026-09-27 a retry *accumulates* context. The narrow window is how a
+  five-document question ends up with five documents. Reverted to 5,
+  `grader.context_chunks` keeps the knob, `--set grader.context_chunks=15`
+  re-runs the experiment. See DECISIONS 2026-09-28.
 
-      .venv/bin/python scripts/run_eval.py --dataset eval_data/fastapi_dataset.json \
-        --run-name grader-window-15
-      .venv/bin/python scripts/run_eval.py --dataset eval_data/fastapi_dataset.json \
-        --set grader.context_chunks=5 --run-name grader-window-5 \
-        --compare eval_data/reports/grader-window-15_<stamp>.json
-
-  Two runs, ~Rs.1.6 the pair. Watch the grading stage in the latency table
-  as much as the scores — the prize here is round trips, not precision.
+  Left open by this: the retry is doing retrieval work that retrieval should
+  arguably be doing directly, and it only fires when the grader happens to
+  be pessimistic about a slice. If multi-document questions need more than
+  one window, the honest fix is in `_retrieve_all`, not in how much the
+  grader is allowed to see.
 
 - **`total_tokens_used` counts only the generation call.** `runner.py:206`
   stashes `generation.prompt_tokens + completion_tokens` and nothing else,
