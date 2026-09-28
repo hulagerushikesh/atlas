@@ -261,9 +261,20 @@ deliberately not penalised: these references are hand-written summaries, and
 `fq-012`'s correct answer legitimately spans five pages where its reference
 names one.
 
-**It has not been run yet, so there is no correctness column above and no
-correctness claim anywhere in this README.** The number costs a full eval
-pass to obtain and will appear here when one is paid for, whatever it says.
+**First run, 2026-09-28: `answer_correctness` 0.7440, on the run that
+returned faithfulness 1.0000.** Same pipeline, same index, the other four
+numbers reproduced to four decimals. Every answer stayed inside the context
+it was given, and about a quarter of what the reference answers assert did
+not survive the trip.
+
+The clearest single row is `fq-002`, "What Python version does FastAPI
+require?". The pipeline answered "Python 3.8 or above" with a citation. It
+is quoting `release-notes.md` — the 2023 entry that says exactly that, three
+thousand lines below the two later entries in the same file that drop 3.8
+and then 3.9. Recall 1.000, because the right document was retrieved.
+Faithfulness 1.000, because the claim really is in the retrieved context.
+Correctness 0.000, because the answer is wrong. Four metrics could not see
+it and the fifth could, which is the argument for having it.
 
 *15 questions, 36k tokens and ≈₹0.70 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run — the identical

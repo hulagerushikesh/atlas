@@ -153,11 +153,28 @@ Newest at the bottom of each section.
   separately from the rest of the dataset, because only this metric reads
   them. See DECISIONS 2026-09-28.
 
-- **Run the harness once with the correctness metric in it.** Everything is
-  in place and no number has been produced, which is the one state that
-  looks like progress and is not. It also prints the first true token and
-  rupee figure for a run, so it settles two open questions at once. Needs a
-  paid run.
+- ~~**Run the harness once with the correctness metric in it.**~~ **Done
+  2026-09-28, Rs.5.92:** correctness **0.7440** against faithfulness 1.0000,
+  and the first true cost figure — 167,740 tokens, 4.3x what was being
+  reported. See DECISIONS.
+
+- **A superseded fact in a reverse-chronological document outranks the
+  current one.** `fq-002` asked which Python version FastAPI requires and
+  got "3.8 or above" with a citation, from a 2023 line of `release-notes.md`
+  that two later entries in the same file supersede. Recall 1.000,
+  faithfulness 1.000, correctness 0.000 — the right page, the wrong part of
+  it, and nothing in the pipeline or the harness can tell. Options: order
+  chunks of a changelog by position (earlier in the file is newer), extract
+  and attach a date, or prefer the newest chunk when several from one
+  document conflict. The first is nearly free and specific to this corpus
+  shape; the last is the general one.
+
+- **`fq-012` retrieves the wrong pages and then answers them faithfully.**
+  Precision 0.13, recall 0.400, correctness 0.000 — it fetched the Pydantic
+  pages for a question about *avoiding* Pydantic. Related to the
+  multi-document item above: the answer needs five query-params pages and
+  gets none of them. This is now measurable end to end, so it is the best
+  single row to aim a retrieval change at.
 
 - ~~**Verify what is actually in an index.**~~ **done 2026-09-28**,
   `scripts/verify_index.py`. Reads both halves of every namespace and compares
