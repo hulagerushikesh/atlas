@@ -44,6 +44,13 @@ Design rationale:
     from knowing they do, and the whole class of fault here is the second
     being assumed from the first.
 
+    A rewritten *reference answer* is checked separately, and only between
+    two runs that both measured `answer_correctness` — the one metric that
+    reads it. Four of the five do not, so a single fingerprint over
+    everything would refuse a precision comparison because a reference
+    answer's wording changed, and a guard that cries wolf is one that gets
+    bypassed with a flag.
+
     The same applies to the two reports' token totals, which is the other
     number a reader diffs by eye. Before 2026-09-28 a report counted the
     generation call and nothing else; after it, every call including the
@@ -62,6 +69,10 @@ from atlas.interfaces.evaluator import EvalResult
 
 _SIGNIFICANCE_THRESHOLD = 0.02   # deltas below this are considered noise
 
+# The one metric that reads `ground_truth_answer`, and so the only one a
+# rewritten reference answer can move.
+_CORRECTNESS = "answer_correctness"
+
 # How many differing sample ids to name before the message stops helping.
 _MAX_NAMED = 5
 
@@ -76,8 +87,12 @@ class MetricDelta:
     score_a: float
     score_b: float
     delta: float           # b - a
-    winner: str            # "A" | "B" | "tie"
+    winner: str            # "A" | "B" | "tie" | "n/a"
     is_significant: bool   # |delta| >= threshold
+    # "A" or "B" when only the other run measured this metric at all. Such a
+    # row has no delta: the absent side is not a zero, it is a run that never
+    # asked the question.
+    missing_in: str = ""
 
 
 @dataclass
@@ -98,6 +113,14 @@ class ComparisonResult:
             "| --- | --- | --- | --- | --- |",
         ]
         for d in self.deltas:
+            if d.missing_in:
+                measured = f"{d.score_b:.4f}" if d.missing_in == "A" else f"{d.score_a:.4f}"
+                cells = ("—", measured) if d.missing_in == "A" else (measured, "—")
+                lines.append(
+                    f"| {d.metric} | {cells[0]} | {cells[1]} | — | not measured in "
+                    f"{d.missing_in} |"
+                )
+                continue
             delta_str = f"{d.delta:+.4f}"
             sig = "" if d.is_significant else " *(ns)*"
             lines.append(
@@ -142,6 +165,19 @@ def _check_comparable(result_a: EvalResult, result_b: EvalResult) -> list[str]:
             f"different things. Re-run the baseline against the current dataset, "
             f"or replay it — scripts/replay_context_metrics.py recomputes both "
             f"context metrics from a stored report for nothing."
+        )
+
+    graded = _CORRECTNESS in result_a.aggregate_scores and \
+        _CORRECTNESS in result_b.aggregate_scores
+    ans_a, ans_b = result_a.answers_fingerprint, result_b.answers_fingerprint
+    if graded and ans_a and ans_b and ans_a != ans_b:
+        raise DatasetMismatch(
+            f"both runs measured {_CORRECTNESS}, and they were graded against "
+            f"different reference answers. That metric reads "
+            f"`ground_truth_answer` directly, so its two scores are not the "
+            f"same measurement. The other metrics do not read it, which is why "
+            f"the reference answers are fingerprinted separately — re-run the "
+            f"baseline if the correctness delta is the one you need."
         )
 
     counted_a, counted_b = bool(result_a.token_usage), bool(result_b.token_usage)
@@ -195,8 +231,36 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
     a_wins = 0
 
     for metric in all_metrics:
+        in_a = metric in result_a.aggregate_scores
+        in_b = metric in result_b.aggregate_scores
         sa = result_a.aggregate_scores.get(metric, 0.0)
         sb = result_b.aggregate_scores.get(metric, 0.0)
+
+        if in_a != in_b:
+            # A metric one run never computed. This used to read as 0.0 and
+            # hand the other run a win, which was harmless only for as long
+            # as both runs always had the same four metrics. The first run
+            # with `answer_correctness` would otherwise have shown
+            # 0.0 -> 0.85 against every stored baseline and called it an
+            # improvement.
+            missing = "A" if not in_a else "B"
+            notes.append(
+                f"'{metric}' was measured only in {'B' if missing == 'A' else 'A'}. "
+                f"It is shown without a delta: the other run did not score 0.0 on "
+                f"it, it never computed it, and treating the two alike invents a "
+                f"result."
+            )
+            deltas.append(MetricDelta(
+                metric=metric,
+                score_a=round(sa, 4),
+                score_b=round(sb, 4),
+                delta=0.0,
+                winner="n/a",
+                is_significant=False,
+                missing_in=missing,
+            ))
+            continue
+
         delta = sb - sa
         significant = abs(delta) >= _SIGNIFICANCE_THRESHOLD
 

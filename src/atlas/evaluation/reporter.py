@@ -33,6 +33,7 @@ _METRIC_ORDER = [
     "context_recall",
     "faithfulness",
     "answer_relevance",
+    "answer_correctness",
 ]
 
 

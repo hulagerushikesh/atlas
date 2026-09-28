@@ -1039,3 +1039,52 @@ Format: date — decision — alternatives — reason.
   Rs.0.77 for a single run. The call counts say the real number is several
   times that. The next paid run will print it; nothing needs to be re-run to
   find out.
+
+- **2026-09-28** — **A correctness metric, and what it refuses to measure.**
+  `answer_correctness` decomposes the reference answer into facts and marks
+  each `present`, `missing` or `contradicted` in the generated one, scoring
+  `(present - contradicted) / total`. *Alt:* RAGAS `answer_correctness`, an
+  F1 over TP/FP/FN statements. *Why not:* its FP term counts material in the
+  answer that the reference does not mention, and these references are
+  hand-written summaries — `fq-012`'s correct answer rests on five pages
+  where its reference names one. That formulation would have scored
+  "matched the length of my summary" and called it correctness. Extra
+  material is only penalised when it contradicts.
+
+  A contradiction costs twice an omission: you lose the credit and pay a
+  penalty. An incomplete answer and a wrong answer are different failures
+  and a metric that ranked them together would be no use for deciding
+  whether to ship.
+
+- **2026-09-28** — **The correctness metric is the only one that can score
+  the refusal path.** A row with no `relevant_doc_ids` is a declared
+  out-of-scope row, where the right answer is the refusal sentence. Context
+  precision and recall skip the row, faithfulness marks a refusal
+  inapplicable, and answer relevance scores a refusal against the question
+  and returns noise. This one scores it in both directions, with no model
+  call: refusing is 1.0, answering anyway is 0.0. It also makes the
+  still-open BACKLOG item — the dataset has no out-of-scope row — worth
+  something, because there is finally a metric that would read it.
+
+- **2026-09-28** — **Reference answers get their own fingerprint.** *Alt:*
+  fold `ground_truth_answer` into `dataset_fingerprint`, as that function's
+  docstring said to do when a correctness judge arrived. *Why not:* four of
+  the five metrics cannot depend on it, so one combined value would declare
+  every stored report incomparable with everything written after today over
+  a field that could not have moved any of their scores. A guard that cries
+  wolf is one that gets bypassed with a flag. `answers_fingerprint` is
+  checked only between two runs that both measured correctness.
+
+- **2026-09-28** — **A metric only one run computed is not a win.**
+  `compare` read a missing metric as 0.0 and handed the other run the
+  point. Harmless while every run had the same four metrics, and live the
+  moment a fifth existed: the first correctness run would have shown
+  `0.0 -> 0.85` against every stored baseline and declared an improvement in
+  something the baseline never measured. Such a row is now printed without a
+  delta, excluded from the winner tally, and noted.
+
+- **2026-09-28** — **Shipped unmeasured, and the README says so.** The
+  metric costs a full eval pass to produce a number and none has been paid
+  for. The README's correctness paragraph now describes a metric that
+  exists and states plainly that there is no correctness figure anywhere in
+  the repo yet. A metric in the code is not a result.

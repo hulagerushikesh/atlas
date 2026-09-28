@@ -241,15 +241,29 @@ table. It is **not** a recall gain — recall goes very slightly down, and the
 claim it made earlier today, that headers recovered a question nothing had
 ever retrieved, was an artifact of `fq-012`'s old label and is withdrawn.
 
-**None of these four is a correctness metric, and the table is weaker than
-it looks because of it.** The dataset carries a reference answer per
-question, but no metric reads it: precision and recall score the retrieved
-documents, faithfulness scores the answer against the chunks it was given,
-and answer relevance scores the question against questions regenerated from
-the answer. All four can be perfect on an answer that is grounded, on-topic
-and wrong. Read faithfulness 1.000 as "it did not invent anything beyond its
-context", not as "it was right". Wiring up a reference-vs-generated judge is
-in BACKLOG.
+**None of the four numbers in that table is a correctness metric, and the
+table is weaker than it looks because of it.** The dataset carries a
+reference answer per question, and until 2026-09-28 no metric read it:
+precision and recall score the retrieved documents, faithfulness scores the
+answer against the chunks it was given, and answer relevance scores the
+question against questions regenerated from the answer. All four can be
+perfect on an answer that is grounded, on-topic and wrong. Read faithfulness
+1.000 as "it did not invent anything beyond its context", not as "it was
+right".
+
+A fifth metric, `answer_correctness`, now closes that gap in code:
+`AnswerCorrectnessMetric` decomposes the reference answer into facts and
+marks each one present, missing or contradicted in the generated answer,
+scoring `(present - contradicted) / total` — a contradiction costs twice
+what an omission does, because an incomplete answer and a wrong one are
+different failures. Extra correct material the reference does not mention is
+deliberately not penalised: these references are hand-written summaries, and
+`fq-012`'s correct answer legitimately spans five pages where its reference
+names one.
+
+**It has not been run yet, so there is no correctness column above and no
+correctness claim anywhere in this README.** The number costs a full eval
+pass to obtain and will appear here when one is paid for, whatever it says.
 
 *15 questions, 36k tokens and ≈₹0.70 per run, 55–155 s wall clock at
 concurrency 4. Retrieval metrics are deterministic run to run — the identical

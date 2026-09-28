@@ -16,7 +16,11 @@ from atlas.evaluation.comparator import (
     compare,
     save_comparison,
 )
-from atlas.evaluation.dataset import dataset_fingerprint, load_dataset
+from atlas.evaluation.dataset import (
+    dataset_answers_fingerprint,
+    dataset_fingerprint,
+    load_dataset,
+)
 from atlas.evaluation.reporter import _md_latency, _md_table, save_report
 from atlas.interfaces.evaluator import (
     EvalDataset,
@@ -419,13 +423,24 @@ class TestDatasetFingerprint:
         )
 
     def test_a_rewritten_reference_answer_does_not_change_it(self) -> None:
-        """No metric reads ground_truth_answer, so fq-010's rewrite changed
-        no score and must not invalidate a comparison. If a correctness judge
-        is ever added, this test is the one that has to change first."""
+        """Still true after `answer_correctness` arrived on 2026-09-28, and
+        the reason changed. Four of the five metrics do not read
+        `ground_truth_answer`, so folding it in here would refuse a
+        precision comparison over a field that cannot move precision. The
+        reference answers get their own fingerprint instead, checked only
+        between two runs that both measured correctness."""
         a = self._dataset(["a/b"])
         b = self._dataset(["a/b"])
         b.samples[0].ground_truth_answer = "Completely differently."
         assert dataset_fingerprint(a) == dataset_fingerprint(b)
+        assert dataset_answers_fingerprint(a) != dataset_answers_fingerprint(b)
+
+    def test_the_answers_fingerprint_ignores_labels_and_questions(self) -> None:
+        """The mirror image: `answer_correctness` reads neither, so neither
+        makes two correctness scores incomparable."""
+        a = self._dataset(["a/b"])
+        b = self._dataset(["c/d"], question="Phrased another way?")
+        assert dataset_answers_fingerprint(a) == dataset_answers_fingerprint(b)
 
     def test_the_shipped_datasets_fingerprint_differently(self) -> None:
         fastapi, _ = load_dataset(Path("eval_data/fastapi_dataset.json"), strict=False)
@@ -515,3 +530,82 @@ class TestTokenComparability:
         old = _spent(total=120_000)
         new = _spent(_CHAT, total=309_000)
         assert compare(old, new).deltas
+
+
+# ── Correctness: a fifth metric, and what it does to a comparison ─────────────
+
+def _graded(
+    correctness: float | None,
+    answers: str = "ans-fp",
+    precision: float = 0.46,
+) -> EvalResult:
+    scores: dict[str, float] = {"context_precision": precision}
+    if correctness is not None:
+        scores["answer_correctness"] = correctness
+    return EvalResult(
+        pipeline_config=PipelineConfig(name="run"),
+        sample_results=[
+            SampleResult(
+                sample_id="s1", question="q", generated_answer="a",
+                retrieved_chunk_ids=["c1"],
+                metrics=[MetricScore(metric_name=k, score=v) for k, v in scores.items()],
+            )
+        ],
+        aggregate_scores=scores,
+        dataset_fingerprint="fp",
+        answers_fingerprint=answers,
+    )
+
+
+class TestOneSidedMetrics:
+    """A metric only one run computed. Before answer_correctness existed
+    every run had the same four, so `aggregate_scores.get(metric, 0.0)`
+    never fired — and the first run carrying a fifth would have shown
+    0.0 -> 0.85 against every stored baseline and called it an improvement."""
+
+    def test_a_new_metric_is_not_a_win(self) -> None:
+        result = compare(_graded(None), _graded(0.85))
+        correctness = next(d for d in result.deltas if d.metric == "answer_correctness")
+
+        assert correctness.winner == "n/a"
+        assert correctness.missing_in == "A"
+        assert result.overall_winner == "tie"
+
+    def test_it_renders_without_a_delta(self) -> None:
+        md = compare(_graded(None), _graded(0.85)).as_markdown()
+        assert "| answer_correctness | — | 0.8500 | — | not measured in A |" in md
+
+    def test_it_is_called_out_in_the_notes(self) -> None:
+        notes = compare(_graded(None), _graded(0.85)).notes
+        assert any("measured only in B" in n for n in notes)
+
+    def test_the_shared_metrics_still_compare(self) -> None:
+        result = compare(_graded(None, precision=0.40), _graded(0.85, precision=0.46))
+        precision = next(d for d in result.deltas if d.metric == "context_precision")
+        assert precision.delta == pytest.approx(0.06)
+        assert precision.winner == "B"
+
+
+class TestAnswersFingerprint:
+    def test_two_correctness_runs_on_different_references_are_refused(self) -> None:
+        """`answer_correctness` reads the reference answer directly, so a
+        rewrite of one — which is what happened to fq-010 on 2026-09-27 —
+        makes two correctness scores different measurements."""
+        with pytest.raises(DatasetMismatch, match="different reference answers"):
+            compare(_graded(0.80, answers="before"), _graded(0.85, answers="after"))
+
+    def test_the_same_references_compare_fine(self) -> None:
+        assert compare(_graded(0.80), _graded(0.85)).overall_winner == "B"
+
+    def test_a_rewrite_does_not_block_a_precision_comparison(self) -> None:
+        """The other four metrics cannot depend on the reference answer, so
+        refusing here would be a guard crying wolf — and a guard that cries
+        wolf is one that gets bypassed with a flag."""
+        a = _graded(None, answers="before", precision=0.40)
+        b = _graded(None, answers="after", precision=0.46)
+        assert compare(a, b).overall_winner == "B"
+
+    def test_a_report_without_the_field_is_not_refused(self) -> None:
+        """Every report written before 2026-09-28 carries an empty one."""
+        old = _graded(0.80, answers="")
+        assert compare(old, _graded(0.85)).overall_winner == "B"

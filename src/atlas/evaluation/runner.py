@@ -40,7 +40,7 @@ from statistics import mean
 
 import structlog
 
-from atlas.evaluation.dataset import dataset_fingerprint
+from atlas.evaluation.dataset import dataset_answers_fingerprint, dataset_fingerprint
 from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import (
     EvalDataset,
@@ -130,6 +130,7 @@ class EvalRunner:
             # produces a report that looks complete and compares wrongly.
             dataset_name=dataset.name,
             dataset_fingerprint=dataset_fingerprint(dataset),
+            answers_fingerprint=dataset_answers_fingerprint(dataset),
         )
 
     async def _score_sample(self, sample: object) -> SampleResult:
