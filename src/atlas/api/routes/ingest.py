@@ -9,9 +9,9 @@ import structlog
 from fastapi import APIRouter, HTTPException, Request
 
 from atlas.api.budget import BudgetExceeded, seconds_until_utc_midnight
-from atlas.api.cost import estimate_cost
 from atlas.api.dependencies import get_app_state, get_registry
 from atlas.api.schemas import IngestRequest, IngestResponse
+from atlas.cost import estimate_cost
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()

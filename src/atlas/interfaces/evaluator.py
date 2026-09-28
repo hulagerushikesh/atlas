@@ -22,6 +22,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from atlas.usage import ModelUsage
+
 
 class EvalSample(BaseModel):
     """One row in the evaluation dataset."""
@@ -118,6 +120,14 @@ class EvalResult(BaseModel):
     # assuming they match.
     dataset_name: str = ""
     dataset_fingerprint: str = ""
+    # Every token this run spent, per model, chat and embedding alike.
+    # `total_tokens_used` is their sum — but only on a report that carries
+    # this field. An empty `token_usage` with a non-zero total is a report
+    # written before 2026-09-28, when the total was the generation call alone
+    # and left out the router, decomposer, grader, faithfulness checker, both
+    # judges and every embedding. The two numbers are not comparable and the
+    # reporter refuses to print them as if they were.
+    token_usage: dict[str, ModelUsage] = Field(default_factory=dict)
     total_tokens_used: int = 0
     duration_seconds: float = 0.0
     # Which chat model actually served the calls in this run, summed over the

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from atlas.cost import estimate_usage_cost
 from atlas.evaluation.comparator import (
     _SIGNIFICANCE_THRESHOLD,
     DatasetMismatch,
@@ -25,6 +26,7 @@ from atlas.interfaces.evaluator import (
     PipelineConfig,
     SampleResult,
 )
+from atlas.usage import ModelUsage
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -429,3 +431,87 @@ class TestDatasetFingerprint:
         fastapi, _ = load_dataset(Path("eval_data/fastapi_dataset.json"), strict=False)
         sample, _ = load_dataset(Path("eval_data/sample_dataset.json"), strict=False)
         assert dataset_fingerprint(fastapi) != dataset_fingerprint(sample)
+
+
+# ── Token accounting ──────────────────────────────────────────────────────────
+
+def _spent(
+    usage: dict[str, ModelUsage] | None = None,
+    total: int = 0,
+    fingerprint: str = "fp",
+) -> EvalResult:
+    return EvalResult(
+        pipeline_config=PipelineConfig(name="run"),
+        sample_results=[
+            SampleResult(
+                sample_id="s1", question="q", generated_answer="a",
+                retrieved_chunk_ids=["c1"],
+                metrics=[MetricScore(metric_name="faithfulness", score=1.0)],
+            )
+        ],
+        aggregate_scores={"faithfulness": 1.0},
+        token_usage=usage or {},
+        total_tokens_used=total,
+        dataset_fingerprint=fingerprint,
+        duration_seconds=1.0,
+    )
+
+
+_CHAT = {"gemini-3.1-flash-lite": ModelUsage(kind="chat", calls=75,
+                                             prompt_tokens=300_000, completion_tokens=9_000)}
+_CHAT_AND_EMBED = _CHAT | {
+    "gemini-embedding-001": ModelUsage(kind="embedding", calls=15, prompt_tokens=400)
+}
+
+
+class TestTokenReporting:
+    def test_per_model_breakdown_is_printed(self) -> None:
+        md = _md_table(_spent(_CHAT_AND_EMBED, total=309_400))
+        assert "gemini-3.1-flash-lite (chat) | 75 | 300,000 | 9,000" in md
+        assert "gemini-embedding-001 (embedding) | 15 | 400 | —" in md
+
+    def test_cost_is_estimated_per_model_not_per_total(self) -> None:
+        """Chat and embedding prices differ by more than 10x, so one total
+        cannot be priced — the split is the whole point of the breakdown."""
+        md = _md_table(_spent(_CHAT_AND_EMBED, total=309_400))
+        expected = estimate_usage_cost(_CHAT_AND_EMBED)
+        assert f"${expected:.4f}" in md
+        assert "₹" in md
+
+    def test_a_pre_2026_09_28_report_says_what_its_total_means(self) -> None:
+        """Generation-only and complete totals differ by roughly 2x. Both
+        kinds of report live in eval_data/reports and will be read side by
+        side, so the older one has to arrive labelled."""
+        md = _md_table(_spent(total=120_000))
+        assert "generation call only" in md
+        assert "| Model | Calls |" not in md
+
+    def test_a_complete_report_carries_no_qualifier(self) -> None:
+        assert "generation call only" not in _md_table(_spent(_CHAT, total=309_000))
+
+    def test_a_run_that_spent_nothing_says_nothing(self) -> None:
+        md = _md_table(_spent(total=0))
+        assert "generation call only" not in md
+
+
+class TestTokenComparability:
+    def test_mixed_provenance_is_noted(self) -> None:
+        old = _spent(total=120_000)
+        new = _spent(_CHAT_AND_EMBED, total=309_400)
+        result = compare(old, new)
+
+        assert any("generation call only" in n for n in result.notes)
+        assert "Unverified" in result.as_markdown()
+
+    def test_two_complete_reports_get_no_note(self) -> None:
+        assert compare(_spent(_CHAT, total=309_000), _spent(_CHAT, total=309_000)).notes == []
+
+    def test_two_legacy_reports_are_comparable_with_each_other(self) -> None:
+        """Both counted the same wrong thing, so the ratio still holds —
+        which is exactly why this was never noticed."""
+        assert compare(_spent(total=120_000), _spent(total=130_000)).notes == []
+
+    def test_the_note_does_not_suppress_the_metric_deltas(self) -> None:
+        old = _spent(total=120_000)
+        new = _spent(_CHAT, total=309_000)
+        assert compare(old, new).deltas

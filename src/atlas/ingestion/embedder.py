@@ -27,6 +27,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 from atlas.config import OpenAIConfig
 from atlas.interfaces.embedder import BaseEmbedder, EmbeddingResult
 from atlas.retry_policy import is_retryable_rate_limit
+from atlas.usage import UsageMeter
 
 logger = structlog.get_logger(__name__)
 
@@ -46,6 +47,11 @@ class OpenAIEmbedder(BaseEmbedder):
             base_url=config.base_url,
             max_retries=0,
         )
+        # Embedding tokens are cheap per token and easy to forget entirely:
+        # they were absent from every eval report and from the /query spend
+        # estimate, which passed `embedding_tokens=0` on every call. Cheap is
+        # not free, and an ingest is almost nothing but these.
+        self.usage = UsageMeter()
 
     @property
     def dimensions(self) -> int:
@@ -85,6 +91,11 @@ class OpenAIEmbedder(BaseEmbedder):
         approx = sum(len(t) for t in texts) // 4
         tokens = response.usage.total_tokens if response.usage else approx
         logger.debug("embedding_batch_complete", count=len(texts), tokens=tokens)
+        # Counted as prompt tokens: an embedding has no completion, and
+        # pricing reads `kind` rather than the model name to know that.
+        self.usage.record(
+            self._config.embedding_model, kind="embedding", prompt_tokens=tokens
+        )
         # Order by the returned index when present; Gemini omits it and
         # returns items in input order, so fall back to position.
         ordered = sorted(

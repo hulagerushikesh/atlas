@@ -47,6 +47,7 @@ from tenacity import (
 from atlas.config import OpenAIConfig
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, GenerationResponse, Message
 from atlas.retry_policy import is_retryable_rate_limit
+from atlas.usage import UsageMeter
 
 logger = structlog.get_logger(__name__)
 
@@ -68,16 +69,22 @@ class OpenAILLMProvider(BaseLLMProvider):
             base_url=config.base_url,
             max_retries=0,
         )
-        # Which model actually served each call, counted for the life of the
-        # provider. The fallback already logged a warning, but a warning is not
-        # a number: the 2026-09-24 eval ran almost entirely on the fallback
-        # model after the primary returned 503, which silently changed both the
-        # quality scores and the latency being compared against a run that had
-        # not. A run has to be able to say which model produced it.
-        self.model_calls: dict[str, int] = {}
+        # Which model served each call and what it cost in tokens, for the
+        # life of the provider. The fallback already logged a warning, but a
+        # warning is not a number: the 2026-09-24 eval ran almost entirely on
+        # the fallback model after the primary returned 503, which silently
+        # changed both the quality scores and the latency being compared
+        # against a run that had not. A run has to be able to say which model
+        # produced it, and what it spent doing so.
+        self.usage = UsageMeter()
 
-    def _record(self, model: str) -> None:
-        self.model_calls[model] = self.model_calls.get(model, 0) + 1
+    @property
+    def model_calls(self) -> dict[str, int]:
+        """Calls per model. Kept as its own name because the eval report's
+        mixed-model warning reads it, and because a call count answers a
+        different question from a token count: two runs can burn the same
+        tokens across a very different number of round trips."""
+        return self.usage.calls_by_model(kind="chat")
 
     async def generate(self, request: GenerationRequest) -> GenerationResponse:
         model = request.model or self._config.primary_model
@@ -97,6 +104,11 @@ class OpenAILLMProvider(BaseLLMProvider):
             raise
 
     async def stream(self, request: GenerationRequest) -> AsyncIterator[str]:
+        # Unrecorded on purpose: an SSE stream carries no usage block, so
+        # there is no count to record here. The caller that owns the stream
+        # approximates it (see atlas.api.routes.query) rather than have this
+        # method invent a number that would be indistinguishable from a
+        # measured one in the same meter.
         model = request.model or self._config.primary_model
         kwargs: dict[str, Any] = {
             "model": model,
@@ -152,7 +164,12 @@ class OpenAILLMProvider(BaseLLMProvider):
             fallback=fallback_triggered,
         )
 
-        self._record(model)
+        self.usage.record(
+            model,
+            kind="chat",
+            prompt_tokens=usage.prompt_tokens if usage else 0,
+            completion_tokens=usage.completion_tokens if usage else 0,
+        )
         return GenerationResponse(
             content=content,
             model_used=model,

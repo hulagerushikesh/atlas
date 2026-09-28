@@ -977,3 +977,65 @@ Format: date — decision — alternatives — reason.
   four decimals, both metrics, no model calls. Whatever else is uncertain
   about this project's numbers, `scripts/replay_context_metrics.py` is not
   guessing.
+
+- **2026-09-28** — **Tokens are counted where they are spent, per model, in a
+  scope.** *Alt:* keep summing `result.generation`'s two fields; or walk the
+  object graph for providers and diff their lifetime counters. *Why:* the
+  provider is the only object that sees every call it makes, so it is the
+  only honest place to count. The same report that said 39,319 tokens also
+  said **101 model calls** — fifteen of which were generation. The other
+  eighty-six had their calls counted and their tokens dropped, which is the
+  whole defect in one line, printed in every report for months.
+
+  Diffing lifetime counters was rejected because the API serves requests
+  concurrently: two requests would be charged each other's tokens. A
+  `ContextVar` scope inherits into child tasks — which is what makes a
+  fanned-out eval run and a pipeline's parallel sub-queries add up — while
+  staying separate between concurrent requests.
+
+- **2026-09-28** — **The scope is entered per await on the streaming path,
+  not once around the body.** An async generator has no context of its own;
+  it runs in whichever task resumes it. A scope entered before a `yield` and
+  left after one can therefore be entered and exited in two different
+  contexts, and silently stop applying halfway down the response. This was
+  not theoretical — Starlette's TestClient drives a streaming body that way,
+  and the first version of this counted nothing after the first chunk. The
+  test that caught it is the reason `usage.counted()` exists.
+
+- **2026-09-28** — **The daily spend cap was charging half of what a request
+  cost.** `/query` priced a request from `result.generation` alone and passed
+  *that* to `spend.add()`, with `embedding_tokens=0` on every call. The
+  router, decomposer, grader, faithfulness check and the query embedding
+  were free as far as the cap was concerned, so a cap set to $X admitted
+  roughly $2X. The route's own docstring described this as a known reporting
+  gap; it was a budget gap. A request that fails mid-pipeline is now charged
+  for what it spent before failing, because a cap that only counts successes
+  is one a failing deployment walks straight through.
+
+- **2026-09-28** — **`kind` is stored on every usage row rather than inferred
+  from the model name.** *Alt:* look the name up in the embedding price table
+  and fall through to chat. *Why:* the fallback path is exactly where the
+  guess is wrong — an unrecognised embedding model would be priced at the
+  chat fallback rate, ten times its real cost, and an unfamiliar model is the
+  only case where this is ever consulted.
+
+- **2026-09-28** — **Prices moved out of `atlas.api` to `atlas.cost`.**
+  Importing `atlas.api.cost` runs `atlas/api/__init__`, which builds the
+  FastAPI app; the eval reporter now prices a run and has no business doing
+  that. Prices are not an API concern.
+
+- **2026-09-28** — **A report's token total is labelled, not silently
+  redefined.** Reports written before today count the generation call only.
+  Both kinds will sit in `eval_data/reports/` for as long as it exists, and
+  diffing one against the other makes the newer configuration look about
+  twice as expensive whatever it did. An empty `token_usage` with a non-zero
+  total identifies the old shape exactly, so the reporter prints "(generation
+  call only)" and the comparator adds a note. The metric deltas between such
+  a pair are still valid — only the cost comparison is not, which is why this
+  is a note and not a refusal.
+
+  **Consequence: every rupee figure quoted in this repo before today is a
+  generation-only estimate**, including Rs.1.57 for the grader-window A/B and
+  Rs.0.77 for a single run. The call counts say the real number is several
+  times that. The next paid run will print it; nothing needs to be re-run to
+  find out.

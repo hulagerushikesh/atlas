@@ -8,7 +8,7 @@ Design rationale:
     cost at most one day's budget — the same guard sextant carries as
     SEXTANT_DAILY_BUDGET_USD.
 
-    Spend is the pipeline's own cost estimate (atlas.api.cost), accumulated
+    Spend is the pipeline's own cost estimate (atlas.cost), accumulated
     per UTC day. Where that total lives is the backend's business
     (atlas.api.spendstore): Redis when there is one, Firestore on Cloud Run
     where instances come and go, in-process otherwise.

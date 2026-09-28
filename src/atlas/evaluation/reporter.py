@@ -25,6 +25,7 @@ import json
 import math
 from pathlib import Path
 
+from atlas.cost import USD_TO_INR, estimate_usage_cost
 from atlas.interfaces.evaluator import EvalResult
 
 _METRIC_ORDER = [
@@ -64,7 +65,12 @@ def _md_table(result: EvalResult) -> str:
     rows.append("")  # trailing newline
     rows.append(f"*{len(result.sample_results)} samples · "
                 f"{result.duration_seconds:.1f}s · "
-                f"{result.total_tokens_used:,} tokens*")
+                f"{result.total_tokens_used:,} tokens{_tokens_qualifier(result)}*")
+
+    spend = _md_tokens(result)
+    if spend:
+        rows.append("")
+        rows.append(spend)
 
     served = _md_models(result)
     if served:
@@ -75,6 +81,60 @@ def _md_table(result: EvalResult) -> str:
     if latency:
         rows.append("")
         rows.append(latency)
+    return "\n".join(rows)
+
+
+def _tokens_qualifier(result: EvalResult) -> str:
+    """Say which of the two meanings of "tokens" this report's total has.
+
+    Reports written before 2026-09-28 count the generation call only — no
+    router, no decomposer, no grader, no faithfulness checker, no judges, no
+    embeddings. That is roughly half a run. Both kinds of report will be read
+    side by side for as long as `eval_data/reports/` exists, so the older
+    number has to arrive labelled rather than be silently compared with a
+    complete one.
+    """
+    if result.token_usage or not result.total_tokens_used:
+        return ""
+    return " (generation call only)"
+
+
+def _md_tokens(result: EvalResult) -> str:
+    """Per-model tokens and what they cost.
+
+    Split by model because that is the only level at which tokens can be
+    priced: a run's chat and embedding models differ in price by more than an
+    order of magnitude, so a single total cannot be turned into a number. The
+    cost is an estimate from a price table that goes stale — it answers "is
+    this configuration cheaper than that one?", which is a ratio and survives
+    a stale table, not "what will the invoice say".
+    """
+    usage = result.token_usage
+    if not usage:
+        return ""
+
+    rows = ["| Model | Calls | Prompt | Completion | Est. cost |",
+            "| --- | ---: | ---: | ---: | ---: |"]
+    for model, entry in sorted(usage.items(), key=lambda kv: -kv[1].total_tokens):
+        cost = estimate_usage_cost({model: entry})
+        # Em dash rather than 0 for an embedding: it has no completion to
+        # count, which is a different fact from having produced none.
+        completion_cell = f"{entry.completion_tokens:,}" if entry.kind == "chat" else "—"
+        rows.append(
+            f"| {model} ({entry.kind}) | {entry.calls:,} | {entry.prompt_tokens:,} "
+            f"| {completion_cell} | ${cost:.4f} |"
+        )
+    total_cost = estimate_usage_cost(usage)
+    calls = sum(e.calls for e in usage.values())
+    prompt = sum(e.prompt_tokens for e in usage.values())
+    completion = sum(e.completion_tokens for e in usage.values())
+    rows.append(
+        f"| **total** | **{calls:,}** | **{prompt:,}** | **{completion:,}** "
+        f"| **${total_cost:.4f}** (~₹{total_cost * USD_TO_INR:.2f}) |"
+    )
+    rows.append("")
+    rows.append(f"*estimated from list prices at {USD_TO_INR:.0f} ₹/$; "
+                f"the ratio between two runs is the part to trust*")
     return "\n".join(rows)
 
 

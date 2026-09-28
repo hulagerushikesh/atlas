@@ -12,6 +12,7 @@ from atlas.evaluation.runner import _FAILED_SENTINEL, EvalRunner
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.evaluator import EvalDataset, EvalSample, MetricScore, PipelineConfig
 from atlas.interfaces.retriever import RetrievedChunk
+from atlas.usage import UsageMeter
 
 
 def _chunk(cid: str) -> RetrievedChunk:
@@ -157,3 +158,89 @@ class TestEvalRunner:
         runner = EvalRunner(_mock_pipeline(), [_mock_metric("cp", 0.5)])
         result = await runner.run(dataset, config)
         assert result.duration_seconds >= 0
+
+
+class TestTokenAccounting:
+    """What the report says a run spent.
+
+    Until 2026-09-28 this was `result.generation`'s two counts and nothing
+    else, so the router, decomposer, grader, faithfulness checker, both
+    judges and every embedding were missing from a field being read as the
+    run's cost. The runner now counts a scope, so anything that records —
+    wherever it sits in the object graph — is included.
+    """
+
+    @staticmethod
+    def _spending_pipeline(prompt: int, completion: int) -> MagicMock:
+        """A pipeline that bills like a real one: a provider recording into
+        whatever scope happens to be active."""
+        provider = UsageMeter()
+        pipeline = MagicMock()
+
+        async def run(question: str) -> object:
+            provider.record("chat-1", prompt_tokens=prompt, completion_tokens=completion)
+            provider.record("embed-1", kind="embedding", prompt_tokens=8)
+            r = MagicMock()
+            r.answer = "a"
+            r.retrieved_chunks = [_chunk("c1")]
+            return r
+
+        pipeline.run = run
+        return pipeline
+
+    @pytest.mark.asyncio
+    async def test_counts_every_model_not_just_generation(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        runner = EvalRunner(self._spending_pipeline(100, 10), [_mock_metric("cp", 0.5)])
+        result = await runner.run(dataset, config)
+
+        assert result.token_usage["chat-1"].calls == 3        # one per sample
+        assert result.token_usage["chat-1"].prompt_tokens == 300
+        assert result.token_usage["embed-1"].kind == "embedding"
+        assert result.total_tokens_used == 3 * (100 + 10) + 3 * 8
+
+    @pytest.mark.asyncio
+    async def test_judges_are_counted_too(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        """A judge holds its own provider. The old walk found it only if it
+        sat within two attributes of the metric; a scope does not care."""
+        judge_provider = UsageMeter()
+        metric = _mock_metric("cp", 0.5)
+
+        async def score(**kwargs: object) -> MetricScore:
+            judge_provider.record("chat-1", prompt_tokens=40, completion_tokens=4)
+            return MetricScore(metric_name="cp", score=0.5, reasoning="ok")
+
+        metric.score = score
+        runner = EvalRunner(self._spending_pipeline(100, 10), [metric])
+        result = await runner.run(dataset, config)
+
+        assert result.token_usage["chat-1"].prompt_tokens == 3 * (100 + 40)
+
+    @pytest.mark.asyncio
+    async def test_model_calls_excludes_the_embedding_model(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        """`model_calls` drives the report's mixed-model warning, which fires
+        on a second model. The embedding model must not trip it."""
+        runner = EvalRunner(self._spending_pipeline(100, 10), [_mock_metric("cp", 0.5)])
+        result = await runner.run(dataset, config)
+
+        assert result.model_calls == {"chat-1": 3}
+
+    @pytest.mark.asyncio
+    async def test_only_this_runs_calls_are_counted(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        """A provider shared with something outside the run keeps its own
+        lifetime total; the report must carry this run's."""
+        pipeline = self._spending_pipeline(100, 10)
+        outside = UsageMeter()
+        outside.record("chat-1", prompt_tokens=100_000)
+
+        runner = EvalRunner(pipeline, [_mock_metric("cp", 0.5)])
+        result = await runner.run(dataset, config)
+
+        assert result.token_usage["chat-1"].prompt_tokens == 300

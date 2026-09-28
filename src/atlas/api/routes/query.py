@@ -22,11 +22,19 @@ Design rationale:
     We do NOT cache streaming responses — the overhead of buffering the stream
     to serialise it defeats the point of streaming.
 
-    Token tracking: we accumulate token counts across all LLM calls in the
-    pipeline. The pipeline currently doesn't expose a single token counter,
-    so we read from the generation response (the dominant cost) and note that
-    grader/router/faithfulness tokens are not yet tracked — logged as a known
-    gap so it doesn't silently inflate cost estimates.
+    Token tracking: the request runs inside a `usage_scope()`, so every
+    model call it makes is counted where it is made — router, decomposer,
+    grader, generator, faithfulness checker, and the query embedding. Until
+    2026-09-28 this read the generation response alone and this docstring
+    called the rest "a known gap". It was not only a reporting gap: the same
+    figure is what `spend.add()` charges the daily cap, so the cap was letting
+    through roughly twice the spend it was set to. The generation call is the
+    largest single item, which is why the shortfall looked plausible for as
+    long as it did.
+
+    Scoping is per request and not a delta on a lifetime counter, because the
+    providers are process-wide singletons and two concurrent requests would
+    otherwise be charged each other's tokens.
 """
 
 from __future__ import annotations
@@ -42,7 +50,6 @@ from fastapi.responses import StreamingResponse
 
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
 from atlas.api.cache import QueryCache
-from atlas.api.cost import estimate_cost
 from atlas.api.dependencies import get_app_state, get_cache, get_registry
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.api.schemas import (
@@ -53,7 +60,9 @@ from atlas.api.schemas import (
     StageTimings,
     TokenUsage,
 )
+from atlas.cost import estimate_usage_cost
 from atlas.orchestration.pipeline import EvidenceChunk, PipelineResult, RAGPipeline
+from atlas.usage import UsageMeter, counted, usage_scope
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -106,8 +115,7 @@ def _stage_timings(stage_ms: dict[str, float], total_ms: float) -> StageTimings:
 def _build_response(
     result: PipelineResult,
     timings: StageTimings,
-    embedding_model: str,
-    chat_model: str = "unknown",
+    usage: UsageMeter,
     cached: bool = False,
 ) -> QueryResponse:
     citations = []
@@ -122,21 +130,18 @@ def _build_response(
             ))
             citation_by_chunk[ref.chunk_id] = num
 
-    gen = result.generation
-    prompt_tokens = gen.prompt_tokens if gen else 0
-    completion_tokens = gen.completion_tokens if gen else 0
+    by_model = usage.by_model
+    # Embedding tokens land in prompt_tokens: an embedding has no completion,
+    # and the flat schema has nowhere else to put them. The per-model split
+    # that pricing needs is kept inside the meter, where `kind` survives.
+    prompt_tokens = sum(u.prompt_tokens for u in by_model.values())
+    completion_tokens = sum(u.completion_tokens for u in by_model.values())
 
-    cost = estimate_cost(
-        model=chat_model,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-        embedding_model=embedding_model,
-    )
     token_usage = TokenUsage(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
         total_tokens=prompt_tokens + completion_tokens,
-        estimated_cost_usd=cost,
+        estimated_cost_usd=estimate_usage_cost(by_model),
     )
 
     return QueryResponse(
@@ -166,6 +171,35 @@ async def _stream_query(
     spend: SpendMeter | None = None,
     chat_model: str = "unknown",
 ) -> AsyncIterator[str]:
+    """Stream the answer, and charge the daily cap for the whole request.
+
+    The meter lives out here so that every path through `_stream_events`
+    ends up charged — including the `out_of_scope` early return, which still
+    paid for a routing call and used to pay for it silently. Each stage in
+    there is scoped one await at a time (`usage.counted`) rather than the
+    whole body at once: an async generator runs in whichever task resumes it,
+    so a scope held across a `yield` can be entered and left in two different
+    contexts and quietly stop applying.
+
+    A client that disconnects mid-stream is not charged: the cap is credited
+    on normal completion because a generator being closed cannot await. That
+    undercounts an abandoned request, which is the same direction the whole
+    estimate used to be wrong in, but bounded by how often a client hangs up
+    rather than by half of every request.
+    """
+    usage = UsageMeter()
+    async for event in _stream_events(query, pipeline, usage, chat_model):
+        yield event
+    if spend is not None and usage:
+        await spend.add(estimate_usage_cost(usage.by_model))
+
+
+async def _stream_events(
+    query: str,
+    pipeline: RAGPipeline,
+    usage: UsageMeter,
+    chat_model: str = "unknown",
+) -> AsyncIterator[str]:
     """
     Streaming path: route → decompose? → retrieve → grade → stream tokens.
 
@@ -187,7 +221,7 @@ async def _stream_query(
     # ── Stage 1: Route ─────────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "routing", "status": "start"})
     t0 = time.perf_counter()
-    classification = await pipeline._router.classify(query)
+    classification = await counted(usage, pipeline._router.classify(query))
     routing_ms = round((time.perf_counter() - t0) * 1000)
     yield _evt({"type": "stage", "name": "routing", "status": "done",
                 "classification": classification, "ms": routing_ms})
@@ -206,7 +240,7 @@ async def _stream_query(
     if classification == "complex":
         yield _evt({"type": "stage", "name": "decompose", "status": "start"})
         t0 = time.perf_counter()
-        sub_queries = await pipeline._decomposer.decompose(query)
+        sub_queries = await counted(usage, pipeline._decomposer.decompose(query))
         yield _evt({"type": "stage", "name": "decompose", "status": "done",
                     "sub_queries": len(sub_queries),
                     "ms": round((time.perf_counter() - t0) * 1000)})
@@ -214,7 +248,7 @@ async def _stream_query(
     # ── Stage 3: Retrieve ──────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
     t0 = time.perf_counter()
-    retrieval = await pipeline._retrieve_all(sub_queries, query)
+    retrieval = await counted(usage, pipeline._retrieve_all(sub_queries, query))
     chunks = retrieval.chunks
     # Evidence goes out as soon as retrieval finishes so the client can
     # render the trail while generation is still streaming.
@@ -225,7 +259,7 @@ async def _stream_query(
     # ── Stage 4: Grade (fast, worth the latency for quality signal) ────────────
     yield _evt({"type": "stage", "name": "grading", "status": "start"})
     t0 = time.perf_counter()
-    sufficient, score, _ = await pipeline._grader.grade(query, chunks)
+    sufficient, score, _ = await counted(usage, pipeline._grader.grade(query, chunks))
     yield _evt({"type": "stage", "name": "grading", "status": "done",
                 "score": round(score, 2), "sufficient": sufficient,
                 "ms": round((time.perf_counter() - t0) * 1000)})
@@ -251,16 +285,18 @@ async def _stream_query(
                 "page_number": chunk.metadata.page_number,
             })
 
-    # The stream carries no usage block; approximate at ~4 chars/token so
-    # streamed answers still count against the daily budget.
-    if spend is not None:
-        prompt_chars = len(query) + sum(len(c.content) for c in chunks)
-        await spend.add(estimate_cost(
-            model=chat_model,
-            prompt_tokens=prompt_chars // 4,
-            completion_tokens=len(full_answer) // 4,
-        ))
-
+    # The stream carries no usage block, so this one call is approximated at
+    # ~4 chars/token and recorded into the same meter as the measured ones.
+    # Everything else in this request — routing, the query embedding, grading
+    # — was counted exactly, and before 2026-09-28 none of it was counted at
+    # all.
+    prompt_chars = len(query) + sum(len(c.content) for c in chunks)
+    usage.record(
+        chat_model,
+        kind="chat",
+        prompt_tokens=prompt_chars // 4,
+        completion_tokens=len(full_answer) // 4,
+    )
     yield _evt({"type": "done", "classification": classification,
                 "citations": citations, "is_faithful": True})
 
@@ -330,23 +366,31 @@ async def query(
     log.info("query_start")
     t_total = time.perf_counter()
 
-    try:
-        result = await pipeline.run(body.query)
-    except Exception as exc:
-        log.error("query_pipeline_failed", error=str(exc))
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    # One meter for this request. Providers are shared across requests, so
+    # this is a scope rather than a delta on their lifetime counters.
+    with usage_scope() as usage:
+        try:
+            result = await pipeline.run(body.query)
+        except Exception as exc:
+            log.error("query_pipeline_failed", error=str(exc))
+            # Charged anyway: a pipeline that failed at the faithfulness check
+            # has already paid for everything before it, and a cap that only
+            # counts successes is a cap a failing deployment can walk through.
+            await app_state.spend.add(estimate_usage_cost(usage.by_model))
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     total_ms = (time.perf_counter() - t_total) * 1000
     timings = _stage_timings(result.stage_ms, total_ms)
 
-    response = _build_response(
-        result, timings, app_state.embedding_model, app_state.chat_model
-    )
+    response = _build_response(result, timings, usage)
 
-    # Emit Prometheus metrics
-    TOKEN_USAGE.labels(model=app_state.chat_model, type="total").inc(
-        response.token_usage.total_tokens
-    )
+    # Emit Prometheus metrics. Per model, and split the way the `type` label
+    # has always said it was: it was being passed "total", which no dashboard
+    # could separate from a sum over the other two.
+    for model, entry in usage.by_model.items():
+        TOKEN_USAGE.labels(model=model, type="prompt").inc(entry.prompt_tokens)
+        if entry.completion_tokens:
+            TOKEN_USAGE.labels(model=model, type="completion").inc(entry.completion_tokens)
     COST_USD.inc(response.token_usage.estimated_cost_usd)
     await app_state.spend.add(response.token_usage.estimated_cost_usd)
 

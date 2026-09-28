@@ -1,6 +1,11 @@
 """
 Token cost estimation.
 
+Lives at the top level rather than under `atlas.api` because the eval
+reporter prices a run too, and importing `atlas.api.cost` pulls in
+`atlas/api/__init__`, which builds the FastAPI app. Prices are not an API
+concern; they are what a token costs.
+
 Design rationale:
     Cost estimation is intentionally a best-effort lookup rather than an exact
     figure — prices change and multi-model pipelines make exact accounting
@@ -16,6 +21,10 @@ Design rationale:
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
+
+from atlas.usage import ModelUsage
 
 # (input_per_1M_usd, output_per_1M_usd)
 _CHAT_PRICES: dict[str, tuple[float, float]] = {
@@ -38,6 +47,12 @@ _EMBEDDING_PRICES: dict[str, float] = {
 _DEFAULT_CHAT_PRICE = (1.00, 3.00)   # conservative fallback for unknown models
 _DEFAULT_EMBED_PRICE = 0.10
 
+# For the second figure on a report only. Prices are quoted in USD and that
+# is the number derived from them; this is a convenience for a budget that is
+# kept in rupees, at a rate noted on the day it was written (2026-09-28) and
+# never read by anything that decides whether to spend.
+USD_TO_INR = 88.0
+
 
 def estimate_cost(
     model: str,
@@ -54,3 +69,24 @@ def estimate_cost(
     embed_cost = embedding_tokens * embed_price / 1_000_000
 
     return round(chat_cost + embed_cost, 8)
+
+
+def estimate_usage_cost(usage: Mapping[str, ModelUsage]) -> float:
+    """Price a whole run or request from its per-model token counts.
+
+    The per-model breakdown is what makes this answerable at all: a run's
+    tokens are split across a chat model and an embedding model whose prices
+    differ by more than an order of magnitude, so one total cannot be priced.
+    `ModelUsage.kind` decides which table to read, rather than the model name,
+    which would send an unrecognised embedding model to the chat fallback
+    price and overstate it ~10x.
+    """
+    total = 0.0
+    for model, entry in usage.items():
+        if entry.kind == "embedding":
+            price = _EMBEDDING_PRICES.get(model, _DEFAULT_EMBED_PRICE)
+            total += entry.prompt_tokens * price / 1_000_000
+        else:
+            inp, out = _CHAT_PRICES.get(model, _DEFAULT_CHAT_PRICE)
+            total += (entry.prompt_tokens * inp + entry.completion_tokens * out) / 1_000_000
+    return round(total, 8)
