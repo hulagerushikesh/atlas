@@ -126,6 +126,14 @@ Newest at the bottom of each section.
   before and after every ingest. Found a half-finished ingest on its first
   run; see DECISIONS 2026-09-28.
 
+- ~~**Nothing retried a Qdrant fault, and the client had no timeout.**~~
+  **fixed 2026-09-28.** `QdrantConfig.timeout_seconds` (default 60) is passed
+  to every `AsyncQdrantClient`; before this qdrant-client handed httpx no
+  timeout at all, so the default was 5s. `is_transient_qdrant_error` plus a
+  tenacity ladder now covers the write path (5 attempts, 1-20s) and the query
+  path (3 attempts, 0.5-4s). The retry sits on the private single-call methods
+  so a resend never repeats an upsert batch that already landed.
+
 - **Ship the context headers to the `default` namespace — PARTIALLY DONE and
   currently inconsistent.** Cost approved 2026-09-27; the auto-mode classifier
   refused the write to the live collection, correctly, so the user runs it.

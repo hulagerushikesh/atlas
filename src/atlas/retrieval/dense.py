@@ -15,15 +15,31 @@ Design rationale:
 
 from __future__ import annotations
 
+from typing import Any
+
 import structlog
 from qdrant_client import AsyncQdrantClient
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from atlas.config import QdrantConfig
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.embedder import BaseEmbedder
 from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
+from atlas.retry_policy import is_transient_qdrant_error
 
 logger = structlog.get_logger(__name__)
+
+# Shorter and shallower than the ingest ladder: a query has a user waiting on
+# it, and a DNS blip that costs one retry is worth surviving while a cluster
+# that is genuinely down should fail the request rather than hold the
+# connection open. The first live symptom of this was a single 500 on an
+# otherwise healthy query.
+_retry_transient = retry(
+    retry=retry_if_exception(is_transient_qdrant_error),
+    wait=wait_exponential(multiplier=0.5, min=0.5, max=4),
+    stop=stop_after_attempt(3),
+    reraise=True,
+)
 
 
 class QdrantDenseRetriever(BaseRetriever):
@@ -33,7 +49,9 @@ class QdrantDenseRetriever(BaseRetriever):
         self._config = config
         self._embedder = embedder
         api_key = config.api_key.get_secret_value() if config.api_key else None
-        self._client = AsyncQdrantClient(url=config.url, api_key=api_key)
+        self._client = AsyncQdrantClient(
+            url=config.url, api_key=api_key, timeout=config.timeout_seconds
+        )
 
     @property
     def name(self) -> str:
@@ -42,18 +60,22 @@ class QdrantDenseRetriever(BaseRetriever):
     async def retrieve(self, query: str, top_k: int) -> RetrievalResult:
         query_vector = await self._embedder.embed_query(query)
 
+        response = await self._query_points(query_vector, top_k)
+
+        chunks = [self._hit_to_chunk(h) for h in response.points]
+        logger.debug("dense_retrieve", query=query[:60], hits=len(chunks))
+        return RetrievalResult(query=query, chunks=chunks, retriever_name=self.name)
+
+    @_retry_transient
+    async def _query_points(self, query_vector: list[float], top_k: int) -> Any:
         # query_points supersedes the removed search(); it returns a QueryResponse
         # wrapper rather than a bare list of hits.
-        response = await self._client.query_points(
+        return await self._client.query_points(
             collection_name=self._config.collection_name,
             query=query_vector,
             limit=top_k,
             with_payload=True,
         )
-
-        chunks = [self._hit_to_chunk(h) for h in response.points]
-        logger.debug("dense_retrieve", query=query[:60], hits=len(chunks))
-        return RetrievalResult(query=query, chunks=chunks, retriever_name=self.name)
 
     @staticmethod
     def _hit_to_chunk(hit: object) -> RetrievedChunk:

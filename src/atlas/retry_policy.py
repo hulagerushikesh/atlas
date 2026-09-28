@@ -1,5 +1,5 @@
 """
-Shared retry predicates for OpenAI calls.
+Shared retry predicates for the two services Atlas cannot run without.
 
 Design rationale:
     OpenAI returns HTTP 429 for two very different conditions, and the SDK
@@ -30,7 +30,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from openai import RateLimitError
+from qdrant_client.http.exceptions import (
+    ResponseHandlingException,
+    UnexpectedResponse,
+)
 
 _FATAL_TYPES = {"insufficient_quota"}
 _FATAL_CODES = {
@@ -69,3 +74,29 @@ def is_retryable_rate_limit(exc: BaseException) -> bool:
         return False
     err_type, err_code = _error_fields(exc)
     return err_type not in _FATAL_TYPES and err_code not in _FATAL_CODES
+
+
+# ── Qdrant ────────────────────────────────────────────────────────────────────
+#
+# A network fault talking to Qdrant Cloud used to lose a whole document. The
+# 2026-09-28 ingest failed 37 of 155 files on WriteTimeout, ReadTimeout,
+# ConnectTimeout and DNS resolution, embedded them anyway, and wrote neither
+# index — paid for, discarded, and reported only as a warning line.
+#
+# Three shapes reach the caller and all three are the same event:
+#   - ResponseHandlingException, which wraps an httpx transport error;
+#   - httpx.TransportError raised straight through;
+#   - OSError, which is what socket.gaierror ("nodename nor servname
+#     provided") is, when the resolver gives out under concurrent connections.
+#
+# UnexpectedResponse means the server answered, so it is judged on its status:
+# a 4xx is a bug in the request and will fail identically forever.
+
+_RETRYABLE_STATUS = frozenset({429, 500, 502, 503, 504})
+
+
+def is_transient_qdrant_error(exc: BaseException) -> bool:
+    """True for a Qdrant failure that a later attempt could plausibly survive."""
+    if isinstance(exc, UnexpectedResponse):
+        return exc.status_code in _RETRYABLE_STATUS
+    return isinstance(exc, ResponseHandlingException | httpx.TransportError | OSError)

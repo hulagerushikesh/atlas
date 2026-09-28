@@ -728,3 +728,42 @@ Format: date — decision — alternatives — reason.
   size, "did it run today" — reports this as fine. It is not fine: it is a
   mismatched hybrid serving production, and roughly half the dense index is
   still pre-header. See STATUS for the re-run.
+
+- **2026-09-28** — **The 5-second timeout nobody chose.** `qdrant-client`
+  only forwards a timeout to httpx when it is given one, and Atlas never gave
+  it one, so every Qdrant call in the project ran on httpx's 5s default. An
+  upsert batch is 100 points of 1536 floats, four documents go concurrently,
+  and the cluster is a region away — 5s is under the honest round trip rather
+  than a margin over it. `QdrantConfig.timeout_seconds` defaults to 60.
+
+  The visible cost was the 2026-09-28 ingest: 37 of 155 files lost to
+  WriteTimeout, ReadTimeout, ConnectTimeout and `[Errno 8] nodename nor
+  servname provided`. The chunks had already been embedded when the write
+  failed, so the tokens were spent and nothing was stored, and the run
+  reported the whole thing as warnings and a non-zero exit while writing 118
+  files successfully. Partial, plausible, and unnoticed until
+  `verify_index.py` compared the two halves.
+
+- **2026-09-28** — **The retry goes on the single-call method, not the public
+  one.** `QdrantDenseIndex.upsert` loops over batches of 100. Decorating it
+  would have made one timed-out batch resend every batch that already landed
+  — correct, because upserts are idempotent, but it multiplies the write
+  under exactly the conditions that made it fail. So `_upsert_batch`,
+  `_retrieve_hashes`, `_scroll_page`, `_create_collection` and friends exist
+  as private one-call methods purely to give the decorator something with the
+  right granularity. `reraise=True` so the indexer still logs `WriteTimeout`
+  per file rather than tenacity's `RetryError`, since that text is the
+  diagnosis.
+
+  The query path gets a shorter ladder — 3 attempts, 0.5-4s against the
+  ingest's 5 and 1-20s — because a query has someone waiting on it. Surviving
+  a DNS blip is worth one retry; a cluster that is down should fail the
+  request.
+
+- **2026-09-28** — **What is retryable is decided by whether the server
+  answered.** `UnexpectedResponse` means Qdrant replied, so it is judged on
+  status: 429 and 5xx retry, 4xx does not, because a malformed request will
+  be malformed again. Everything else — `ResponseHandlingException`,
+  `httpx.TransportError`, `OSError` — is a transport fault and retries. The
+  `OSError` arm is there for `socket.gaierror`, which arrives unwrapped and
+  is what a home resolver does when several TLS connections open at once.

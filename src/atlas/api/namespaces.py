@@ -84,7 +84,11 @@ class SharedComponents:
             CrossEncoderReranker(settings.reranker) if settings.reranker.enabled else None
         )
         api_key = settings.qdrant.api_key.get_secret_value() if settings.qdrant.api_key else None
-        self.qdrant_client = AsyncQdrantClient(url=settings.qdrant.url, api_key=api_key)
+        self.qdrant_client = AsyncQdrantClient(
+            url=settings.qdrant.url,
+            api_key=api_key,
+            timeout=settings.qdrant.timeout_seconds,
+        )
 
 
 class NamespaceComponents:
