@@ -217,6 +217,11 @@ async def _stream_query(
     # already announces itself with a `status: "start"`, so the wrapper knows
     # without `_stream_events` having to report to it.
     stage = "routing"
+    # Captured before the first yield. The middleware unbinds its contextvars
+    # when `call_next` returns, and for a StreamingResponse that is before
+    # this body has produced anything — so reading it lazily inside the
+    # `except` would find nothing.
+    request_id = _request_id()
     try:
         async for event in _stream_events(query, pipeline, usage, chat_model):
             if '"status": "start"' in event:
@@ -227,12 +232,20 @@ async def _stream_query(
     except Exception as exc:
         logger.error("query_stream_failed", stage=stage,
                      error=str(exc), error_type=type(exc).__name__)
-        # Matches the non-streaming path, which puts `str(exc)` in the 500's
-        # `detail`. Consistency over redaction here: if the message is too
-        # revealing it is too revealing on both paths, and that is one
-        # decision about one convention rather than a difference between two
-        # endpoints that nobody would remember.
-        yield f"data: {json.dumps({'type': 'error', 'error': str(exc), 'stage': stage})}\n\n"
+        # The same public message the non-streaming 500 returns. When this
+        # shipped it sent `str(exc)`, matching what the 500 did — one
+        # convention, and the wrong one. `str(exc)` on this pipeline is
+        # where the Qdrant URL, the collection name and the upstream model
+        # id surface. `stage` stays: it is a fixed word from a known set,
+        # and it is the field that makes the console's failure card useful.
+        payload = {
+            "type": "error",
+            "error": _public_error(request_id),
+            "stage": stage,
+        }
+        if request_id:
+            payload["request_id"] = request_id
+        yield f"data: {json.dumps(payload)}\n\n"
         yield "data: [DONE]\n\n"
         if spend is not None and usage:
             await spend.add(estimate_usage_cost(usage.by_model))
@@ -358,6 +371,42 @@ async def _stream_events(
     yield "data: [DONE]\n\n"
 
 
+def _request_id() -> str:
+    """This request's id, as the tracing middleware bound it.
+
+    Read from structlog's contextvars rather than passed down from the
+    handler, because every log line in the request already carries it and
+    the two must agree — a public message naming an id that is not in the
+    logs is worse than no id. Empty string if the middleware is not in the
+    stack, which is the case in a few unit tests.
+    """
+    value = structlog.contextvars.get_contextvars().get("request_id", "")
+    return str(value)
+
+
+def _public_error(request_id: str) -> str:
+    """What a caller is told when the pipeline raises.
+
+    Not `str(exc)`. That is where the Qdrant URL, the collection name, the
+    upstream model id and occasionally a query string end up, and it was
+    being returned verbatim in a 500 body and, since this morning, in an SSE
+    error event. The full exception is already logged with its type against
+    this same request id, so nothing is lost by the person who can read the
+    logs, and nothing is handed to the person who cannot.
+
+    The id is in the message and not only in the `X-Request-ID` header
+    because a browser console shows the body, and a bug report quotes what
+    is on the screen.
+    """
+    if not request_id:
+        return "Atlas failed to answer this query. Check the service logs."
+    return (
+        "Atlas failed to answer this query. Quote request id "
+        f"{request_id} when reporting it; the cause is in the service logs "
+        "under that id."
+    )
+
+
 async def _enforce_budget(spend: SpendMeter) -> None:
     """429 with Retry-After until UTC midnight once the daily cap is hit."""
     try:
@@ -427,12 +476,15 @@ async def query(
         try:
             result = await pipeline.run(body.query)
         except Exception as exc:
-            log.error("query_pipeline_failed", error=str(exc))
+            log.error("query_pipeline_failed", error=str(exc),
+                      error_type=type(exc).__name__)
             # Charged anyway: a pipeline that failed at the faithfulness check
             # has already paid for everything before it, and a cap that only
             # counts successes is a cap a failing deployment can walk through.
             await app_state.spend.add(estimate_usage_cost(usage.by_model))
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=500, detail=_public_error(_request_id())
+            ) from exc
 
     total_ms = (time.perf_counter() - t_total) * 1000
     timings = _stage_timings(result.stage_ms, total_ms)

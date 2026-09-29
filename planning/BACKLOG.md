@@ -371,7 +371,15 @@ Newest at the bottom of each section.
   the generation call alone and admitting roughly twice its budget**. The
   user runs deploys.
 
-- **Both error paths hand the client `str(exc)`.** The non-streaming 500
+- ~~**Both error paths hand the client `str(exc)`.**~~ **Fixed 2026-09-29,
+  Rs.0.** `_public_error()` returns one fixed sentence naming the request
+  id; the full exception and its type go to the log under that same id. Both
+  paths moved together, because the SSE event had copied the 500's leak on
+  purpose for consistency. `stage` survives redaction (one word, fixed set,
+  and the field that makes the failure card useful) and `request_id` is in
+  the event body as well as the header. See DECISIONS 2026-09-29.
+
+  Original entry: The non-streaming 500
   puts it in `detail` and, as of 2026-09-29, the streaming `error` event
   carries the same string — deliberately, so the two agree. Whether a public
   deployment should be returning raw exception text at all is the open

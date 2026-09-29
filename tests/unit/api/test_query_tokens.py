@@ -194,7 +194,39 @@ class TestStreamingFailures:
         assert resp.status_code == 200  # the status line went out long ago
         errors = [e for e in events if e["type"] == "error"]
         assert len(errors) == 1
-        assert "qdrant went away" in errors[0]["error"]
+        assert "Atlas failed to answer this query" in errors[0]["error"]
+
+    def test_the_error_event_does_not_leak_the_exception(
+        self, client: TestClient
+    ) -> None:
+        # `str(exc)` on this pipeline is where the Qdrant URL, the collection
+        # name and the upstream model id surface. It goes to the log, which
+        # carries the same request id, and not to the wire.
+        self._break_at_grading(client)
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        [error] = [e for e in events if e["type"] == "error"]
+        assert "qdrant went away" not in json.dumps(error)
+        assert error["request_id"]
+        assert resp.headers["X-Request-ID"] == error["request_id"]
+
+    def test_the_500_does_not_leak_the_exception_either(
+        self, client: TestClient
+    ) -> None:
+        # Both paths, one message. The streaming event used to copy the 500's
+        # `str(exc)` deliberately, for consistency — so fixing one without
+        # the other would restore exactly the inconsistency that argued for
+        # the leak in the first place.
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline.run = AsyncMock(side_effect=RuntimeError("qdrant went away"))
+
+        resp = client.post("/query", json={"query": "q", "stream": False})
+
+        assert resp.status_code == 500
+        assert "qdrant went away" not in resp.text
+        assert resp.headers["X-Request-ID"] in resp.json()["detail"]
 
     def test_the_error_event_names_the_stage_that_broke(self, client: TestClient) -> None:
         self._break_at_grading(client)

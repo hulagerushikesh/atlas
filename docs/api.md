@@ -156,7 +156,7 @@ lands.
 | `stage` | `{"type":"stage","name":"grading","status":"done","score":0.82,"sufficient":true,"ms":390}` | grading finished |
 | `delta` | `{"type":"delta","text":"…"}` | one token span |
 | `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":true}` | the answer is complete |
-| `error` | `{"type":"error","error":"…","stage":"grading"}` | the pipeline threw after streaming began |
+| `error` | `{"type":"error","error":"…","stage":"grading","request_id":"…"}` | the pipeline threw after streaming began |
 
 ```
 data: {"type": "stage", "name": "routing", "status": "start"}
@@ -179,6 +179,17 @@ An exception raised after the first byte **cannot** be a 500: the status line
 went out with the headers, before the pipeline had a chance to fail. It arrives
 as an `error` event instead, carrying the stage that was in flight. The daily
 spend cap is still charged for what the failed request spent up to that point.
+
+`error` is a fixed public sentence naming the request id, not the exception's
+text — on both this path and the non-streaming 500's `detail`. `str(exc)` on
+this pipeline is where the Qdrant URL, the collection name and the upstream
+model id surface. The full exception, with its type, is logged against the
+same request id, so the person who can read the logs loses nothing and the
+person who cannot is handed nothing. `request_id` matches the `X-Request-ID`
+response header; it is in the body as well because a browser console shows
+the body and a bug report quotes what is on the screen. `stage` is not
+redacted: it is one word from a known set, and it is what makes a failure
+card useful.
 Clients should treat the stream ending with neither `done` nor `error` as a
 failure too — that is the network, a proxy, or a gateway timeout, and no event
 can be sent for it.
