@@ -31,8 +31,16 @@ Newest at the bottom of each section.
   is invisible until restart.
 - ~~Eval script cannot apply `PipelineConfig.overrides`~~ `--set section.field=value` (post-M1).
 - ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
-- Streaming errors after first byte become events; document the event
-  schema in `docs/api.md`.
+- ~~Streaming errors after first byte become events; document the event
+  schema in `docs/api.md`.~~ **Shipped 2026-09-29, Rs.0.** `{"type":"error",
+  "error":…,"stage":…}` plus the `[DONE]` sentinel, which the success path
+  was also missing, so all three endings now agree. The failed request is
+  charged for what it spent — the same hole the non-streaming path had until
+  2026-09-28. `docs/api.md` gained the full event table; it had been
+  documenting `{"delta": "..."}`, a shape the server stopped sending some
+  time ago, and no stage events at all. Console handles the event and, more
+  importantly, handles a stream that ends with neither `done` nor `error` —
+  a dropped connection, which no server change can announce.
 - ~~**The grader reads a third of the window it is judging.**~~ **measured
   2026-09-28, and the slice was right.** Grading all 15 instead of the top 5
   cost 0.060 context recall and 0.033 faithfulness; precision and answer
@@ -314,6 +322,16 @@ Newest at the bottom of each section.
   including the spend-cap fix — so **the deployed cap is still being charged
   the generation call alone and admitting roughly twice its budget**. The
   user runs deploys.
+
+- **Both error paths hand the client `str(exc)`.** The non-streaming 500
+  puts it in `detail` and, as of 2026-09-29, the streaming `error` event
+  carries the same string — deliberately, so the two agree. Whether a public
+  deployment should be returning raw exception text at all is the open
+  question: a Qdrant client error can carry a host, and a provider error can
+  carry a request id or a fragment of configuration. The shape of a fix is a
+  single helper both paths call, returning a short public message plus the
+  `X-Request-ID` already on every response, with the detail left in the log.
+  One decision, one convention, both endpoints.
 
 ## Ideas (research-backed, see learning/09)
 

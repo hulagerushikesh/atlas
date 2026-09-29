@@ -158,3 +158,124 @@ class TestStreamingTokenUsage:
         assert "out_of_scope" in body
         state.spend.add.assert_awaited_once()
         assert state.spend.add.await_args.args[0] > 0
+
+
+class TestStreamingFailures:
+    """An exception after the first byte cannot become a 500 — the status line
+    is already sent. It used to end the body mid-event instead, which every
+    layer read as a completed stream: the console's `for await` simply stopped,
+    no error was thrown, no `done` arrived, and the spinner ran for ever."""
+
+    @staticmethod
+    def _events(resp: object) -> list[dict]:
+        out = []
+        for line in resp.iter_lines():  # type: ignore[attr-defined]
+            if not line.startswith("data:"):
+                continue
+            payload = line[5:].strip()
+            if payload == "[DONE]":
+                out.append({"type": "[DONE]"})
+            else:
+                out.append(json.loads(payload))
+        return out
+
+    def _break_at_grading(self, client: TestClient) -> MagicMock:
+        state = client.app.state.atlas
+        pipeline = state.registry.get("default").pipeline
+        pipeline._grader.grade = AsyncMock(side_effect=RuntimeError("qdrant went away"))
+        return state
+
+    def test_a_mid_stream_failure_becomes_an_error_event(self, client: TestClient) -> None:
+        self._break_at_grading(client)
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        assert resp.status_code == 200  # the status line went out long ago
+        errors = [e for e in events if e["type"] == "error"]
+        assert len(errors) == 1
+        assert "qdrant went away" in errors[0]["error"]
+
+    def test_the_error_event_names_the_stage_that_broke(self, client: TestClient) -> None:
+        self._break_at_grading(client)
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        assert [e for e in events if e["type"] == "error"][0]["stage"] == "grading"
+
+    def test_a_failed_stream_still_ends_with_the_done_sentinel(
+        self, client: TestClient
+    ) -> None:
+        # The sentinel is what lets a reader tell "finished" from "socket
+        # closed", which is the whole bug.
+        self._break_at_grading(client)
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        assert events[-1]["type"] == "[DONE]"
+
+    def test_a_successful_stream_also_ends_with_the_sentinel(
+        self, client: TestClient
+    ) -> None:
+        # It always did on the out-of-scope branch and never did on the path
+        # that streams an answer.
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline._grader.grade = AsyncMock(return_value=(True, 0.9, "q"))
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        assert events[-1]["type"] == "[DONE]"
+        assert events[-2]["type"] == "done"
+
+    def test_a_failed_stream_is_charged_for_what_it_already_spent(
+        self, client: TestClient
+    ) -> None:
+        """The non-streaming path was fixed for this on 2026-09-28 and the
+        streaming one kept the hole: a stream that dies at generation has
+        already paid for routing, embedding, retrieval and grading."""
+        state = self._break_at_grading(client)
+        pipeline = state.registry.get("default").pipeline
+        provider = UsageMeter()
+        original = pipeline._router.classify
+
+        async def classify(query: str) -> str:
+            provider.record("gpt-4o-mini", prompt_tokens=80_000, completion_tokens=10)
+            return await original(query)
+
+        pipeline._router.classify = classify
+        state.spend.add = AsyncMock()
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            list(resp.iter_lines())
+
+        state.spend.add.assert_awaited_once()
+        assert state.spend.add.await_args.args[0] > 0
+
+    def test_the_error_event_arrives_after_the_stages_that_did_work(
+        self, client: TestClient
+    ) -> None:
+        # A client that has already rendered routing and retrieval should not
+        # have them rolled back; the error is an ending, not a replacement.
+        self._break_at_grading(client)
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        names = [e.get("name") for e in events if e["type"] == "stage"]
+        assert "routing" in names and "retrieval" in names
+        assert events.index([e for e in events if e["type"] == "error"][0]) > 0
+
+    def test_no_done_event_is_emitted_when_the_stream_fails(
+        self, client: TestClient
+    ) -> None:
+        # `done` carries citations and a faithfulness verdict. Sending one
+        # after a failure would tell the client the answer is complete.
+        self._break_at_grading(client)
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            events = self._events(resp)
+
+        assert not [e for e in events if e["type"] == "done"]

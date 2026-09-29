@@ -39,6 +39,7 @@ Design rationale:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
@@ -186,10 +187,54 @@ async def _stream_query(
     undercounts an abandoned request, which is the same direction the whole
     estimate used to be wrong in, but bounded by how often a client hangs up
     rather than by half of every request.
+
+    An exception raised after the first byte cannot become a 500 — the status
+    line is long gone — so it used to end the response body mid-event and
+    nothing more. Every layer read that as a completed stream: the client's
+    `for await` just stopped, no error was thrown, no `done` arrived, and the
+    console sat on a running spinner for ever. It is now an `error` event
+    followed by the `[DONE]` sentinel, so a reader that waits for either one
+    terminates.
+
+    Two things are deliberate about the recovery. The exception is logged
+    with the request id before anything is emitted, because the event is what
+    the user sees and the log is what gets debugged. And the cap is charged
+    for what the failed request already spent, for the same reason the
+    non-streaming path was fixed on 2026-09-28: a cap that only counts
+    successes is one a failing deployment can walk straight through, and a
+    stream that dies at generation has already paid for routing, embedding,
+    retrieval and grading.
+
+    `CancelledError` and `GeneratorExit` are re-raised untouched. Those are
+    the client hanging up, not a fault: there is no socket left to write an
+    event to, and swallowing them would stop the disconnect propagating.
     """
     usage = UsageMeter()
-    async for event in _stream_events(query, pipeline, usage, chat_model):
-        yield event
+    # Which stage was in flight when it broke. Read back off the events being
+    # forwarded rather than passed down as a mutable argument: every stage
+    # already announces itself with a `status: "start"`, so the wrapper knows
+    # without `_stream_events` having to report to it.
+    stage = "routing"
+    try:
+        async for event in _stream_events(query, pipeline, usage, chat_model):
+            if '"status": "start"' in event:
+                stage = json.loads(event[len("data: "):]).get("name", stage)
+            yield event
+    except (asyncio.CancelledError, GeneratorExit):
+        raise
+    except Exception as exc:
+        logger.error("query_stream_failed", stage=stage,
+                     error=str(exc), error_type=type(exc).__name__)
+        # Matches the non-streaming path, which puts `str(exc)` in the 500's
+        # `detail`. Consistency over redaction here: if the message is too
+        # revealing it is too revealing on both paths, and that is one
+        # decision about one convention rather than a difference between two
+        # endpoints that nobody would remember.
+        yield f"data: {json.dumps({'type': 'error', 'error': str(exc), 'stage': stage})}\n\n"
+        yield "data: [DONE]\n\n"
+        if spend is not None and usage:
+            await spend.add(estimate_usage_cost(usage.by_model))
+        return
     if spend is not None and usage:
         await spend.add(estimate_usage_cost(usage.by_model))
 
@@ -211,6 +256,12 @@ async def _stream_events(
         {"type":"stage","name":"routing","status":"done","classification":"simple","ms":45}
         {"type":"delta","text":"token text"}
         {"type":"done","classification":"simple","citations":[...],"is_faithful":true}
+        {"type":"error","error":"...","stage":"grading"}
+
+    Every stream ends with `data: [DONE]`, after a `done` event or an
+    `error` one. The `error` event is emitted by `_stream_query`, not here —
+    see its docstring for why an exception after the first byte cannot be a
+    500.
 
     Faithfulness is skipped on the streaming path — we'd have to buffer the
     full answer to check it, defeating the purpose of streaming.
@@ -299,6 +350,10 @@ async def _stream_events(
     )
     yield _evt({"type": "done", "classification": classification,
                 "citations": citations, "is_faithful": True})
+    # The out-of-scope branch above has always sent this and the success path
+    # never did, so a client could not tell "finished" from "socket closed"
+    # on the one path that streams an answer. Now all three endings agree.
+    yield "data: [DONE]\n\n"
 
 
 async def _enforce_budget(spend: SpendMeter) -> None:
@@ -349,8 +404,6 @@ async def query(
         log.info("query_cache_hit")
         response = QueryResponse.model_validate(cached_payload)
         response.cached = True
-        import asyncio
-
         from atlas.api import auth as _auth
         api_key_id = getattr(request.state, "api_key_id", None)
         if api_key_id is not None:
@@ -395,8 +448,6 @@ async def query(
     await app_state.spend.add(response.token_usage.estimated_cost_usd)
 
     # Fire-and-forget: cache + usage log (never block the response)
-    import asyncio
-
     from atlas.api import auth as _auth
     asyncio.create_task(cache.set(cache_key, response.model_dump()))
     api_key_id = getattr(request.state, "api_key_id", None)

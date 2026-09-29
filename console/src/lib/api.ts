@@ -76,6 +76,10 @@ export type StreamEvent =
   | { type: "stage"; name: "grading"; status: "done"; score: number; sufficient: boolean; ms: number }
   | { type: "delta"; text: string }
   | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean; answer?: string }
+  // Sent when the pipeline throws after the first byte. The response is a 200
+  // by then — the status line left before the pipeline had a chance to fail —
+  // so this event is the only way the failure can reach the client at all.
+  | { type: "error"; error: string; stage: string }
 
 const KEY = "atlas_api_key"
 const BASE = "atlas_api_base"
