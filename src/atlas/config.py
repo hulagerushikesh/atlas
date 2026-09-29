@@ -146,6 +146,43 @@ class RerankerConfig(BaseSettings):
     model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 
+class HyDEConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="HYDE_", env_file=_ENV_FILE, extra="ignore")
+
+    # Hypothetical Document Embeddings: write a passage that would answer the
+    # query, then retrieve with that instead of (or alongside) the question.
+    #
+    # Off by default, and this is the third intervention aimed at the same
+    # row. `fq-012` asks how to add string validation to a query parameter.
+    # The pages that answer it say `Query`, `Annotated`, `min_length`,
+    # `Pydantic` — and the question says none of those words. Retrieval
+    # ranked pages by how often they happen to mention "pydantic": 15 on
+    # `tutorial/body` (retrieved), 0 on `tutorial/path-params-numeric-
+    # validations` (not retrieved). That is a vocabulary gap, not a ranking
+    # one.
+    #
+    # Context headers were the first attempt and bought precision, not this
+    # row. Decomposition was the second, and a ₹0.023 probe on 2026-09-29
+    # settled it: the decomposer splits a question, it does not translate
+    # one, so all three shards led with "Pydantic" and scored what the live
+    # run already scored. HyDE is the only remaining candidate that changes
+    # the words being searched with rather than how many searches happen.
+    enabled: bool = False
+    # "concat" keeps the question in front of the hypothesis; "replace" sends
+    # the hypothesis alone, which is what the HyDE paper does.
+    #
+    # Default is concat because this retriever is hybrid. The paper assumes a
+    # dense index, where replacing costs nothing; here BM25 sees the same
+    # string, and a bare hypothesis strips the question's own rare terms out
+    # of the sparse query. Concat is the conservative version — everything
+    # BM25 matched before is still in the text — and `--set hyde.mode=replace`
+    # runs the paper's.
+    mode: Literal["concat", "replace"] = "concat"
+    # A cap, not a target. A long hypothesis is a long BM25 query, and BM25
+    # has no way to tell a probe's padding from its content.
+    max_tokens: int = 220
+
+
 class BudgetConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="BUDGET_", env_file=_ENV_FILE, extra="ignore")
 
@@ -193,6 +230,7 @@ class Settings(BaseSettings):
     grader: GraderConfig = Field(default_factory=GraderConfig)
     reranker: RerankerConfig = Field(default_factory=RerankerConfig)
     router: RouterConfig = Field(default_factory=RouterConfig)
+    hyde: HyDEConfig = Field(default_factory=HyDEConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     api: APIConfig = Field(default_factory=APIConfig)
 

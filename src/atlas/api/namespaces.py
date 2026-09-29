@@ -38,6 +38,7 @@ from atlas.orchestration.decomposer import QueryDecomposer
 from atlas.orchestration.faithfulness import FaithfulnessChecker
 from atlas.orchestration.generator import AnswerGenerator
 from atlas.orchestration.grader import RetrievalGrader
+from atlas.orchestration.hyde import HyDEExpander
 from atlas.orchestration.llm import OpenAILLMProvider
 from atlas.orchestration.pipeline import RAGPipeline
 from atlas.orchestration.router import QueryRouter
@@ -154,6 +155,7 @@ class NamespaceRegistry:
             generator=AnswerGenerator(s.llm),
             faithfulness=FaithfulnessChecker(s.llm),
             reranker=s.reranker,
+            hyde=HyDEExpander(s.llm, cfg.hyde) if cfg.hyde.enabled else None,
         )
 
         indexer = DocumentIndexer(

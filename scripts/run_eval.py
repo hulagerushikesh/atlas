@@ -21,6 +21,8 @@ Usage:
     python scripts/run_eval.py --compare eval_data/reports/baseline.json
     python scripts/run_eval.py --set reranker.enabled=false --run-name no-rerank
     python scripts/run_eval.py --set reranker.top_k=10 --set retrieval.top_k=30
+    python scripts/run_eval.py --set hyde.enabled=true --run-name hyde
+    python scripts/run_eval.py --set hyde.enabled=true --set hyde.mode=replace
 
 Exit code 0 = run completed (even if scores are low).
 Exit code 1 = setup error (missing file, infra unreachable).
@@ -65,6 +67,7 @@ def _build_pipeline(settings, namespace: str = "default"):
     from atlas.orchestration.faithfulness import FaithfulnessChecker
     from atlas.orchestration.generator import AnswerGenerator
     from atlas.orchestration.grader import RetrievalGrader
+    from atlas.orchestration.hyde import HyDEExpander
     from atlas.orchestration.llm import OpenAILLMProvider
     from atlas.orchestration.pipeline import RAGPipeline
     from atlas.orchestration.router import QueryRouter
@@ -103,6 +106,7 @@ def _build_pipeline(settings, namespace: str = "default"):
         generator=AnswerGenerator(llm),
         faithfulness=FaithfulnessChecker(llm),
         reranker=reranker,
+        hyde=HyDEExpander(llm, settings.hyde) if settings.hyde.enabled else None,
     )
 
 

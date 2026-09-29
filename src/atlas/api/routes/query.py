@@ -105,6 +105,7 @@ def _stage_timings(stage_ms: dict[str, float], total_ms: float) -> StageTimings:
     return StageTimings(
         routing_ms=stage_ms.get("routing"),
         decompose_ms=stage_ms.get("decompose"),
+        hyde_ms=stage_ms.get("hyde"),
         retrieval_ms=stage_ms.get("retrieval"),
         grading_ms=stage_ms.get("grading"),
         generation_ms=stage_ms.get("generation"),
@@ -163,6 +164,7 @@ def _build_response(
             list(result.faithfulness.unsupported_claims) if result.faithfulness else []
         ),
         evidence=_evidence_response(result.evidence, citation_by_chunk),
+        hypotheses=list(result.hypotheses),
     )
 
 

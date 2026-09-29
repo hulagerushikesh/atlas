@@ -67,6 +67,10 @@ class EvidenceResponse(BaseModel):
 class StageTimings(BaseModel):
     routing_ms: float | None = None
     decompose_ms: float | None = None
+    # None unless HyDE is on. Reported apart from retrieval_ms because it is
+    # an LLM call, and folding it in would make enabling HyDE read as the
+    # vector store having slowed down.
+    hyde_ms: float | None = None
     retrieval_ms: float | None = None
     grading_ms: float | None = None
     generation_ms: float | None = None
@@ -90,6 +94,10 @@ class QueryResponse(BaseModel):
     grader_score: float | None = None
     unsupported_claims: list[str] = []
     evidence: list[EvidenceResponse] = []
+    # The hypothetical passages retrieval searched with, when HyDE is on.
+    # Empty otherwise. Exposed because a search run on text the caller never
+    # wrote is not debuggable from the query alone.
+    hypotheses: list[str] = []
 
 
 class TokenUsage(BaseModel):

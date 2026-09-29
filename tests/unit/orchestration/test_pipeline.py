@@ -82,10 +82,26 @@ def _mock_faithfulness(faithful: bool = True, score: float = 0.95) -> MagicMock:
     return f
 
 
+def _mock_hyde(prefix: str = "PASSAGE about ") -> MagicMock:
+    """An expander that returns a recognisable passage per query."""
+    from atlas.orchestration.hyde import Expansion
+
+    h = MagicMock()
+
+    async def expand(queries: list[str]) -> list[Expansion]:
+        return [
+            Expansion(query=q, hypothesis=f"{prefix}{q}", text=f"{prefix}{q}")
+            for q in queries
+        ]
+
+    h.expand = AsyncMock(side_effect=expand)
+    return h
+
+
 def _pipeline(
     retriever=None, router=None, decomposer=None,
     grader=None, generator=None, faithfulness=None,
-    chunks=None, reranker=None,
+    chunks=None, reranker=None, hyde=None,
 ) -> RAGPipeline:
     if chunks is None:
         chunks = [_chunk("c1")]
@@ -97,6 +113,7 @@ def _pipeline(
         generator=generator or _mock_generator(),
         faithfulness=faithfulness or _mock_faithfulness(),
         reranker=reranker,
+        hyde=hyde,
     )
 
 
@@ -538,3 +555,98 @@ class TestSubQueryMergeFitsOneWindow:
         kept = {c.chunk_id for c in result.retrieved_chunks}
         selected = {e.chunk.chunk_id for e in result.evidence if e.selected}
         assert selected == kept
+
+
+class TestHyDEInThePipeline:
+    """HyDE changes the text that reaches the retriever, and nothing else.
+
+    The generator must still see the user's question and the retrieved
+    chunks, never the invented passage — that separation is what makes a
+    wrong hypothesis cost a worse search rather than a wrong answer.
+    """
+
+    @pytest.mark.asyncio
+    async def test_off_by_default_the_retriever_sees_the_query(self) -> None:
+        retriever = _mock_retriever([_chunk("c1")])
+        p = _pipeline(retriever=retriever)
+        result = await p.run("what is a query parameter?")
+        retriever.retrieve.assert_awaited_once_with("what is a query parameter?")
+        assert result.hypotheses == []
+
+    @pytest.mark.asyncio
+    async def test_on_the_retriever_searches_with_the_passage(self) -> None:
+        retriever = _mock_retriever([_chunk("c1")])
+        p = _pipeline(retriever=retriever, hyde=_mock_hyde())
+        await p.run("what is a query parameter?")
+        retriever.retrieve.assert_awaited_once_with(
+            "PASSAGE about what is a query parameter?"
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_generator_still_sees_the_users_question(self) -> None:
+        generator = _mock_generator()
+        p = _pipeline(generator=generator, hyde=_mock_hyde())
+        await p.run("what is a query parameter?")
+        assert generator.generate.await_args.args[0] == "what is a query parameter?"
+
+    @pytest.mark.asyncio
+    async def test_every_sub_query_is_expanded(self) -> None:
+        retriever = _mock_retriever([_chunk("c1")])
+        p = _pipeline(
+            router=_mock_router("complex"),
+            decomposer=_mock_decomposer(["sub1", "sub2"]),
+            retriever=retriever,
+            hyde=_mock_hyde(),
+        )
+        result = await p.run("two-part question")
+        searched = [c.args[0] for c in retriever.retrieve.await_args_list]
+        assert searched == ["PASSAGE about sub1", "PASSAGE about sub2"]
+        assert len(result.hypotheses) == 2
+
+    @pytest.mark.asyncio
+    async def test_a_grader_retry_expands_the_reformulation_too(self) -> None:
+        # The retry exists because the first search missed. Handing the
+        # second one unexpanded text would turn the feature off at the one
+        # point it is most needed.
+        retriever = _mock_retriever([_chunk("c1")])
+        p = _pipeline(
+            retriever=retriever,
+            grader=_mock_grader([(False, 0.2, "reformulated"), (True, 0.9, "q")]),
+            hyde=_mock_hyde(),
+        )
+        result = await p.run("original")
+        searched = [c.args[0] for c in retriever.retrieve.await_args_list]
+        assert searched == ["PASSAGE about original", "PASSAGE about reformulated"]
+        assert result.hypotheses == [
+            "PASSAGE about original",
+            "PASSAGE about reformulated",
+        ]
+
+    @pytest.mark.asyncio
+    async def test_hyde_time_is_not_charged_to_retrieval(self) -> None:
+        p = _pipeline(hyde=_mock_hyde())
+        result = await p.run("q")
+        assert "hyde" in result.stage_ms
+        assert result.stage_ms["retrieval"] >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_no_hyde_stage_when_it_is_off(self) -> None:
+        result = await _pipeline().run("q")
+        assert "hyde" not in result.stage_ms
+
+    @pytest.mark.asyncio
+    async def test_a_failed_expansion_still_retrieves(self) -> None:
+        # The expander degrades to the raw query on its own; the pipeline
+        # must not add a second failure mode on top of that.
+        from atlas.orchestration.hyde import Expansion
+
+        hyde = MagicMock()
+        hyde.expand = AsyncMock(
+            side_effect=lambda qs: [Expansion(query=q, hypothesis="", text=q) for q in qs]
+        )
+        retriever = _mock_retriever([_chunk("c1")])
+        p = _pipeline(retriever=retriever, hyde=hyde)
+        result = await p.run("q")
+        retriever.retrieve.assert_awaited_once_with("q")
+        assert result.hypotheses == []
+        assert result.answer == "The answer [1]."
