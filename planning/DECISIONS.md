@@ -1268,3 +1268,40 @@ Format: date — decision — alternatives — reason.
   hypothetical *answer* than to a sub-question, which is the argument for
   HyDE that the ideas backlog has been carrying without evidence. It now has
   some.
+
+- **2026-09-29** — **The router fix for `fq-012` is dead, and Rs.0.023 is
+  what it cost to find out.** Before spending Rs.6 on an eval pass behind a
+  router-prompt edit, ran the real router and the real decomposer on the row
+  — two model calls, 588 tokens.
+
+  The router confirmed the diagnosis: it classified `fq-012` as `simple`.
+  But forcing the decomposer to run anyway produced this:
+
+      - Does FastAPI require Pydantic for input validation?
+      - Can FastAPI be used without Pydantic for request validation?
+      - What are the consequences of skipping Pydantic in a FastAPI application?
+
+  Three paraphrases. Every one of them still leads with "Pydantic", and not
+  one mentions query parameters, type hints, `Query()` or `Path()` — the
+  vocabulary the answer is written in. Retrieved on those, top 15 merged:
+  **chunk-precision 0.1333, doc-recall 0.400 — identical to the live run**,
+  to four decimals. Decomposition changes nothing on this row.
+
+  So the router edit would have cost Rs.6 and moved the number by zero. The
+  item is closed rather than scheduled.
+
+  Why it fails is in the decomposer's own prompt: rule 3 asks the
+  sub-queries to "together cover all aspects of the original question", and
+  the worked example turns a refund question into two refund questions. It
+  **splits** a question; it does not **translate** it. `fq-012`'s failure is
+  a vocabulary mismatch between the asker and the corpus, and splitting
+  cannot close a vocabulary gap — every shard inherits the words that were
+  already missing the target.
+
+  Which leaves exactly one candidate standing. The hand-written sub-queries
+  that scored 5/5 worked because they used the *corpus's* words, and the
+  only reason I had those words is that I had read the labels — that is,
+  I already knew the answer. Generating a plausible answer and retrieving
+  with *that* is HyDE. It is now the only intervention with evidence behind
+  it on this row, and the evidence is that its competitor measurably does
+  nothing.
