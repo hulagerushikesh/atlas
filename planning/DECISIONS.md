@@ -1209,3 +1209,62 @@ Format: date — decision — alternatives — reason.
   still absent from the corpus. What it buys is that the claim arrives
   dated, so a generator has the option of saying when it was true instead of
   asserting it in the present tense.
+
+- **2026-09-29** — **`fq-012` is a routing failure, not a retrieval failure.
+  The documents are findable; the query as written is what fails.** Same
+  free method as `fq-002`: map the stored report's chunk ids back to pages,
+  then probe the local BM25 index, which needs no API call.
+
+  The 15-chunk window was `query-params-str-validations` (rank 0),
+  `tutorial/body` (rank 9) and thirteen chunks of `sql-databases`,
+  `query-param-models`, `alternatives` x2, `release-notes`, `index` x2,
+  `deployment/versions`, `benchmarks`, `features` x2,
+  `advanced/using-request-directly`, `migrate-from-pydantic-v1-to-v2`.
+
+  Counting the word "pydantic" per page explains the ranking exactly:
+
+      tutorial/body                          15   retrieved
+      query-params-str-validations            5   retrieved
+      body-multiple-params                    2   missed
+      tutorial/query-params                   0   missed
+      path-params-numeric-validations         0   missed
+      -- and the noise --
+      features 16, index 16, alternatives 10      retrieved
+
+  Relevance to *this* question is anti-correlated with how often the page
+  says "Pydantic". `tutorial/query-params` is the single most important page
+  for the answer — it is where plain type hints are shown parsing and
+  validating without a model — and it contains the word zero times. It is
+  unreachable from this query by construction, and the pages that merely
+  describe Pydantic-the-library outrank it.
+
+  **The decomposer would fix it, and did not run.** `stage_ms` shows
+  `decompose` on 3 of 15 rows — `fq-007`, `fq-013`, `fq-015` — and not on
+  `fq-012` or `fq-006`, which are the two multi-document rows in the set.
+  The router classified it `simple`. Reading the prompt, that is what it was
+  told to do: its only `complex` example is a comparison with causal
+  reasoning, and it ends "When in doubt, prefer 'simple'". A negation over a
+  disjunction across five documents reads as one question.
+
+  Measured on the local BM25 index, top 15, against the five labels:
+
+      raw query alone                chunk-precision 0.0667   doc-recall 0.200
+      raw + two sub-queries          chunk-precision 0.4000   doc-recall 0.600
+      the two sub-queries alone      chunk-precision 0.6667   doc-recall 1.000
+      (the live run, with dense + RRF + rerank:     0.1333            0.400)
+
+  Two sub-queries take the worst row in the set to a perfect one, on BM25
+  alone, with no dense retrieval and no reranker.
+
+  **The limit of this evidence, stated plainly: the sub-queries are mine.**
+  "add Query and Path constraints to singular values" and "declare a query
+  parameter with a plain Python type hint without a model" were written
+  knowing the labels. A real decomposer may not produce them, and BM25 is
+  only half the retriever. What has been established is that the corpus can
+  answer this question and the current query cannot reach it — not that any
+  particular fix will work. Cost of this diagnosis: Rs.0.
+
+  Worth noting where the winning sub-query came from: it is closer to a
+  hypothetical *answer* than to a sub-question, which is the argument for
+  HyDE that the ideas backlog has been carrying without evidence. It now has
+  some.
