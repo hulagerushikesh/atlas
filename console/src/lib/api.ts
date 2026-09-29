@@ -27,6 +27,8 @@ export interface Citation {
 export interface StageTimings {
   routing_ms?: number | null
   decompose_ms?: number | null
+  // Only present when HyDE is on; it is an LLM call, not retrieval.
+  hyde_ms?: number | null
   retrieval_ms?: number | null
   grading_ms?: number | null
   generation_ms?: number | null
@@ -57,6 +59,8 @@ export interface QueryResponse {
   grader_score: number | null
   unsupported_claims: string[]
   evidence: Evidence[]
+  // The passages retrieval searched with when HyDE is on, empty otherwise.
+  hypotheses?: string[]
 }
 
 export interface SourceInfo { source: string; doc_type: string; chunks: number }

@@ -117,10 +117,24 @@ distinguished by `body.stream`.
 }
 ```
 
-> **Known gap**: `token_usage` is populated with zeros in the current implementation.
-> `PipelineResult` doesn't thread raw token counts from sub-calls (router, grader,
-> generator, faithfulness). Threading token counts through `PipelineResult` is the
-> next iteration — the schema and cost estimator are already in place.
+`token_usage` counts the whole request, not the generation call: the router,
+the decomposer, the grader, the faithfulness check and the query embedding are
+all in it. Before 2026-09-28 it carried the generation call alone, so a
+response understated its own cost by roughly half — and `estimated_cost_usd`
+is what the daily spend cap is charged, so the cap was admitting about twice
+the spend it was set to.
+
+**HyDE fields** (`HYDE_ENABLED=true` only)
+
+`timings.hyde_ms` and `hypotheses` appear when HyDE is on and are absent or
+empty otherwise. With it on, the model first writes the passage that *would*
+answer the question and retrieval searches with that instead — `hypotheses`
+is the text actually searched with, per retrieval query, including any the
+grader's retry reformulated. It is a search probe: it is never shown to the
+user, never reaches the generator, and is not checked for truth, so a wrong
+passage costs a worse search rather than a wrong answer. `hyde_ms` is
+reported apart from `retrieval_ms` because it is an LLM call; folding it in
+would make enabling the flag read as the vector store having slowed down.
 
 **Streaming response** (`stream: true`)
 

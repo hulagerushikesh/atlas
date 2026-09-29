@@ -14,6 +14,9 @@ Design rationale:
           │
           └──→ complex ──→ decompose → retrieve per sub-query → merge & deduplicate
           │
+          ├──→ (HyDE, if enabled) each retrieval query is replaced by a
+          │     passage that would answer it, before it reaches the retriever
+          │
           ▼
         Grader ──→ insufficient ──→ retrieve with reformulated query (≤ MAX_RETRIES)
           │
@@ -55,6 +58,7 @@ from atlas.orchestration.decomposer import QueryDecomposer
 from atlas.orchestration.faithfulness import FaithfulnessChecker, FaithfulnessResult
 from atlas.orchestration.generator import AnswerGenerator, GeneratorResult
 from atlas.orchestration.grader import RetrievalGrader
+from atlas.orchestration.hyde import HyDEExpander
 from atlas.orchestration.router import QueryRouter
 
 logger = structlog.get_logger(__name__)
@@ -92,6 +96,16 @@ class RetrievalPass:
 
     chunks: list[RetrievedChunk]
     evidence: list[EvidenceChunk]
+    # The HyDE passages searched with, when HyDE is on. Empty otherwise, and
+    # empty is the honest answer: a run that did not expand is not a run that
+    # expanded into nothing.
+    hypotheses: list[str] = field(default_factory=list)
+    # Time inside the expander, kept apart from the caller's retrieval timer
+    # so "retrieval got slower" cannot mean "an LLM call was added in front
+    # of it". None means the expander did not run — distinct from 0.0, which
+    # is what a fast expander legitimately measures and what a bare `if`
+    # would have read as "off".
+    hyde_ms: float | None = None
 
 
 @dataclass
@@ -108,6 +122,9 @@ class PipelineResult:
     faithfulness: FaithfulnessResult | None
     # Selected chunks first, then rerank rejects, each with per-stage scores.
     evidence: list[EvidenceChunk] = field(default_factory=list)
+    # Hypothetical passages retrieval actually searched with, across every
+    # attempt. Empty when HyDE is off, which is the default.
+    hypotheses: list[str] = field(default_factory=list)
     # Wall-clock per stage, keyed by stage name. Retrieval and grading
     # accumulate across grader-driven retries.
     stage_ms: dict[str, float] = field(default_factory=dict)
@@ -155,6 +172,7 @@ class RAGPipeline:
         generator: AnswerGenerator,
         faithfulness: FaithfulnessChecker,
         reranker: BaseReranker | None = None,
+        hyde: HyDEExpander | None = None,
     ) -> None:
         self._retriever = retriever
         self._router = router
@@ -166,6 +184,11 @@ class RAGPipeline:
         # original query. Optional so a caller that builds a pipeline without
         # one keeps the old single-pass behaviour instead of failing.
         self._reranker = reranker
+        # None means retrieve with the query as asked. Passing an expander is
+        # the only thing that turns HyDE on; there is no flag read in here,
+        # so a pipeline built without one cannot accidentally be paying for
+        # an extra call per search.
+        self._hyde = hyde
 
     async def run(self, query: str) -> PipelineResult:
         log = logger.bind(query=query[:80])
@@ -238,6 +261,7 @@ class RAGPipeline:
             generation=generation,
             faithfulness=faithfulness,
             evidence=retrieval.evidence,
+            hypotheses=retrieval.hypotheses,
             stage_ms=stage_ms,
         )
 
@@ -266,11 +290,24 @@ class RAGPipeline:
         union: list[RetrievedChunk] = []
         seen: set[str] = set()
         window = 0
+        # Every probe every attempt searched with, including the retries'.
+        # A retry reformulates, the reformulation is expanded in its turn, and
+        # a trace that showed only the first one would explain the wrong
+        # search.
+        hypotheses: list[str] = []
 
         while True:
             t0 = time.perf_counter()
             retrieval = await self._retrieve_all(current_queries, original_query)
-            stage_ms["retrieval"] = stage_ms.get("retrieval", 0.0) + _elapsed_ms(t0)
+            # The expander runs inside `_retrieve_all` and so inside this
+            # timer. Charging its LLM call to "retrieval" would make turning
+            # HyDE on look like the vector store got slower.
+            elapsed = _elapsed_ms(t0)
+            if retrieval.hyde_ms is not None:
+                stage_ms["hyde"] = stage_ms.get("hyde", 0.0) + retrieval.hyde_ms
+                elapsed = max(0.0, round(elapsed - retrieval.hyde_ms, 1))
+            stage_ms["retrieval"] = stage_ms.get("retrieval", 0.0) + elapsed
+            hypotheses.extend(retrieval.hypotheses)
             window = window or len(retrieval.chunks)
             for chunk in retrieval.chunks:
                 if chunk.chunk_id not in seen:
@@ -288,6 +325,7 @@ class RAGPipeline:
                     retrieval = await self._merge_attempts(
                         original_query, retrieval, union, window, stage_ms
                     )
+                retrieval.hypotheses = hypotheses
                 return retrieval, score, retries
 
             logger.info(
@@ -335,9 +373,24 @@ class RAGPipeline:
         the absence of a decision about what a window means once a query has
         been split.
         """
+        # With HyDE on, what goes to the retriever is a passage that would
+        # answer the query, not the query. Done here rather than in `run` so
+        # a grader-driven reformulation is expanded too: the retry exists
+        # because the first search missed, and handing the second one the
+        # unexpanded text would be the one place the feature is off.
+        hypotheses: list[str] = []
+        hyde_ms: float | None = None
+        search_texts = queries
+        if self._hyde is not None:
+            t0 = time.perf_counter()
+            expansions = await self._hyde.expand(queries)
+            hyde_ms = _elapsed_ms(t0)
+            search_texts = [e.text for e in expansions]
+            hypotheses = [e.hypothesis for e in expansions if e.hypothesis]
+
         # Each call returns a HybridRetrievalResult (or duck-typed equivalent)
         results = await asyncio.gather(
-            *[self._retriever.retrieve(q) for q in queries]
+            *[self._retriever.retrieve(q) for q in search_texts]
         )
 
         # One window is what a single sub-query returns. Taking it from the
@@ -386,7 +439,12 @@ class RAGPipeline:
             )
 
         kept = {c.chunk_id for c in merged}
-        return RetrievalPass(chunks=merged, evidence=_collect_evidence(results, kept))
+        return RetrievalPass(
+            chunks=merged,
+            evidence=_collect_evidence(results, kept),
+            hypotheses=hypotheses,
+            hyde_ms=hyde_ms,
+        )
 
 
 def _elapsed_ms(t0: float) -> float:

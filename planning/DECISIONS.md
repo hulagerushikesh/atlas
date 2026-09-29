@@ -1418,3 +1418,64 @@ Format: date — decision — alternatives — reason.
   equally obvious and measured at exactly zero. Filed with the prediction
   above so the next full run either confirms the diagnosis or kills it,
   before any prompt is touched.
+
+- **2026-09-29** — **HyDE, built and off. Rs.0.** `HYDE_ENABLED=false` by
+  default; `atlas.orchestration.hyde.HyDEExpander` is only constructed when
+  the flag is on, so a pipeline built without it cannot quietly be paying
+  for an extra call per search. *Alt:* leave it as a backlog note until a
+  paid run is scheduled. *Why:* the next paid run has to happen anyway —
+  `fq-016` moved both dataset fingerprints — and the flag turns one
+  unavoidable baseline pass into a two-arm experiment for the cost of the
+  extra calls.
+
+  Four choices inside it, each of which could have gone the other way:
+
+  **Concat, not replace, by default.** The paper replaces the query with the
+  hypothesis, which is free when the index is dense. Half of this retriever
+  is BM25, and a bare hypothesis strips the question's own rare terms out of
+  the sparse query — trading one vocabulary gap for another. Concat keeps
+  everything BM25 already matched and adds to it. `--set hyde.mode=replace`
+  runs the paper's version, so the choice is measurable rather than
+  asserted.
+
+  **Deterministic, against the paper.** HyDE samples several hypotheses and
+  averages their embeddings. Averaging has no sparse equivalent, and a
+  sampled probe makes two runs of the same eval differ for a reason that is
+  not the knob under test. This repo has already lost one baseline to an
+  uncontrolled change; temperature 0.0.
+
+  **Expanded in `_retrieve_all`, not in `run`.** That puts the expansion in
+  front of the grader-driven retry as well as the first attempt. The retry
+  exists *because* the first search missed, so leaving it unexpanded would
+  switch the feature off at the one point it is most needed.
+
+  **Failure is a fallback, never an error.** A raised or empty call returns
+  the original query. HyDE off and HyDE broken then produce identical
+  retrieval, which is the only tolerable behaviour for something sitting in
+  front of every search.
+
+  The safety argument for trying it at all: the passage is a probe. It is
+  never shown, never reaches the generator, and is not checked for truth.
+  Its invented `Annotated[str, Query(min_length=3)]` retrieves the real page
+  whether or not the signature is right, and the generator still answers
+  from retrieved text alone. A wrong hypothesis costs a worse search, not a
+  wrong answer.
+
+  **Not measured, and that is not a detail.** Two interventions have now
+  been aimed at `fq-012` — context headers and decomposition — and both
+  measured at zero on that row. Building a third is not evidence. The
+  predictions are filed in BACKLOG before the run, including the one that
+  says HyDE should make `fq-016` *worse*.
+
+- **2026-09-29** — **`hyde_ms` is `None` when HyDE is off, not `0.0`.** The
+  first version tested `if retrieval.hyde_ms:` and a mock expander
+  legitimately measured 0.0, so the stage vanished from the trace. A fast
+  stage and an absent stage are different facts and a bare truthiness check
+  cannot tell them apart. Caught by a test written to assert the stage
+  appears, which is the only reason it was caught at all.
+
+- **2026-09-29** — **`docs/api.md` still described `token_usage` as zeros.**
+  A "known gap" note said `PipelineResult` does not thread token counts from
+  sub-calls. It has since 2026-09-28, and that fix is what the daily spend
+  cap depends on. Corrected while documenting the HyDE fields on the same
+  response object.

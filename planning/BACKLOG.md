@@ -229,7 +229,18 @@ Newest at the bottom of each section.
   one, so every shard inherits the vocabulary that was already missing the
   target. See DECISIONS 2026-09-29.
 
-- **HyDE, now the only candidate left standing on `fq-012`.** The
+- ~~**HyDE, now the only candidate left standing on `fq-012`.**~~ **Built
+  2026-09-29, Rs.0 — unmeasured.** `HYDE_ENABLED=false` by default;
+  `--set hyde.enabled=true` turns it on, `--set hyde.mode=replace` runs the
+  paper's variant instead of the default concat. One extra LLM call per
+  retrieval query, expanded inside `_retrieve_all` so a grader-driven retry
+  gets the same treatment as the first attempt. `timings.hyde_ms` and
+  `hypotheses` are on the response, so a search run on text the caller never
+  wrote is still debuggable. **Nothing is measured yet** — building it is not
+  evidence it works, and the last two interventions aimed at this row both
+  measured at zero. The pass that measures it is below.
+
+  Original entry, kept because it is the argument: The
   sub-query that hit 5/5 labels — "add Query and Path constraints to
   singular values" — reads like a sentence from the answer, not a narrower
   question, and the only reason I could write it is that I had read the
@@ -240,6 +251,29 @@ Newest at the bottom of each section.
   from the same model already on the critical path, one extra call, and it
   can go behind a config flag so `--set` re-runs the experiment. Price a
   measured pass at ~Rs.6 plus the extra call per row.
+
+- **Measure HyDE, and re-establish the baseline, in one pass.** Both are
+  now unavoidable and they are the same run: adding `fq-016` moved both
+  dataset fingerprints on 2026-09-29, so every stored report is already
+  incomparable with anything run after it and a fresh baseline has to be
+  paid for regardless. Running it twice — once bare, once `--set
+  hyde.enabled=true` — costs roughly Rs.6 for the baseline plus the HyDE
+  pass's extra call per retrieval query, and answers three questions at
+  once: what the new 16-row baseline is, whether HyDE moves `fq-012`, and
+  whether the correctness prediction of 0.6975 (the router answering
+  `fq-016` instead of refusing it) holds.
+
+  Three predictions worth writing down before paying, because a prediction
+  made afterwards is not one. (1) `fq-012` doc-recall rises from 0.400;
+  this is the whole thesis and the only row HyDE was built for. (2)
+  Precision falls somewhere, because a probe retrieves pages about the
+  topic rather than pages answering the question, and the corpus has many
+  of the former. (3) `fq-016` gets *worse*, not better: the router already
+  calls it `complex`, and asked to write a passage about verifying a Stripe
+  webhook signature the model will write a confident one, which is a
+  stronger pull toward `advanced/openapi-webhooks.md` than the bare
+  question was. If HyDE nets positive it will be by trading (2) and (3)
+  against (1).
 
 - ~~**Verify what is actually in an index.**~~ **done 2026-09-28**,
   `scripts/verify_index.py`. Reads both halves of every namespace and compares
@@ -349,7 +383,8 @@ Newest at the bottom of each section.
 
 ## Ideas (research-backed, see learning/09)
 
-- HyDE retriever behind a config flag.
+- ~~HyDE retriever behind a config flag~~ built 2026-09-29, off by default,
+  not yet measured.
 - Contextual retrieval at ingest (LLM-written chunk context).
 - ~~BM25 tokeniser: keep identifiers, split camelCase~~ shipped cb4e28d;
   measured neutral end to end, see DECISIONS 2026-09-23.

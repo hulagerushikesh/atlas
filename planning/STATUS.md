@@ -9,6 +9,33 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 
 ## Blocked on you
 
+- [ ] **Keep-warm ping for the cold start — two commands, still unrun.**
+      Chosen 2026-09-29 over `min-instances=1` (Rs.650-700/month) at
+      roughly Rs.0-20/month. `atlas.hulage.in` is not broken; it is
+      scale-to-zero. `atlas_startup` to `atlas_ready` is 2.9 s and the other
+      ~33 s is image pull plus the torch/transformers import into a 2.15 GB
+      image that bakes the reranker weights. The service has no
+      `cpu-throttling: false` annotation, so an idle instance is not billed
+      for CPU and the ping costs only the requests.
+
+      ```
+      gcloud services enable cloudscheduler.googleapis.com --project atlas-rag-rush
+
+      gcloud scheduler jobs create http atlas-keepwarm \
+        --project atlas-rag-rush --location asia-south1 \
+        --schedule "*/10 * * * *" \
+        --uri https://atlas-api-cde2q3b7lq-el.a.run.app/health \
+        --http-method GET --attempt-deadline 60s
+      ```
+
+- [ ] **Deploy — `main` is 22 commits ahead of the live image.** Live is
+      `d21a922`, revision `atlas-api-00008-v9g`. Unshipped and user-visible:
+      the spend cap still charges the generation call alone (so it admits
+      about twice the configured spend), the SSE stream still truncates
+      silently on a mid-stream failure, and the changelog heading fix is not
+      in the index. `scripts/deploy_gcp.sh`, run by hand — the sandbox
+      blocks `gcloud run deploy`.
+
 - [x] ~~Add OpenAI credits~~ → switched to Gemini (2026-09-20). Same AI Studio
       key as sextant, in `atlas/.env` only. Daily spend cap: ₹50–100 across
       both projects — state ₹ before every paid step.
@@ -251,6 +278,21 @@ daily spend cap, console markdown.
 
 ## Next
 
+- **One paid pass, two arms, Rs.~6 plus HyDE's extra calls — the next thing
+  to spend on.** The baseline has to be re-measured regardless: `fq-016`
+  moved both dataset fingerprints on 2026-09-29, so the comparator will
+  refuse to diff anything against the 2026-09-28 report and every number in
+  the table below is now the last of its kind. Since that run is
+  unavoidable, run it twice — bare, then `--set hyde.enabled=true` — and it
+  answers three things at once: the new 16-row baseline, whether HyDE moves
+  `fq-012`, and whether the 0.6975 correctness prediction holds.
+  Predictions are filed in BACKLOG *before* the run, including the one
+  saying HyDE should make `fq-016` worse.
+- **HyDE is built and off** (2026-09-29, Rs.0). `HYDE_ENABLED=false`;
+  `--set hyde.enabled=true`, `--set hyde.mode=replace` for the paper's
+  variant. Nothing about it is measured. Two previous interventions aimed
+  at `fq-012` — context headers and decomposition — both measured at zero
+  on that row, so a third one existing is not evidence.
 - ~~`retrieval.top_k` 20 → 40~~ run 2026-09-24 and **rejected**: recall
   0.9000 → 0.9333 in aggregate, but per sample `fq-012` and `fq-007` were
   bought with `fq-005` breaking outright, and precision fell 0.3022 → 0.2711

@@ -42,6 +42,7 @@ def _make_pipeline_result(answer: str = "The answer [1].", faithful: bool = True
     result.answer = answer
     result.is_faithful = faithful
     result.evidence = []
+    result.hypotheses = []
     result.stage_ms = {"routing": 12.0, "retrieval": 80.0, "generation": 400.0}
     return result
 
