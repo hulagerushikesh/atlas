@@ -188,3 +188,77 @@ class TestApplyContextHeaders:
         # this pins the behaviour rather than pretending it is idempotent.
         assert chunks[0].content == once.split("\n\n", 1)[0] + "\n\n" + once
         assert chunks[0].content.count("Regex prose.") == 1
+
+
+# FastAPI's release notes nest sections under the release for most of their
+# length, but the 2023 entries put both at H2. Four chunks of the corpus fall
+# in that window and `fq-002` was answered from one of them.
+FLAT_CHANGELOG = (
+    "# Release Notes\n\n"
+    "## Latest Changes\n\n### Internal\n\nunreleased prose\n\n"
+    "## 0.129.0 (2026-02-12)\n\n### Breaking Changes\n\nnested prose\n\n"
+    "## 0.104.0 (2023-10-18)\n\n"
+    "## Features\n\nflat feature prose\n\n"
+    "## Upgrades\n\nflat upgrade prose\n\n"
+    "## 0.103.2 (2023-09-29)\n\n## Fixes\n\nnext release prose\n"
+)
+
+
+class TestChangelogReleaseHeadings:
+    def test_a_flat_section_does_not_displace_its_release(self) -> None:
+        # The outline says these are siblings. They are not: the release is a
+        # record boundary and the section is a field inside it.
+        assert heading_trail(FLAT_CHANGELOG, FLAT_CHANGELOG.index("flat upgrade prose")) == [
+            "Release Notes",
+            "0.104.0 (2023-10-18)",
+            "Upgrades",
+        ]
+
+    def test_a_second_flat_section_replaces_only_the_first(self) -> None:
+        trail = heading_trail(FLAT_CHANGELOG, FLAT_CHANGELOG.index("flat upgrade prose"))
+        assert "Features" not in trail
+
+    def test_the_next_release_displaces_the_previous_one(self) -> None:
+        # The exception is for non-version headings only, or a changelog
+        # would accumulate every release it had ever seen.
+        assert heading_trail(FLAT_CHANGELOG, FLAT_CHANGELOG.index("next release prose")) == [
+            "Release Notes",
+            "0.103.2 (2023-09-29)",
+            "Fixes",
+        ]
+
+    def test_a_properly_nested_release_is_unaffected(self) -> None:
+        assert heading_trail(FLAT_CHANGELOG, FLAT_CHANGELOG.index("nested prose")) == [
+            "Release Notes",
+            "0.129.0 (2026-02-12)",
+            "Breaking Changes",
+        ]
+
+    def test_an_unreleased_section_still_has_no_release(self) -> None:
+        # "Latest Changes" is not a version and must not borrow one.
+        assert heading_trail(FLAT_CHANGELOG, FLAT_CHANGELOG.index("unreleased prose")) == [
+            "Release Notes",
+            "Latest Changes",
+            "Internal",
+        ]
+
+    def test_ordinary_documents_keep_sibling_replacement(self) -> None:
+        # The guard is a text test, so it must not fire on prose headings that
+        # merely follow one another.
+        assert heading_trail(DOC, DOC.index("Required prose")) == [
+            "Query Parameters and String Validations",
+            "Required parameters",
+        ]
+
+    def test_bracketed_and_v_prefixed_releases_are_recognised(self) -> None:
+        # keepachangelog and `v`-prefixed tags are the two other common forms.
+        for heading in ("[1.2.3] - 2024-01-01", "v1.2.3"):
+            doc = f"# Changelog\n\n## {heading}\n\n## Fixed\n\nprose\n"
+            assert heading_trail(doc, doc.index("prose")) == ["Changelog", heading, "Fixed"]
+
+    def test_the_chunk_that_answered_fq_002_now_carries_its_date(self) -> None:
+        # The whole point: a claim that was three years stale was indexed and
+        # cited with nothing on it to say when it was true.
+        header = context_header("fastapi/release-notes.md", FLAT_CHANGELOG,
+                                FLAT_CHANGELOG.index("flat upgrade prose"))
+        assert "0.104.0 (2023-10-18)" in header
