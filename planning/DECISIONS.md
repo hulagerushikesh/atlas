@@ -1479,3 +1479,30 @@ Format: date — decision — alternatives — reason.
   sub-calls. It has since 2026-09-28, and that fix is what the daily spend
   cap depends on. Corrected while documenting the HyDE fields on the same
   response object.
+
+- **2026-09-29** — **`str(exc)` no longer reaches the caller, on either
+  path. Rs.0.** A fixed sentence naming the request id replaces the
+  exception text in the 500's `detail` and in the SSE `error` event. *Alt:*
+  leave it; the endpoint is behind an API key. *Why:* `str(exc)` on this
+  pipeline is where the Qdrant URL, the collection name and the upstream
+  model id surface, and an API key is an authentication boundary, not a
+  reason to hand authenticated callers the infrastructure layout.
+
+  Worth recording how it got there. The SSE error event shipped this
+  morning *deliberately* copying `str(exc)` from the 500, on the argument
+  that one convention across both endpoints beats a difference nobody would
+  remember. The argument was right and the convention was wrong, so
+  applying it propagated the leak to a second place before anyone looked at
+  whether the first one was correct. Both moved together, which is the same
+  argument used properly.
+
+  `stage` is not redacted — one word from a fixed set, and the field that
+  makes the console's failure card worth rendering. `request_id` is in the
+  event body as well as the `X-Request-ID` header because a browser console
+  shows the body, and a bug report quotes what is on the screen.
+
+  Captured at the top of `_stream_query`, before the first yield:
+  `TracingMiddleware` unbinds its contextvars when `call_next` returns, and
+  for a `StreamingResponse` that is before the body has produced anything,
+  so reading the id lazily inside the `except` would have found an empty
+  string exactly when it was needed.
