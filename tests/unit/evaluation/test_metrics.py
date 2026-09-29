@@ -398,3 +398,72 @@ class TestAnswerCorrectnessMetric:
 
     def test_metric_name(self) -> None:
         assert AnswerCorrectnessMetric(AsyncMock()).name == "answer_correctness"
+
+
+class TestAnswerRelevanceOnRefusals:
+    """Until 2026-09-29 this metric reverse-questioned the refusal sentence and
+    folded the resulting noise into the mean, having paid a generation call and
+    an embedding call for it. Nothing caught it because the dataset had no row
+    the pipeline was supposed to refuse."""
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_is_inapplicable(self) -> None:
+        metric = AnswerRelevanceMetric(_llm("{}"), AsyncMock())
+        ms = await metric.score("What Python version?", "3.10", REFUSAL, [], [])
+        assert ms.applicable is False
+
+    @pytest.mark.asyncio
+    async def test_a_refusal_costs_no_model_call(self) -> None:
+        llm, emb = _llm("{}"), AsyncMock()
+        await AnswerRelevanceMetric(llm, emb).score("q", "a", REFUSAL, [], [])
+        llm.generate.assert_not_awaited()
+        emb.embed_texts.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_ordinary_answer_is_still_scored(self) -> None:
+        # The branch must not swallow answers that merely sound uncertain.
+        payload = json.dumps({"questions": ["q", "q", "q"]})
+        emb = AsyncMock()
+        emb.embed_texts = AsyncMock(
+            return_value=EmbeddingResult(vectors=[[1.0, 0.0]] * 4, model="mock", total_tokens=10)
+        )
+        ms = await AnswerRelevanceMetric(_llm(payload), emb).score(
+            "q", "a", "I don't have the exact number, but it is documented here [1].", [], []
+        )
+        assert ms.applicable is True
+        assert ms.score == pytest.approx(1.0)
+
+
+class TestOutOfScopeRowScoring:
+    """The refusal path, end to end across the metrics that see it. Only
+    `answer_correctness` produces a number; the other four abstain, which is
+    why the row could not be scored at all before 2026-09-28."""
+
+    @pytest.mark.asyncio
+    async def test_correctness_rewards_a_refusal_without_a_judge(self) -> None:
+        llm = _llm("{}")
+        ms = await AnswerCorrectnessMetric(llm).score("q", "out of scope", REFUSAL, [], [])
+        assert ms.score == 1.0
+        assert ms.applicable is True
+        llm.generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_correctness_punishes_answering_anyway(self) -> None:
+        # The failure this row exists to catch: the corpus has an adjacent
+        # page, so the pipeline can produce something confident and wrong.
+        llm = _llm("{}")
+        ms = await AnswerCorrectnessMetric(llm).score(
+            "q", "out of scope", "You verify the signature with the webhooks API [1].", [], []
+        )
+        assert ms.score == 0.0
+        assert ms.applicable is True
+        llm.generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_other_four_abstain_on_the_row(self) -> None:
+        emb = AsyncMock()
+        precision = await ContextPrecisionMetric().score("q", "", REFUSAL, [], [])
+        recall = await ContextRecallMetric().score("q", "", REFUSAL, [], [])
+        faith = await FaithfulnessMetric(_llm("{}")).score("q", "", REFUSAL, [], [])
+        relevance = await AnswerRelevanceMetric(_llm("{}"), emb).score("q", "", REFUSAL, [], [])
+        assert [m.applicable for m in (precision, recall, faith, relevance)] == [False] * 4

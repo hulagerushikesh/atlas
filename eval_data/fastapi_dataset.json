@@ -204,6 +204,18 @@
         "difficulty": "hard",
         "label_rationale": "Relabelled 2026-09-27 and no longer out_of_scope. advanced/websockets is in the corpus and its 'WebSockets client' section names React by name. The empty label was scoring a perfect retrieval as a structural zero and then discarding it."
       }
+    },
+    {
+      "id": "fq-016",
+      "question": "How do I verify a Stripe webhook signature in FastAPI before processing a subscription event?",
+      "ground_truth_answer": "Out of scope. The corpus is the FastAPI documentation, which does not cover Stripe, webhook signature verification, or billing. The correct behaviour is the refusal sentence, not an answer assembled from the OpenAPI webhooks page.",
+      "relevant_doc_ids": [],
+      "metadata": {
+        "category": "out_of_scope",
+        "difficulty": "hard",
+        "out_of_scope": true,
+        "label_rationale": "A hard negative, not an easy one. Verified absent by grep over the corpus: 'stripe' 0, 'billing' 0, 'signature verif' 0, 'idempotency' 0. But advanced/openapi-webhooks.md exists, and its worked example is literally named 'new-subscription', so retrieval will surface a confident-looking wrong page rather than nothing. That is the case worth testing: refusing when the corpus is empty is easy, refusing when it offers adjacent material is not. Deliberately not the router's own 'capital of France' example, which is in its system prompt. Added 2026-09-29 -- see planning/DECISIONS.md."
+      }
     }
   ]
 }

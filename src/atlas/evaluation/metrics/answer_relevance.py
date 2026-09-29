@@ -23,6 +23,19 @@ Design rationale:
 
     The embedder is injected at construction so this metric can be tested with
     a mock embedder and mock LLM without any API calls.
+
+Refusals are inapplicable, and that is not a technicality:
+    The reverse-question technique has nothing to work on when the answer is
+    "I don't have sufficient information to answer this question". It would
+    ask the model what questions that sentence answers, embed whatever came
+    back, and compare them to a question about FastAPI — a number with no
+    meaning, dragged into the mean, having cost a generation call and an
+    embedding call to produce.
+
+    Nothing caught this because the dataset had no row the pipeline was
+    supposed to refuse. Adding one on 2026-09-29 made it reachable, so the
+    branch went in first. Precision, recall and faithfulness all already
+    abstain on this path; this was the one metric that scored noise.
 """
 
 from __future__ import annotations
@@ -35,6 +48,7 @@ from atlas.interfaces.embedder import BaseEmbedder
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
+from atlas.orchestration.generator import is_refusal
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -73,6 +87,20 @@ class AnswerRelevanceMetric(BaseMetric):
         retrieved_chunks: list[RetrievedChunk],
         relevant_doc_ids: list[str],
     ) -> MetricScore:
+        if is_refusal(generated_answer):
+            # Before any call: whether refusing was right is
+            # `answer_correctness`'s question, and it answers it without a
+            # model too.
+            return MetricScore(
+                metric_name=self.name,
+                score=0.0,
+                reasoning=(
+                    "The pipeline refused. Relevance is undefined for a refusal — "
+                    "reverse-questioning the refusal sentence measures nothing."
+                ),
+                applicable=False,
+            )
+
         # Step 1: generate synthetic questions from the answer
         request = GenerationRequest(
             messages=[

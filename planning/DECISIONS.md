@@ -1345,3 +1345,76 @@ Format: date — decision — alternatives — reason.
   stopped during grading / qdrant went away", the truncation case renders
   "The connection closed before Atlas finished", and the happy path still
   streams and finishes clean with no console errors. Rs.0.
+
+- **2026-09-29** — **The dataset has a declared out-of-scope row, and it is a
+  hard negative on purpose.** `fq-016`: "How do I verify a Stripe webhook
+  signature in FastAPI before processing a subscription event?"
+
+  Refusing when the corpus holds nothing is easy. This row refuses while the
+  corpus holds something that *looks* right: `advanced/openapi-webhooks.md`
+  exists and its worked example is literally named `new-subscription`, so
+  retrieval will return a confident-looking wrong page rather than an empty
+  window. Absence verified by grep, not by feel — `stripe` 0, `billing` 0,
+  `signature verif` 0, `idempotency` 0 across the whole corpus. Deliberately
+  not the router's "capital of France" example, which sits in its own system
+  prompt and would test the prompt's memory rather than the pipeline.
+
+  *Why the caution:* `fq-015` was once believed unanswerable on the same sort
+  of hunch, and `advanced/websockets.md` turned out to answer it. That row
+  was a good retrieval being scored 0.0 and then discarded for months.
+
+- **2026-09-29** — **`answer_relevance` scored noise on refusals, and the
+  bug only became reachable once the row existed.** The reverse-question
+  technique asks what questions an answer would suit, embeds them, and
+  compares them to the real question. Handed "I don't have sufficient
+  information to answer this question" it did exactly that — a generation
+  call and an embedding call spent to produce a number with no meaning,
+  folded straight into the mean. Precision, recall and faithfulness all
+  already abstain on this path; this was the one metric that did not, and
+  nothing caught it because no row in the dataset was ever supposed to be
+  refused. Fixed before adding the row, and the refusal branch returns
+  before any call, so it is cheaper as well as correct.
+
+- **2026-09-29** — **Both fingerprints changed; every stored report is now
+  incomparable with every future one.** `dataset_fingerprint`
+  `486ff3dab9b597b5` → `80c1a625bc7b7533` and `dataset_answers_fingerprint`
+  `5c60f37e17520115` → `c9c564cc06b1eb3d`. This is the guard working, not
+  misfiring: a mean over sixteen rows is not a mean over fifteen. The
+  comparator will now refuse to diff the 2026-09-28 baseline against
+  anything run after today, and that is the correct refusal.
+
+  The conversion, so nobody has to rediscover it. Four of the five metrics
+  mark the row inapplicable **on condition that the pipeline refuses** — and
+  only then are their means arithmetically identical to the fifteen-row ones.
+  If the pipeline answers instead, faithfulness and answer relevance each
+  gain a sixteenth score and move. `answer_correctness` always scores the
+  row, so its mean moves either way:
+
+      refuses:  (0.7440 x 15 + 1.0) / 16 = 0.7600
+      answers:  (0.7440 x 15 + 0.0) / 16 = 0.6975
+
+- **2026-09-29** — **The router does not refuse it. Rs.0.0149 says so before
+  Rs.6 does.** One call on the new question returns **`complex`**, not
+  `out_of_scope`. So the pipeline will decompose, retrieve the webhooks page
+  and answer, and `fq-016` will score correctness **0.000** on its first run
+  — which is the row doing its job on day one.
+
+  Written down as a prediction to check against the next full pass:
+  correctness **0.6975**, precision and recall unchanged, faithfulness and
+  answer relevance each gaining a sixteenth score that is probably high,
+  because an answer assembled from `openapi-webhooks.md` will be grounded in
+  it and will sound like it addresses a question about webhooks. That is the
+  point of the row: four metrics will be comfortable with an answer to a
+  question the corpus cannot answer.
+
+  Note what the router's own `domain` string says — "the FastAPI web
+  framework … including Starlette and Pydantic as used by FastAPI". The
+  boundary is stated. The question names Stripe. The classifier still did
+  not reach for `out_of_scope`, and its prompt ends "When in doubt, prefer
+  'simple'" — the same sentence that produced the `fq-012` misroute, now
+  visibly doing damage in a second, different way.
+
+  **Not fixing it yet, on purpose.** The last router-prompt fix looked
+  equally obvious and measured at exactly zero. Filed with the prediction
+  above so the next full run either confirms the diagnosis or kills it,
+  before any prompt is touched.
