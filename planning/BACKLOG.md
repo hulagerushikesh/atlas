@@ -118,18 +118,32 @@ Newest at the bottom of each section.
   table and `metadata.label_rationale` on each row for the reason. Every
   figure in STATUS and README restated from an offline replay, Rs.0.
 
-- **The set has no out-of-scope row, so the refusal path is unmeasured.**
-  `fq-015` was the only candidate and it turned out to be answerable from
-  `advanced/websockets.md`. Write one that the corpus genuinely cannot
-  answer — it has to be plausible enough that the retriever returns
-  something, or it tests nothing. Two shapes that would work against this
-  corpus: a question about a framework the docs only name in passing
-  (`alternatives.md` mentions plenty), or a FastAPI question whose answer
-  post-dates the snapshot. Note the cost asymmetry: a new row is free to
-  write but cannot be replayed into the existing reports, so the first
-  measurement of it needs a paid eval run (~Rs.0.77). Adding it also changes
-  the denominator of every aggregate, so do it at a milestone boundary, not
-  mid-comparison.
+- ~~**The set has no out-of-scope row, so the refusal path is
+  unmeasured.**~~ **Added 2026-09-29, Rs.0.015.** `fq-016`, a Stripe webhook
+  signature question — a hard negative, because `advanced/openapi-webhooks.md`
+  exists and its worked example is named `new-subscription`, so retrieval
+  returns a confident-looking wrong page rather than nothing. Absence
+  verified by grep (`stripe` 0, `billing` 0, `signature verif` 0). Both
+  fingerprints changed, as they should. A router probe says the pipeline
+  will **not** refuse it — `complex`, not `out_of_scope` — so the first run
+  will score it 0.000 and correctness will read **0.6975**, predicted. See
+  DECISIONS 2026-09-29. Successors below.
+
+- **The baseline is broken and the next run resets it.** Every report in
+  `eval_data/reports/` was measured on the fifteen-row set. The comparator
+  will refuse to diff any of them against a run made from today, which is
+  correct. Worth doing at the next paid pass: re-measure once, label the
+  report clearly as the new baseline, and say in STATUS which column is
+  which. Until then the 2026-09-28 numbers stand as the last comparable set
+  among themselves.
+
+- **The router does not treat a Stripe question as out of scope**, though
+  its own `domain` string names the boundary. It returned `complex`. The
+  same "When in doubt, prefer 'simple'" sentence that misrouted `fq-012` is
+  the likely cause, now visible in a second, different way. **Deliberately
+  not fixed yet:** the last router-prompt fix looked just as obvious and
+  measured at exactly zero, so this waits on the next full run confirming
+  the prediction above before anything is touched.
 
 - ~~Guard against the fault the audit found, in the dataset loader.~~
   **done 2026-09-27**, `atlas.evaluation.dataset`. Every label must resolve to

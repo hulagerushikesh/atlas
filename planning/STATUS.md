@@ -108,6 +108,18 @@ of the substance is missing or wrong — see DECISIONS 2026-09-28 for the two
 rows that scored 0.000, one of which is a cited, grounded, confidently wrong
 answer about a Python version.
 
+> **The table above is the last comparable set. Read this first.**
+> On 2026-09-29 the dataset gained a sixteenth row, `fq-016`, the first
+> declared out-of-scope question. Both fingerprints moved —
+> `486ff3dab9b597b5` → `80c1a625bc7b7533` and `5c60f37e17520115` →
+> `c9c564cc06b1eb3d` — so the comparator will refuse to diff anything above
+> against anything measured from now on, correctly: a mean over sixteen rows
+> is not a mean over fifteen. Precision and recall are unaffected in
+> arithmetic (the row is inapplicable to both), faithfulness and answer
+> relevance only if the pipeline refuses, and `answer_correctness` moves
+> either way. A router probe says it will not refuse, so the next run should
+> read **0.6975**; that is a prediction, written down to be checked.
+
 **`fq-002`, that Python row, was chased on 2026-09-29 and is not a retrieval
 failure.** The chunks carrying the current facts were never in the candidate
 set, and no chunk in the corpus states FastAPI's current Python floor at

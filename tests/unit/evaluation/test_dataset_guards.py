@@ -205,7 +205,22 @@ class TestTheShippedDataset:
         # It failed both halves of this on 2026-09-27.
         dataset, notes = load_dataset(Path("eval_data/fastapi_dataset.json"))
         assert notes == []
-        assert len(dataset.samples) == 15
+        assert len(dataset.samples) == 16
+
+    def test_the_set_carries_exactly_one_declared_out_of_scope_row(self) -> None:
+        # Added 2026-09-29. Empty labels are only legal with the flag, so this
+        # also pins that the guard is being satisfied deliberately rather than
+        # by a row someone forgot to label.
+        dataset, _ = load_dataset(Path("eval_data/fastapi_dataset.json"))
+        flagged = [s for s in dataset.samples if s.metadata.get("out_of_scope") is True]
+        assert [s.id for s in flagged] == ["fq-016"]
+        assert flagged[0].relevant_doc_ids == []
+
+    def test_every_other_row_still_names_at_least_one_document(self) -> None:
+        dataset, _ = load_dataset(Path("eval_data/fastapi_dataset.json"))
+        unlabelled = [s.id for s in dataset.samples
+                      if not s.relevant_doc_ids and s.metadata.get("out_of_scope") is not True]
+        assert unlabelled == []
 
     def test_the_sample_set_loads_with_only_the_no_corpus_note(self) -> None:
         # Its doc ids are synthetic (doc-hr-leave-policy), so there is nothing
