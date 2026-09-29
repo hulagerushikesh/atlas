@@ -1305,3 +1305,43 @@ Format: date — decision — alternatives — reason.
   with *that* is HyDE. It is now the only intervention with evidence behind
   it on this row, and the evidence is that its competitor measurably does
   nothing.
+
+- **2026-09-29** — **A mid-stream exception is an `error` event, and the
+  success path now sends `[DONE]` too.** Once the first byte is out the
+  status line is gone, so a failure cannot be a 500. It used to end the
+  response body mid-event and nothing more, and every layer read that as a
+  completed stream: the console's `for await` simply stopped, no exception
+  was thrown, `finish()` was never called, and the run sat on a running
+  spinner indefinitely. Verified by reading `store.ts` before touching it,
+  not assumed.
+
+  Three parts, and the second is the one that actually matters:
+    1. `_stream_query` catches, logs with the stage that was in flight, and
+       emits `{"type":"error","error":…,"stage":…}` then `[DONE]`.
+    2. The success path now sends `[DONE]` as well. Only the `out_of_scope`
+       branch ever did, so on the one path that streams an answer a client
+       could not distinguish "finished" from "socket closed". All three
+       endings agree now, and the sentinel is the contract.
+    3. The console handles the `error` event **and** the case where the
+       stream ends with neither ending — a dropped connection, a proxy, a
+       Cloud Run timeout. No server change can announce those, so the guard
+       is what actually removes the infinite spinner.
+
+  The failed request is charged for what it already spent, matching the fix
+  the non-streaming path got on 2026-09-28: a stream that dies at generation
+  has already paid for routing, embedding, retrieval and grading, and a cap
+  that only counts successes is one a failing deployment walks through.
+  `CancelledError` and `GeneratorExit` are re-raised untouched — that is the
+  client hanging up, there is no socket left to write to, and swallowing
+  them would stop the disconnect propagating.
+
+  *Alt considered:* redacting `str(exc)` from the event. Not taken, because
+  the non-streaming path already puts `str(exc)` in the 500's `detail`;
+  making the two disagree would be a difference nobody would remember.
+  Whether that convention should change at all is filed separately.
+
+  Verified in a browser against a stub that serves the built console and
+  fails mid-stream, so no model was called: the `error` case renders "Atlas
+  stopped during grading / qdrant went away", the truncation case renders
+  "The connection closed before Atlas finished", and the happy path still
+  streams and finishes clean with no console errors. Rs.0.

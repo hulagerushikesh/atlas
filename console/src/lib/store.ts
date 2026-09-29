@@ -211,6 +211,11 @@ export const useAtlas = create<AtlasState>((set, get) => ({
 
       let answer = ""
       let genStart = 0
+      // A stream has to end in one of three ways: `done`, `error`, or the
+      // body closing under us. Only the first two are endings the server
+      // meant, so track whether one arrived — otherwise the loop exits
+      // normally, nothing calls finish(), and the run spins for ever.
+      let ended = false
       for await (const ev of streamQuery(q, sheet, top_k)) {
         if (ev.type === "stage") {
           if (ev.status === "start") {
@@ -226,7 +231,20 @@ export const useAtlas = create<AtlasState>((set, get) => ({
         } else if (ev.type === "delta") {
           answer += ev.text
           patch({ answer })
+        } else if (ev.type === "error") {
+          ended = true
+          for (const st of STAGES) if (get().run.stages[st.name].status === "running") stage(st.name, "failed")
+          finish({
+            phase: "failed", streaming: false, answer,
+            failure: {
+              what: `Atlas stopped during ${ev.stage}.`,
+              why: ev.error,
+              next: "The stages above show how far it got. Re-run the query; if it fails at the same stage, check `make health`.",
+            },
+          })
+          return
         } else if (ev.type === "done") {
+          ended = true
           if (ev.classification === "out_of_scope") {
             skipRest()
             finish({ phase: "refused", strength: { label: "Out of scope", kind: "none" } })
@@ -239,6 +257,20 @@ export const useAtlas = create<AtlasState>((set, get) => ({
           const evidence = get().run.evidence.map((e) => ({ ...e, citation: byChunk[e.chunk_id] ?? null }))
           finish({ phase: "done", streaming: false, answer, evidence, citations: ev.citations, numberToChunk, strength: { label: "Unchecked", kind: "none", note: "streamed" } })
         }
+      }
+      if (!ended) {
+        // The body closed without either ending. The server now always sends
+        // one, so this is the network dropping, a proxy timing out, or Cloud
+        // Run cutting the request — none of which the server can announce.
+        for (const st of STAGES) if (get().run.stages[st.name].status === "running") stage(st.name, "failed")
+        finish({
+          phase: "failed", streaming: false, answer,
+          failure: {
+            what: "The connection closed before Atlas finished.",
+            why: "The stream ended without a completion event, so the answer above may be cut short.",
+            next: "Re-run the query. If it keeps happening on long answers, a proxy or gateway timeout is the usual cause.",
+          },
+        })
       }
     } catch (e) {
       const stages = get().run.stages

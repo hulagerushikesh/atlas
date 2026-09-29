@@ -129,24 +129,52 @@ on the streaming path because it requires the full answer before running — buf
 defeats the purpose of streaming. A `X-Faithfulness: skipped-streaming` response header
 signals this to clients.
 
+Every event is one `data:` line holding a JSON object with a `type`. Clients
+concatenate `delta.text` to rebuild the answer and can render each stage as it
+lands.
+
+| `type` | Shape | When |
+|--------|-------|------|
+| `stage` | `{"type":"stage","name":"routing","status":"start"}` | each stage begins |
+| `stage` | `{"type":"stage","name":"routing","status":"done","classification":"simple","ms":45}` | routing finished |
+| `stage` | `{"type":"stage","name":"decompose","status":"done","sub_queries":3,"ms":610}` | complex queries only |
+| `stage` | `{"type":"stage","name":"retrieval","status":"done","chunks":15,"ms":840,"evidence":[…]}` | evidence ships before generation, so the trail renders while tokens stream |
+| `stage` | `{"type":"stage","name":"grading","status":"done","score":0.82,"sufficient":true,"ms":390}` | grading finished |
+| `delta` | `{"type":"delta","text":"…"}` | one token span |
+| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":true}` | the answer is complete |
+| `error` | `{"type":"error","error":"…","stage":"grading"}` | the pipeline threw after streaming began |
+
 ```
-data: {"delta": "Employees"}
-data: {"delta": " receive"}
-data: {"delta": " 15 days"}
+data: {"type": "stage", "name": "routing", "status": "start"}
+data: {"type": "stage", "name": "routing", "status": "done", "classification": "simple", "ms": 45}
+data: {"type": "delta", "text": "Employees"}
+data: {"type": "delta", "text": " receive"}
 ...
+data: {"type": "done", "classification": "simple", "citations": [...], "is_faithful": true}
 data: [DONE]
 ```
 
-Clients concatenate `delta` values to reconstruct the answer. The final `[DONE]` event
-signals end-of-stream. Citation metadata is not yet sent in the final SSE event
-(future iteration: add a `{"citations": [...]}` event before `[DONE]`).
+**A stream always ends with `data: [DONE]`**, after a `done` event or an `error`
+one. That sentinel is the contract: a reader that stops on the body closing
+instead cannot tell a finished answer from a dropped connection. Until
+2026-09-29 the success path did not send it and an exception sent nothing at
+all — the body simply ended mid-event, which every layer read as completion,
+and the console sat on a running spinner indefinitely.
+
+An exception raised after the first byte **cannot** be a 500: the status line
+went out with the headers, before the pipeline had a chance to fail. It arrives
+as an `error` event instead, carrying the stage that was in flight. The daily
+spend cap is still charged for what the failed request spent up to that point.
+Clients should treat the stream ending with neither `done` nor `error` as a
+failure too — that is the network, a proxy, or a gateway timeout, and no event
+can be sent for it.
 
 **Error responses**
 
 | Status | Condition |
 |--------|-----------|
 | 422 | `query` is empty or exceeds 4096 chars |
-| 500 | Pipeline raised an unhandled exception (detail included) |
+| 500 | Pipeline raised an unhandled exception (detail included) — non-streaming only |
 
 ---
 
