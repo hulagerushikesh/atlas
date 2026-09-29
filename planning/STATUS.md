@@ -108,6 +108,17 @@ of the substance is missing or wrong — see DECISIONS 2026-09-28 for the two
 rows that scored 0.000, one of which is a cited, grounded, confidently wrong
 answer about a Python version.
 
+**`fq-002`, that Python row, was chased on 2026-09-29 and is not a retrieval
+failure.** The chunks carrying the current facts were never in the candidate
+set, and no chunk in the corpus states FastAPI's current Python floor at
+all — the reference answer is a subtraction over three changelog entries
+3,100 lines apart. It was labelled `simple_factual` / `easy`, which is why it
+read as a ranking bug; it is now `multi_hop` / `hard`. Neither fingerprint
+moved, so the report above stays comparable. A real bug did surface
+underneath it — `heading_trail` dropped the release heading from the four
+chunks of the flat-H2 `0.104.0` block, including the one that was cited — and
+is fixed. See DECISIONS 2026-09-29.
+
 The last column's token and rupee figures are **real**. Every other column's
 are marked †.
 

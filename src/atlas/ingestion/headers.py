@@ -50,6 +50,12 @@ _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$", re.MULTILINE)
 # keeping it pays to embed everything twice and tells BM25 nothing new.
 _ATTR_LIST = re.compile(r"\s*\{[^}]*\}\s*$")
 
+# A release heading in a changelog: `## 0.104.0 (2023-10-18)`, `## v1.2.3`,
+# `## [1.2.3] - 2024-01-01`. Matched on the leading version number only —
+# whatever follows it is a date, a codename or nothing, and none of that
+# changes what the heading *is*.
+_VERSION_HEADING = re.compile(r"^\[?v?\d+\.\d+")
+
 # Separators inside a documentation path. Kept as a set of characters rather
 # than a regex split so `.md` is removed by suffix handling, not by chance.
 _PATH_SEPARATORS = re.compile(r"[/\\_\-]+")
@@ -87,6 +93,25 @@ def heading_trail(document_text: str, start_char: int) -> list[str]:
     a level-3 heading does not inherit the level-3 sibling that preceded it.
     Anything at or below the new heading's level is dropped, which is what
     "in force" means for a document outline.
+
+    One exception, for changelogs written with a flat outline. FastAPI's
+    `release-notes.md` nests its sections under the release for most of its
+    length (`## 0.129.0 (2026-02-12)` then `### Breaking Changes`) but in the
+    2023 entries the section is an H2 too:
+
+        ## 0.104.0 (2023-10-18)
+        ## Upgrades
+        * Drop support for Python 3.7, require Python 3.8 or above.
+
+    By the outline rule those two are siblings and the release is dropped, so
+    the chunk that states a Python floor is the one chunk in the corpus with
+    no date on it. That is not a cosmetic loss: `fq-002` asked what Python
+    version FastAPI requires and was answered from this exact chunk, in the
+    present tense, three years stale. They are not siblings in meaning — the
+    release is a record boundary and the section is a field inside it — and
+    nothing structural says so, so the text has to. A version-like heading
+    therefore survives a same-level heading that is not itself a version, and
+    is displaced only by the next release.
     """
     stack: list[tuple[int, str]] = []
     for match in _HEADING.finditer(document_text):
@@ -96,7 +121,10 @@ def heading_trail(document_text: str, start_char: int) -> list[str]:
         text = _ATTR_LIST.sub("", match.group(2)).strip()
         if not text:
             continue
+        starts_a_release = bool(_VERSION_HEADING.match(text))
         while stack and stack[-1][0] >= level:
+            if not starts_a_release and _VERSION_HEADING.match(stack[-1][1]):
+                break
             stack.pop()
         stack.append((level, text))
     return [text for _, text in stack]

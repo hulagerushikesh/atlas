@@ -158,16 +158,35 @@ Newest at the bottom of each section.
   and the first true cost figure — 167,740 tokens, 4.3x what was being
   reported. See DECISIONS.
 
-- **A superseded fact in a reverse-chronological document outranks the
-  current one.** `fq-002` asked which Python version FastAPI requires and
-  got "3.8 or above" with a citation, from a 2023 line of `release-notes.md`
-  that two later entries in the same file supersede. Recall 1.000,
-  faithfulness 1.000, correctness 0.000 — the right page, the wrong part of
-  it, and nothing in the pipeline or the harness can tell. Options: order
-  chunks of a changelog by position (earlier in the file is newer), extract
-  and attach a date, or prefer the newest chunk when several from one
-  document conflict. The first is nearly free and specific to this corpus
-  shape; the last is the general one.
+- ~~**A superseded fact in a reverse-chronological document outranks the
+  current one.**~~ **Diagnosed 2026-09-29, Rs.0 — the premise was wrong.**
+  The current chunks were never retrieved, so nothing about ranking or
+  ordering was ever going to fix `fq-002`, and no chunk in the corpus states
+  the current Python floor at all. The row needs aggregation, not retrieval.
+  A real but small bug turned up underneath it (`heading_trail` dropping the
+  release heading from a flat changelog) and is fixed. See DECISIONS
+  2026-09-29 for the forensics. What it leaves open is below.
+
+- **Nothing in the corpus states the current state of a changelog, and
+  nothing derives it.** `fq-002`'s answer exists only as a subtraction over
+  three entries 3,100 lines apart. Two shapes of fix, both real work:
+  *(a)* at ingest, synthesise a "current state" chunk per changelog — an LLM
+  pass over the file, corpus-shaped, and it re-prices the ingest; *(b)* at
+  query time, let the pipeline scan a document rather than retrieve from it,
+  which is a second retrieval mode and touches `_retrieve_all`. Neither is
+  worth starting before something else in the dataset needs the same
+  capability — as of now `fq-002` is the only row that does, which is an
+  argument for leaving it scored 0.000 and honest.
+
+- **Should the generator date a claim it takes from a changelog?** Now
+  possible, since the release heading reaches the chunk text. One line in
+  the generator prompt would turn "FastAPI requires Python 3.8 or above"
+  into "as of 0.104.0 (2023-10-18), ...". It would not raise `fq-002`'s
+  correctness — the reference says 3.10 — but it would move the judge's
+  verdict on that fact from *contradicted* to *missing*, which is the exact
+  distinction the metric was built to draw, and it stops the deployed site
+  stating a stale fact in the present tense. Costs one eval pass (~Rs.6) to
+  measure, and should not ship unmeasured.
 
 - **`fq-012` retrieves the wrong pages and then answers them faithfully.**
   Precision 0.13, recall 0.400, correctness 0.000 — it fetched the Pydantic

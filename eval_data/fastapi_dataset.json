@@ -23,8 +23,9 @@
         "release-notes"
       ],
       "metadata": {
-        "category": "simple_factual",
-        "difficulty": "easy"
+        "category": "multi_hop",
+        "difficulty": "hard",
+        "note": "No chunk in the corpus states the current Python floor. The only 'requires Python X' sentence is the 2023 one saying 3.8; the answer is a subtraction over three entries 3,100 lines apart in release-notes.md. Labelled simple_factual/easy until 2026-09-29, which is why the retrieval failure looked like a ranking bug."
       }
     },
     {
@@ -125,7 +126,7 @@
     {
       "id": "fq-010",
       "question": "Can you use synchronous blocking database calls directly in a FastAPI async endpoint without any workaround?",
-      "ground_truth_answer": "No. A path operation declared with async def is called directly on the event loop, so blocking I/O inside it holds up the server. The documented fix is not a helper you call from inside the coroutine — it is the function declaration. Declare the path operation with plain def and FastAPI runs it in an external threadpool that it then awaits; the docs recommend exactly this for database libraries, most of which have no await support. Reserve async def for libraries you call with await. Dependencies and sub-dependencies follow the same rule: a def dependency is also run in the external threadpool. For mixing blocking code into async code you write yourself, FastAPI points at AnyIO, which Starlette and FastAPI are built on.",
+      "ground_truth_answer": "No. A path operation declared with async def is called directly on the event loop, so blocking I/O inside it holds up the server. The documented fix is not a helper you call from inside the coroutine \u2014 it is the function declaration. Declare the path operation with plain def and FastAPI runs it in an external threadpool that it then awaits; the docs recommend exactly this for database libraries, most of which have no await support. Reserve async def for libraries you call with await. Dependencies and sub-dependencies follow the same rule: a def dependency is also run in the external threadpool. For mixing blocking code into async code you write yourself, FastAPI points at AnyIO, which Starlette and FastAPI are built on.",
       "relevant_doc_ids": [
         "async"
       ],
@@ -150,7 +151,7 @@
     {
       "id": "fq-012",
       "question": "Does FastAPI require you to use Pydantic for input validation, or can you skip it entirely?",
-      "ground_truth_answer": "Pydantic is optional per endpoint. You can declare parameters without Pydantic models — plain Python type hints (int, str, float) and Query()/Path()/Body() with basic constraints are supported. Pydantic models are required only for complex nested request bodies.",
+      "ground_truth_answer": "Pydantic is optional per endpoint. You can declare parameters without Pydantic models \u2014 plain Python type hints (int, str, float) and Query()/Path()/Body() with basic constraints are supported. Pydantic models are required only for complex nested request bodies.",
       "relevant_doc_ids": [
         "tutorial/query-params",
         "tutorial/query-params-str-validations",

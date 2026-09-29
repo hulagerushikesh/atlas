@@ -1139,3 +1139,73 @@ Format: date — decision — alternatives — reason.
   `answer_correctness | — | 0.7440 | — | not measured in A` with a note, and
   a second note that the two token totals are not a cost comparison. Under
   the old code the same diff would have read `+0.8500, winner B`.
+
+- **2026-09-29** — **`fq-002` is not a retrieval failure, and the fix filed
+  for it yesterday could not have worked.** Yesterday's entry proposed
+  ordering changelog chunks by file position (earlier = newer). Forensics on
+  the stored report kills it. The four `release-notes` chunks in the window
+  were indexes 1106, 1342, 1503 and 1504 of 1955 — the 2023, 2022 and 2021
+  entries. The two chunks that carry the current facts, 230
+  (`0.129.0 (2026-02-12)`, drop 3.9) and 307 (`0.125.0 (2025-12-17)`, drop
+  3.8), **were not retrieved at all**. Reordering a candidate set cannot
+  promote a chunk that is not in it.
+
+  They were not retrieved because of how they are worded. The query asks
+  what FastAPI *requires*; those entries say only "Drop support for Python
+  3.9". The single sentence in the whole corpus containing "require Python"
+  is the 2023 one that says 3.8 — so the stale chunk is not merely ranked
+  above the current one, it is the *best* lexical and semantic match for the
+  question by a wide margin. Retrieval did what it was asked.
+
+  And the deeper fact: **no chunk in the corpus states FastAPI's current
+  Python floor.** Grepping all 4,020 for a present-tense version requirement
+  returns the 2023 line and nothing else. The reference answer "3.10 or
+  later" is a *derivation* over three entries 3,100 lines apart — and the
+  reference answer says so in its own text, spelling out the subtraction.
+  No value of top_k, no reranker and no recency prior produces it. The row
+  needs aggregation at ingest or a multi-hop scan, which is a different and
+  much larger piece of work than the one that was filed.
+
+- **2026-09-29** — **The row was labelled `simple_factual` / `easy`, and the
+  mislabel is why this looked like a ranking bug.** Relabelled `multi_hop` /
+  `hard` with a note recording what the corpus does and does not contain.
+  Safe to change: `dataset_fingerprint` covers the id, question, label set
+  and out-of-scope flag, and `dataset_answers_fingerprint` the reference
+  answers — neither reads `category` or `difficulty`. Verified both hashes
+  before and after the edit: `486ff3dab9b597b5` and `5c60f37e17520115`,
+  unchanged. The 2026-09-28 report stays comparable.
+
+- **2026-09-29** — **A real bug found on the way, in `heading_trail`: a flat
+  changelog loses its release heading.** FastAPI's release notes nest
+  sections under the release for most of their length
+  (`## 0.129.0 (2026-02-12)` then `### Breaking Changes`), but the 2023
+  entries put the section at H2 as well:
+
+      ## 0.104.0 (2023-10-18)
+      ## Upgrades
+      * Drop support for Python 3.7, require Python 3.8 or above.
+
+  By the outline rule those are siblings, so the release is popped and the
+  chunk's trail is `Release Notes > Upgrades`. The chunk that states a
+  Python floor was the one chunk in the corpus indexed with no date on it —
+  and it is the chunk that answered `fq-002` in the present tense.
+
+  Fixed: a version-like heading survives a same-level heading that is not
+  itself a version, and is displaced only by the next release. *Alt:*
+  normalising heading levels per document, which is guessing; or leaving it,
+  since it is small. *Why not leaving it:* the loss is concentrated exactly
+  where it does damage — on the stale half of the corpus's largest document.
+
+  **Measured blast radius: 4 chunks.** Before the fix 30 of the 1,955
+  release-notes chunks had no release in their trail; 26 of those are
+  "Latest Changes", which is unreleased and correctly dateless. The other
+  four are 1106–1109, the `0.104.0` window. No other document in the corpus
+  has a version heading at any level, so nothing else moves. Re-ingest
+  re-embeds those four chunks and skips the rest on `content_hash`, so
+  shipping it is free rather than the ~Rs.3 a release-notes re-ingest would
+  otherwise cost.
+
+  **It does not fix `fq-002`'s score, and is not claimed to.** The answer is
+  still absent from the corpus. What it buys is that the claim arrives
+  dated, so a generator has the option of saying when it was true instead of
+  asserting it in the present tense.
