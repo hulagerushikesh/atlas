@@ -16,6 +16,19 @@ Newest at the bottom of each section.
   weights (`Dockerfile` step 7) and sets `HF_HUB_OFFLINE=1`, so a cold start
   loads from `/opt/hf` and never reaches the Hub (M2).
 - ~~Eval metrics in README are placeholders~~ replaced with measured numbers (M1).
+- **A streamed answer claims a faithfulness check it never ran.** The SSE
+  `done` event hardcodes `"is_faithful": True` (`routes/query.py`, the
+  success branch), on the path whose own module docstring says it "skips the
+  faithfulness check because we don't have the full answer until the stream
+  ends". The console happens to render `UNCHECKED` because no score arrives,
+  so the UI is more honest than the API — but any other client reading the
+  field is told a never-checked answer was verified. Observed live on
+  2026-10-07 at atlas.hulage.in. This is the one field the project's whole
+  claim rests on, so it must not assert what was not computed. Options, in
+  order of preference: (1) send `is_faithful: null` and let clients render
+  "unchecked"; (2) run the check once the stream completes and emit a second
+  event; (3) drop the field from the streaming contract entirely. (1) is the
+  smallest honest fix and matches what the console already shows.
 
 ## Debts
 
