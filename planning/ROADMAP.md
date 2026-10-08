@@ -55,6 +55,9 @@ Exit criteria:
 - [ ] ≥ 2 changes merged, each with `eval-compare` in the PR
 - [ ] Faithfulness or context recall up by more than the measured noise floor
 - [ ] p95 latency and $/query not worse by more than an agreed budget
+      → **agreed 2026-10-08: `planning/BUDGET.md`** (warm p95 ≤ 20 s,
+      cost ≤ $0.005/query, +15% / +20% regression rule). Enforcement is
+      manual until `comparator.compare()` reads `stage_ms` and tokens.
 - [ ] `learning/` module 09 exercise written up for each in DECISIONS.md
 
 ## M4 — Product hardening

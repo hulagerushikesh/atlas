@@ -16,6 +16,26 @@ Newest at the bottom of each section.
   weights (`Dockerfile` step 7) and sets `HF_HUB_OFFLINE=1`, so a cold start
   loads from `/opt/hf` and never reaches the Hub (M2).
 - ~~Eval metrics in README are placeholders~~ replaced with measured numbers (M1).
+
+- **`compare()` calls a winner without reading latency or cost.**
+  `atlas.evaluation.comparator.compare()` builds its verdict from
+  `aggregate_scores` alone and ends in **Overall winner**. It never touches
+  `stage_ms` or `token_usage`, both of which the report already stores and
+  the reporter already renders as a p50/p95 table. So a change that bought
+  +0.03 context recall while doubling p95 latency and tripling cost per query
+  is declared the winner, with the regression printed nowhere in the
+  comparison a PR quotes.
+
+  This is the whole reason `planning/BUDGET.md` has to be checked by hand.
+  Fix: give `compare()` the two thresholds from that file (p95 total +15%,
+  cost/query +20%), report both deltas in the output alongside the metric
+  deltas, and withhold the word "winner" when either is breached — a
+  comparison that says "better on recall, over budget on latency" is the
+  honest sentence and the one it cannot currently produce.
+
+  Needs `EvalResult` to carry per-sample `token_usage`; it carries run-wide
+  totals today, which are contaminated by the metric graders' own calls and
+  so cannot be divided by sample count to get a production cost per query.
 - **A streamed answer claims a faithfulness check it never ran.** The SSE
   `done` event hardcodes `"is_faithful": True` (`routes/query.py`, the
   success branch), on the path whose own module docstring says it "skips the

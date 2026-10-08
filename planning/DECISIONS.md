@@ -1506,3 +1506,28 @@ Format: date — decision — alternatives — reason.
   for a `StreamingResponse` that is before the body has produced anything,
   so reading the id lazily inside the `except` would have found an empty
   string exactly when it was needed.
+
+- **2026-10-08** — Latency and cost budget set forward from the 2026-10-03
+  measurement, not back from M1. *Alt:* hold M3 to M1's ≈7 s / ≈₹0.03.
+  *Why:* M1's pipeline had `top_k` 5, no grader and no faithfulness check,
+  and scored context recall 0.667 against today's 0.938. Those figures
+  describe a cheaper, faster system that was wrong three times as often, so
+  holding M3 to them means either failing the criterion permanently or
+  reverting accuracy bought one measured PR at a time. The M1-to-now increase
+  (+44% p50, ≈10x cost, +0.271 recall) is ratified explicitly rather than
+  left unstated, and `planning/BUDGET.md` governs what happens next: warm p95
+  ≤ 20 s, cost ≤ $0.005 a query, and a +15% / +20% regression rule whose
+  breach needs a decision entry naming the quality gain that paid for it.
+  Cold start is budgeted separately at 60 s and only while `atlas-keepwarm`
+  is enabled — mixing cold into the warm p95 makes the headline number a
+  function of traffic rather than of the code.
+
+  The honest weakness is enforcement: `comparator.compare()` is metric-only.
+  It prints **Overall winner** from aggregate scores and never reads
+  `stage_ms` or token usage, so a change that bought +0.03 recall while
+  doubling p95 would be declared the winner with the regression printed
+  nowhere. Until `compare()` learns the two thresholds, the budget is checked
+  by reading the report's latency table by hand.
+
+  `cost / query` rests on n=1 — one live query on `58e4e00` with a long
+  answer — which is why its headroom is +44% against the latency lines' +19%.
