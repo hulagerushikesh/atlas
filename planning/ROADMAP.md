@@ -54,10 +54,13 @@ Candidates, in expected value-per-effort order:
 Exit criteria:
 - [ ] ≥ 2 changes merged, each with `eval-compare` in the PR
 - [ ] Faithfulness or context recall up by more than the measured noise floor
-- [ ] p95 latency and $/query not worse by more than an agreed budget
-      → **agreed 2026-10-08: `planning/BUDGET.md`** (warm p95 ≤ 20 s,
-      cost ≤ $0.005/query, +15% / +20% regression rule). Enforcement is
-      manual until `comparator.compare()` reads `stage_ms` and tokens.
+- [x] p95 latency and $/query not worse by more than an agreed budget
+      → **budget agreed and accepted 2026-10-08: `planning/BUDGET.md`**
+      (warm p95 ≤ 20 s, cost ≤ $0.005/query, +15% / +20% regression rule).
+      Measured at acceptance, all inside the ceilings: warm p50 10,062 ms /
+      p95 16,859 ms against 12,000 / 20,000; cost $0.0034677 against $0.005;
+      eval run $0.0709 against $0.100. Enforcement is manual until
+      `comparator.compare()` reads `stage_ms` and tokens — see BACKLOG.
 - [ ] `learning/` module 09 exercise written up for each in DECISIONS.md
 
 ## M4 — Product hardening

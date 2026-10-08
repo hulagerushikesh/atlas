@@ -4,7 +4,10 @@ The missing half of M3's exit criteria. Three of the four are met; the fourth
 reads "p95 latency and $/query not worse by more than an agreed budget" and
 there was no agreed budget, so it could not be evaluated either way.
 
-This file is that budget. It is a decision to accept or move, not a
+This file is that budget. **Accepted 2026-10-08**, and the M3 criterion is
+ticked on it: every measured value sat inside its ceiling at acceptance
+(warm p50 10,062 / p95 16,859 ms against 12,000 / 20,000; $0.0034677 a query
+against $0.005; $0.0709 an eval run against $0.100). It was a decision, not a
 measurement — the measurements are below it, and every ceiling says which
 number it was derived from.
 
