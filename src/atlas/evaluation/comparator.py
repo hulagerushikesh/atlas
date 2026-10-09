@@ -51,6 +51,23 @@ Design rationale:
     answer's wording changed, and a guard that cries wolf is one that gets
     bypassed with a flag.
 
+    Metric deltas are not the whole verdict. This function used to build one
+    from `aggregate_scores` alone and end in **Overall winner**, while the
+    report it sat next to already carried per-sample `stage_ms` and per-model
+    `token_usage` — so a change buying +0.03 recall at twice the p95 and
+    double the cost was declared the winner with the regression printed
+    nowhere. It now measures both against `planning/BUDGET.md` and withholds
+    the winner on a breach, which is the one sentence anybody quotes.
+
+    Two honest limits on that check. The latency numbers are per-sample and
+    mean what a caller waits for, so they are the budget's own quantity. The
+    cost is a whole eval run, which pays for the metric judges as well
+    (~7.8 chat calls a sample against production's ~4) — so it checks a run
+    against the run ceiling and a regression against the other run, and is
+    not the production cost per query. Getting that would need per-sample
+    token accounting, which no stored report has, and demanding it would
+    make the check unusable against every baseline already on disk.
+
     The same applies to the two reports' token totals, which is the other
     number a reader diffs by eye. Before 2026-09-28 a report counted the
     generation call and nothing else; after it, every call including the
@@ -65,9 +82,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from atlas.cost import estimate_usage_cost
+from atlas.evaluation.reporter import percentile
 from atlas.interfaces.evaluator import EvalResult
 
 _SIGNIFICANCE_THRESHOLD = 0.02   # deltas below this are considered noise
+
+# ── The agreed budget: planning/BUDGET.md, accepted 2026-10-08 ───────────────
+# The numbers live here as well as in the document because a budget nothing
+# reads is a wish. Measured at acceptance, for scale: warm p50 10,062 ms,
+# warm p95 16,859 ms, one 16-row run $0.0709.
+_P50_CEILING_MS = 12_000.0
+_P95_CEILING_MS = 20_000.0
+_RUN_COST_CEILING_USD = 0.100
+# Regression allowances, against whichever run this one is compared with.
+_P95_REGRESSION_LIMIT = 0.15
+_COST_REGRESSION_LIMIT = 0.20
 
 # The one metric that reads `ground_truth_answer`, and so the only one a
 # rewritten reference answer can move.
@@ -96,6 +126,26 @@ class MetricDelta:
 
 
 @dataclass
+class BudgetDelta:
+    """One budgeted quantity, measured in both runs.
+
+    `ceiling` is the absolute line B has to sit under; `limit` is how far it
+    may rise against A. Both are checked, because a run can be well inside
+    the regression allowance and still over the ceiling when the run it is
+    compared with was already close to it.
+    """
+
+    name: str
+    unit: str                 # "ms" | "USD"
+    value_a: float
+    value_b: float
+    ratio: float | None       # value_b / value_a - 1; None when A measured 0
+    limit: float | None       # allowed fractional increase, None when unbounded
+    ceiling: float | None     # absolute ceiling for B, None when none applies
+    breach: str = ""          # why it breached; empty string when it did not
+
+
+@dataclass
 class ComparisonResult:
     config_a_name: str
     config_b_name: str
@@ -104,6 +154,24 @@ class ComparisonResult:
     # What could not be verified. Printed with the table, because a
     # comparison nobody could check should not look like one that was.
     notes: list[str] = field(default_factory=list)
+    # Latency and cost against planning/BUDGET.md. Kept apart from `notes`,
+    # which is about whether the two runs measured the same thing: a budget
+    # that could not be checked is a different fact from a dataset that could
+    # not be matched, and collapsing them would hide one behind the other.
+    budget: list[BudgetDelta] = field(default_factory=list)
+    budget_notes: list[str] = field(default_factory=list)
+
+    @property
+    def budget_breaches(self) -> list[str]:
+        """Every breached budget line, in words. Empty when none breached —
+        which is not the same as a budget that was checked, so read
+        `budget` or `budget_notes` to tell those apart."""
+        return [d.breach for d in self.budget if d.breach]
+
+    def _quality_sentence(self) -> str:
+        if self.overall_winner == "tie":
+            return "neither run wins on quality"
+        return f"{self.overall_winner} wins on quality"
 
     def as_markdown(self) -> str:
         lines = [
@@ -128,7 +196,51 @@ class ComparisonResult:
                 f"{delta_str}{sig} | {d.winner} |"
             )
         lines.append("")
-        lines.append(f"**Overall winner: {self.overall_winner}**")
+
+        if self.budget:
+            lines.append("### Budget (planning/BUDGET.md)")
+            lines.append("")
+            lines.append(
+                f"| Budgeted | {self.config_a_name} | {self.config_b_name} "
+                f"| Change | Allowed | Ceiling | Verdict |"
+            )
+            lines.append("| --- | --- | --- | --- | --- | --- | --- |")
+            for line in self.budget:
+                change = "—" if line.ratio is None else f"{line.ratio:+.1%}"
+                allowed = "—" if line.limit is None else f"{line.limit:+.0%}"
+                ceiling = (
+                    "—" if line.ceiling is None else _fmt(line.ceiling, line.unit)
+                )
+                verdict = "**BREACH**" if line.breach else "ok"
+                lines.append(
+                    f"| {line.name} | {_fmt(line.value_a, line.unit)} "
+                    f"| {_fmt(line.value_b, line.unit)} | {change} | {allowed} "
+                    f"| {ceiling} | {verdict} |"
+                )
+            lines.append("")
+
+        breaches = self.budget_breaches
+        if breaches:
+            # The winner is withheld rather than annotated. This line is the
+            # one that gets pasted into a commit message, and "Overall
+            # winner: B" with a caveat three paragraphs down is how a
+            # regression ships.
+            lines.append(
+                f"**Overall winner: withheld** — {self._quality_sentence()}, "
+                f"but the agreed budget is breached:"
+            )
+            lines.append("")
+            for breach in breaches:
+                lines.append(f"- {breach}")
+            lines.append("")
+            lines.append(
+                "Shipping it anyway is allowed and needs a "
+                "`planning/DECISIONS.md` entry naming the quality gain it "
+                "buys. Shipping it silently is what the budget exists to stop."
+            )
+        else:
+            lines.append(f"**Overall winner: {self.overall_winner}**")
+
         lines.append("")
         lines.append(
             f"*(ns) = not significant (|delta| < {_SIGNIFICANCE_THRESHOLD})*"
@@ -136,7 +248,138 @@ class ComparisonResult:
         for note in self.notes:
             lines.append("")
             lines.append(f"> **Unverified:** {note}")
+        for note in self.budget_notes:
+            lines.append("")
+            lines.append(f"> **Budget:** {note}")
         return "\n".join(lines)
+
+
+def _fmt(value: float, unit: str) -> str:
+    if unit == "USD":
+        return f"${value:.4f}"
+    return f"{value:,.0f} {unit}"
+
+
+def _sample_totals(result: EvalResult) -> list[float]:
+    """Per-sample end-to-end latency, in ms.
+
+    A sample with no `stage_ms` is left out rather than counted as zero: the
+    field was added after several of the stored reports were written, and a
+    run that did not record latency has not got a fast one.
+    """
+    return [sum(s.stage_ms.values()) for s in result.sample_results if s.stage_ms]
+
+
+def _budgeted(
+    *,
+    name: str,
+    unit: str,
+    value_a: float,
+    value_b: float,
+    ceiling: float | None,
+    limit: float | None,
+) -> BudgetDelta:
+    # Rounded before it is either judged or printed, so the figure in the
+    # table and the figure in the breach line are the same figure. They were
+    # not: 0.21250585 printed as +21.3% in the sentence and +21.2% in the
+    # table, which is two numbers for one measurement.
+    ratio = round(value_b / value_a - 1, 4) if value_a else None
+    reasons: list[str] = []
+    if ceiling is not None and value_b > ceiling:
+        reasons.append(
+            f"{name} is {_fmt(value_b, unit)}, over the "
+            f"{_fmt(ceiling, unit)} ceiling"
+        )
+    if limit is not None and ratio is not None and ratio > limit:
+        reasons.append(
+            f"{name} rose {ratio:+.1%} ({_fmt(value_a, unit)} → "
+            f"{_fmt(value_b, unit)}) against an allowed {limit:+.0%}"
+        )
+    return BudgetDelta(
+        name=name,
+        unit=unit,
+        value_a=round(value_a, 4),
+        value_b=round(value_b, 4),
+        ratio=ratio,
+        limit=limit,
+        ceiling=ceiling,
+        breach="; ".join(reasons),
+    )
+
+
+def _check_budget(
+    result_a: EvalResult,
+    result_b: EvalResult,
+    *,
+    same_metrics: bool,
+) -> tuple[list[BudgetDelta], list[str]]:
+    """Measure both runs against planning/BUDGET.md.
+
+    Returns the budgeted lines and whatever could not be checked. A line that
+    could not be measured is absent from the first and named in the second —
+    never silently passed, which would make an unmeasurable run look like a
+    compliant one.
+    """
+    deltas: list[BudgetDelta] = []
+    notes: list[str] = []
+
+    totals_a, totals_b = _sample_totals(result_a), _sample_totals(result_b)
+    if totals_a and totals_b:
+        deltas.append(_budgeted(
+            name="warm p50 latency", unit="ms",
+            value_a=percentile(totals_a, 50), value_b=percentile(totals_b, 50),
+            ceiling=_P50_CEILING_MS, limit=None,
+        ))
+        deltas.append(_budgeted(
+            name="warm p95 latency", unit="ms",
+            value_a=percentile(totals_a, 95), value_b=percentile(totals_b, 95),
+            ceiling=_P95_CEILING_MS, limit=_P95_REGRESSION_LIMIT,
+        ))
+    else:
+        if not totals_a and not totals_b:
+            which = "Neither run recorded"
+        else:
+            which = f"Run {'A' if not totals_a else 'B'} did not record"
+        notes.append(
+            f"{which} per-sample `stage_ms`, so the latency half of the "
+            f"budget is unchecked. The run's own `duration_seconds` is "
+            f"concurrency-wide and is not a substitute."
+        )
+
+    cost_a = estimate_usage_cost(result_a.token_usage) if result_a.token_usage else 0.0
+    cost_b = estimate_usage_cost(result_b.token_usage) if result_b.token_usage else 0.0
+    if not (result_a.token_usage and result_b.token_usage):
+        missing = "Neither run" if not (cost_a or cost_b) else (
+            f"Run {'A' if not cost_a else 'B'}"
+        )
+        notes.append(
+            f"{missing} carries per-model `token_usage`, so the cost half of "
+            f"the budget is unchecked — a report written before 2026-09-28 "
+            f"counted the generation call alone and cannot be priced."
+        )
+    elif not same_metrics:
+        notes.append(
+            f"The two runs did not measure the same metrics, so the cost half "
+            f"of the budget is unchecked: the judges spend tokens too, and "
+            f"the run carrying an extra metric would look more expensive for "
+            f"that reason alone (A ${cost_a:.4f}, B ${cost_b:.4f}, reported "
+            f"here and not judged)."
+        )
+    else:
+        deltas.append(_budgeted(
+            name="eval run cost", unit="USD",
+            value_a=cost_a, value_b=cost_b,
+            ceiling=_RUN_COST_CEILING_USD, limit=_COST_REGRESSION_LIMIT,
+        ))
+        notes.append(
+            "The cost line is a whole eval run, judges included — about 7.8 "
+            "chat calls a sample against production's ~4. It checks the run "
+            "ceiling and the run-to-run regression; it is not the production "
+            "cost per query, which would need per-sample token accounting no "
+            "stored report has."
+        )
+
+    return deltas, notes
 
 
 def _check_comparable(result_a: EvalResult, result_b: EvalResult) -> list[str]:
@@ -219,6 +462,12 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
     thing. That is not a formality — this function's output ends in
     **Overall winner**, which is the sentence a wrong comparison gets quoted
     as.
+
+    `overall_winner` is the quality verdict and nothing else. The latency and
+    cost budget is measured separately into `budget`, and on a breach the
+    rendered markdown withholds the winner instead of printing it: a change
+    may still ship, with a `planning/DECISIONS.md` entry naming what the
+    regression bought.
     """
     notes = _check_comparable(result_a, result_b)
 
@@ -283,12 +532,22 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
         ))
 
     overall = "B" if b_wins > a_wins else ("A" if a_wins > b_wins else "tie")
+
+    # The cost line only means anything between two runs that paid for the
+    # same judges, so the metric set decides whether it is checked at all.
+    same_metrics = not any(d.missing_in for d in deltas)
+    budget, budget_notes = _check_budget(
+        result_a, result_b, same_metrics=same_metrics
+    )
+
     return ComparisonResult(
         config_a_name=result_a.pipeline_config.name,
         config_b_name=result_b.pipeline_config.name,
         deltas=deltas,
         overall_winner=overall,
         notes=notes,
+        budget=budget,
+        budget_notes=budget_notes,
     )
 
 

@@ -609,3 +609,211 @@ class TestAnswersFingerprint:
         """Every report written before 2026-09-28 carries an empty one."""
         old = _graded(0.80, answers="")
         assert compare(old, _graded(0.85)).overall_winner == "B"
+
+
+# ── The budget: planning/BUDGET.md, enforced by compare() ─────────────────────
+
+def _budget_run(
+    stage_totals: list[float],
+    usage: dict | None = None,
+    *,
+    precision: float = 0.46,
+    recall: float | None = None,
+    name: str = "run",
+    timed: bool = True,
+) -> EvalResult:
+    """A run with per-sample latency, and optionally per-model tokens.
+
+    `stage_totals` is one end-to-end figure per sample; it is split across two
+    stages so the result exercises the same summing the reporter does.
+    """
+    scores: dict[str, float] = {"context_precision": precision}
+    if recall is not None:
+        scores["context_recall"] = recall
+    samples = [
+        SampleResult(
+            sample_id=f"s{i}", question="q", generated_answer="a",
+            retrieved_chunk_ids=["c1"],
+            metrics=[MetricScore(metric_name=k, score=v) for k, v in scores.items()],
+            stage_ms=(
+                {"retrieval": total * 0.6, "generation": total * 0.4} if timed else {}
+            ),
+        )
+        for i, total in enumerate(stage_totals)
+    ]
+    return EvalResult(
+        pipeline_config=PipelineConfig(name=name),
+        sample_results=samples,
+        aggregate_scores=scores,
+        dataset_fingerprint="fp",
+        token_usage=usage or {},
+        total_tokens_used=sum(
+            u.prompt_tokens + u.completion_tokens for u in (usage or {}).values()
+        ),
+    )
+
+
+def _at(ms: float) -> list[float]:
+    """Sixteen samples all at the same latency, so p50 == p95 == ms and a
+    test says which threshold it is about."""
+    return [ms] * 16
+
+
+class TestBudgetLatency:
+    def test_a_run_inside_the_ceilings_keeps_its_winner(self) -> None:
+        result = compare(
+            _budget_run(_at(10_000), precision=0.40),
+            _budget_run(_at(10_500), precision=0.46),
+        )
+        assert result.budget_breaches == []
+        assert result.overall_winner == "B"
+        assert "**Overall winner: B**" in result.as_markdown()
+
+    def test_p95_rising_past_the_allowance_withholds_the_winner(self) -> None:
+        """+15% is the agreed allowance. The quality win is real and still
+        reported — it is the word "winner" that is withheld, because that is
+        the sentence a regression ships quoted as."""
+        result = compare(
+            _budget_run(_at(10_000), precision=0.40),
+            _budget_run(_at(11_600), precision=0.46),   # +16%
+        )
+        assert result.overall_winner == "B"             # quality verdict unchanged
+        assert any("rose +16.0%" in b for b in result.budget_breaches)
+
+        md = result.as_markdown()
+        assert "**Overall winner: withheld**" in md
+        assert "B wins on quality" in md
+        assert "**Overall winner: B**" not in md
+
+    def test_the_absolute_ceiling_bites_even_inside_the_allowance(self) -> None:
+        """A run already near the ceiling can regress by less than 15% and
+        still land outside the budget, so both are checked."""
+        result = compare(_budget_run(_at(19_000)), _budget_run(_at(20_900)))  # +10%
+        assert any("over the 20,000 ms ceiling" in b for b in result.budget_breaches)
+
+    def test_p50_has_its_own_ceiling_and_no_allowance(self) -> None:
+        p50 = next(d for d in compare(
+            _budget_run(_at(9_000)), _budget_run(_at(12_500))
+        ).budget if d.name == "warm p50 latency")
+        assert p50.limit is None
+        assert "over the 12,000 ms ceiling" in p50.breach
+
+    def test_getting_faster_is_never_a_breach(self) -> None:
+        assert compare(_budget_run(_at(17_000)), _budget_run(_at(9_000))).budget_breaches == []
+
+    def test_the_p95_is_the_one_the_report_prints(self) -> None:
+        """The budget check and the latency table have to agree, or a change
+        is judged on a number nobody can see. Nearest-rank, both sides."""
+        from atlas.evaluation.reporter import percentile
+
+        totals = [6_457, 8_173, 10_053, 10_566, 15_671, 17_072]
+        run = _budget_run(totals)
+        measured = next(
+            d for d in compare(run, run).budget if d.name == "warm p95 latency"
+        )
+        assert measured.value_b == pytest.approx(percentile(totals, 95))
+        assert f"{percentile(totals, 95):.0f}" in _md_latency(run)
+
+    def test_a_run_without_stage_ms_is_not_a_compliant_run(self) -> None:
+        """Several stored reports predate the field. An unmeasurable budget
+        must read as unmeasured, not as passed."""
+        result = compare(_result("A", {"faithfulness": 0.8}),
+                         _result("B", {"faithfulness": 0.9}))
+        assert not [d for d in result.budget if d.unit == "ms"]
+        assert any("latency half of the budget is unchecked" in n
+                   for n in result.budget_notes)
+
+    def test_one_run_missing_it_is_named(self) -> None:
+        """The common case: a new run compared against a stored baseline from
+        before `stage_ms` existed."""
+        result = compare(_budget_run(_at(9_000), precision=0.40, timed=False),
+                         _budget_run(_at(9_000), precision=0.46))
+        assert not [d for d in result.budget if d.unit == "ms"]
+        assert any("Run A did not record" in n for n in result.budget_notes)
+
+
+class TestBudgetCost:
+    def test_run_cost_is_priced_from_the_per_model_breakdown(self) -> None:
+        cost = next(d for d in compare(
+            _budget_run(_at(9_000), _CHAT_AND_EMBED),
+            _budget_run(_at(9_000), _CHAT_AND_EMBED),
+        ).budget if d.unit == "USD")
+        assert cost.value_b == pytest.approx(estimate_usage_cost(_CHAT_AND_EMBED), abs=1e-4)
+
+    def test_cost_rising_past_the_allowance_withholds_the_winner(self) -> None:
+        cheap = {"gemini-3.1-flash-lite": ModelUsage(
+            kind="chat", calls=75, prompt_tokens=100_000, completion_tokens=5_000)}
+        dear = {"gemini-3.1-flash-lite": ModelUsage(
+            kind="chat", calls=75, prompt_tokens=130_000, completion_tokens=6_500)}
+        result = compare(
+            _budget_run(_at(9_000), cheap, precision=0.40),
+            _budget_run(_at(9_000), dear, precision=0.46),
+        )
+        assert any("eval run cost rose +30.0%" in b for b in result.budget_breaches)
+        assert "**Overall winner: withheld**" in result.as_markdown()
+
+    def test_the_run_ceiling_is_checked_too(self) -> None:
+        huge = {"gemini-3.1-flash-lite": ModelUsage(
+            kind="chat", calls=900, prompt_tokens=4_000_000, completion_tokens=100_000)}
+        result = compare(_budget_run(_at(9_000), huge), _budget_run(_at(9_000), huge))
+        assert any("over the $0.1000 ceiling" in b for b in result.budget_breaches)
+
+    def test_it_says_the_figure_is_a_run_and_not_a_query(self) -> None:
+        """An eval run pays the metric judges as well — ~7.8 chat calls a
+        sample against production's ~4 — so this is not cost per query, and
+        a reader who takes it for one will under-budget production."""
+        notes = compare(
+            _budget_run(_at(9_000), _CHAT), _budget_run(_at(9_000), _CHAT)
+        ).budget_notes
+        assert any("not the production cost per query" in n for n in notes)
+
+    def test_different_metric_sets_make_the_cost_unjudgeable(self) -> None:
+        """The judges spend tokens. A run carrying a fifth metric costs more
+        for that reason alone, so there is no cost verdict to give."""
+        result = compare(
+            _budget_run(_at(9_000), _CHAT, recall=None),
+            _budget_run(_at(9_000), _CHAT, recall=0.93),
+        )
+        assert not [d for d in result.budget if d.unit == "USD"]
+        assert any("did not measure the same metrics" in n for n in result.budget_notes)
+
+    def test_a_legacy_report_cannot_be_priced(self) -> None:
+        result = compare(_budget_run(_at(9_000)), _budget_run(_at(9_000), _CHAT))
+        assert not [d for d in result.budget if d.unit == "USD"]
+        assert any("Run A carries" in n for n in result.budget_notes)
+
+
+class TestBudgetRendering:
+    def test_a_breach_names_what_it_needs_to_ship(self) -> None:
+        md = compare(
+            _budget_run(_at(10_000), precision=0.40),
+            _budget_run(_at(12_000), precision=0.46),
+        ).as_markdown()
+        assert "planning/DECISIONS.md" in md
+        assert "breached" in md
+
+    def test_the_table_shows_both_runs_and_the_verdict(self) -> None:
+        md = compare(
+            _budget_run(_at(10_000), name="before"),
+            _budget_run(_at(10_000), name="after"),
+        ).as_markdown()
+        assert "### Budget (planning/BUDGET.md)" in md
+        assert "| warm p95 latency | 10,000 ms | 10,000 ms | +0.0% | +15% | 20,000 ms | ok |" in md
+
+    def test_breaches_are_distinguishable_from_an_unchecked_budget(self) -> None:
+        """No breaches and no budget are the same empty list, so the notes
+        are the only thing that tells them apart."""
+        unchecked = compare(_result("A", {"faithfulness": 0.8}),
+                            _result("B", {"faithfulness": 0.8}))
+        assert unchecked.budget_breaches == []
+        assert unchecked.budget == []
+        assert unchecked.budget_notes
+
+    def test_the_table_and_the_breach_quote_the_same_percentage(self) -> None:
+        """One measurement, one number. Rounding after formatting gave
+        +21.2% in the table and +21.3% in the sentence beneath it."""
+        md = compare(_budget_run(_at(17_072)), _budget_run(_at(20_700))).as_markdown()
+        percentages = {line.split("rose ")[1].split(" ")[0]
+                       for line in md.splitlines() if "rose " in line}
+        assert len(percentages) == 1
+        assert percentages.pop() in md.split("### Budget")[1].split("**Overall")[0]

@@ -180,8 +180,12 @@ def _inapplicable_counts(result: EvalResult) -> dict[str, int]:
     return counts
 
 
-def _percentile(values: list[float], pct: float) -> float:
-    """Nearest-rank percentile. The eval set is 15 samples; interpolating
+def percentile(values: list[float], pct: float) -> float:
+    """Nearest-rank percentile. Public because `comparator` checks the budget
+    with it, and a p95 that is checked by one rule and printed by another is
+    two numbers under one name.
+
+    The eval set is 15 samples; interpolating
     between two of them would imply a precision the sample size does not have."""
     ordered = sorted(values)
     idx = min(len(ordered) - 1, max(0, math.ceil(pct / 100 * len(ordered)) - 1))
@@ -207,11 +211,11 @@ def _md_latency(result: EvalResult) -> str:
         totals.append(sum(s.stage_ms.values()))
 
     rows = ["| Stage | p50 ms | p95 ms |", "| --- | --- | --- |"]
-    for stage, values in sorted(stages.items(), key=lambda kv: -_percentile(kv[1], 50)):
-        rows.append(f"| {stage} | {_percentile(values, 50):.0f} | {_percentile(values, 95):.0f} |")
+    for stage, values in sorted(stages.items(), key=lambda kv: -percentile(kv[1], 50)):
+        rows.append(f"| {stage} | {percentile(values, 50):.0f} | {percentile(values, 95):.0f} |")
     rows.append(
-        f"| **total** | **{_percentile(totals, 50):.0f}** "
-        f"| **{_percentile(totals, 95):.0f}** |"
+        f"| **total** | **{percentile(totals, 50):.0f}** "
+        f"| **{percentile(totals, 95):.0f}** |"
     )
     rows.append("")
     rows.append(f"*per-sample latency, {len(samples)} samples; the run's own "

@@ -9,7 +9,13 @@ Submodules:
     comparator  — diffs two EvalResults for A/B comparison
 """
 
-from atlas.evaluation.comparator import ComparisonResult, MetricDelta, compare, save_comparison
+from atlas.evaluation.comparator import (
+    BudgetDelta,
+    ComparisonResult,
+    MetricDelta,
+    compare,
+    save_comparison,
+)
 from atlas.evaluation.metrics import (
     AnswerCorrectnessMetric,
     AnswerRelevanceMetric,
@@ -39,4 +45,5 @@ __all__ = [
     "save_comparison",
     "ComparisonResult",
     "MetricDelta",
+    "BudgetDelta",
 ]
