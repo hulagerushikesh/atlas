@@ -1,40 +1,74 @@
-# Status — 2026-09-27 (v0.1.0, M2 done, M3 in progress)
+# Status — 2026-10-09 (v0.1.0, M2 done, M3 at 3 of 4)
 
 ## One line
 
-**M2 is done: https://atlas.hulage.in is live** — Cloud Run rev 00004 in
+**M2 is done and shipped: https://atlas.hulage.in is live and current** —
+Cloud Run rev **00011-xcm** (image `58e4e00`, deployed 2026-10-07) in
 `asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
-Firestore for keys and the spend counter, four Secret Manager secrets, ₹200/mo
-budget alert. M3 has started: the BM25 tokeniser is the first measured change.
+Firestore for keys and the spend counter, four Secret Manager secrets,
+₹200/mo budget alert, and a `*/10` keep-warm job. `main` and production
+agree. **M3 is at three of four exit criteria**; the two that are open fail
+on form rather than substance, and the one that is objectively met is still
+unticked — see *M3 exit criteria* below.
 
 ## Blocked on you
 
-- [ ] **Keep-warm ping for the cold start — two commands, still unrun.**
-      Chosen 2026-09-29 over `min-instances=1` (Rs.650-700/month) at
-      roughly Rs.0-20/month. `atlas.hulage.in` is not broken; it is
-      scale-to-zero. `atlas_startup` to `atlas_ready` is 2.9 s and the other
-      ~33 s is image pull plus the torch/transformers import into a 2.15 GB
-      image that bakes the reranker weights. The service has no
+- [ ] **Two M3 criteria need a wording call, not work (₹0 either way).**
+      Criterion 1 asks for "≥ 2 changes merged, each with `eval-compare` in
+      the PR" and criterion 4 for a "`learning/` module 09 exercise" per
+      change. Both are met in substance and neither in form: this repo has
+      **zero merge commits — no pull request has ever existed** — and no
+      DECISIONS entry cross-references `learning/09`. The evidence the
+      criteria wanted is there and stronger than a PR body (16 stored
+      before/after eval reports in `eval_data/reports/`, ~20 dated write-ups
+      in DECISIONS.md). Three options: reword both criteria to match how this
+      project actually works, add the module-09 cross-references, or leave
+      M3 at 3 of 4. Criterion 2 is objectively met (recall 0.667 → 0.9378)
+      and is still unticked for the same reason — nobody has said so.
+
+- [ ] **Re-ingest `default` — ≈₹6.45, needs a spend go-ahead.** It lands
+      `eccc01d` (the `fq-002` chunk is dated three years stale without it)
+      and turns the deploy's index gate green. Until then every deploy needs
+      `SKIP_VERIFY=1`, which is correct but is a standing exception — see
+      *the index gate* below.
+
+- [ ] **HyDE arm — ≈₹6.24, needs a spend go-ahead.** Built, off, and still
+      the only unmeasured thing in M3. Run at `--concurrency 1` (4 hangs the
+      laptop) and pass the mode explicitly, because both the code and
+      `.env.example` default to `concat`:
+
+      ```
+      .venv/bin/python scripts/run_eval.py \
+        --dataset eval_data/fastapi_dataset.json --namespace default \
+        --run-name hyde-on --set hyde.enabled=true --set hyde.mode=replace \
+        --concurrency 1 \
+        --compare eval_data/reports/baseline-16_20261003-182853.json
+      ```
+
+- [x] ~~**Keep-warm ping for the cold start**~~ **done 2026-10-07.** Job
+      `atlas-keepwarm`, `*/10 * * * *` against `/health`, created and
+      verified firing. Chosen 2026-09-29 over `min-instances=1`
+      (Rs.650-700/month) at roughly Rs.0-20/month: the service has no
       `cpu-throttling: false` annotation, so an idle instance is not billed
-      for CPU and the ping costs only the requests.
+      for CPU and the ping costs only the requests. The cold path it hides
+      measured **49 s** (`atlas_startup` → `atlas_ready` is 2.9 s of it; the
+      rest is image pull plus the torch/transformers import into a 2.15 GB
+      image that bakes the reranker weights). **The 60 s cold-start budget is
+      conditional on this job staying enabled** — delete it and that ceiling
+      stops being a budget and becomes the normal user experience.
 
-      ```
-      gcloud services enable cloudscheduler.googleapis.com --project atlas-rag-rush
-
-      gcloud scheduler jobs create http atlas-keepwarm \
-        --project atlas-rag-rush --location asia-south1 \
-        --schedule "*/10 * * * *" \
-        --uri https://atlas-api-cde2q3b7lq-el.a.run.app/health \
-        --http-method GET --attempt-deadline 60s
-      ```
-
-- [ ] **Deploy — `main` is 22 commits ahead of the live image.** Live is
-      `d21a922`, revision `atlas-api-00008-v9g`. Unshipped and user-visible:
-      the spend cap still charges the generation call alone (so it admits
-      about twice the configured spend), the SSE stream still truncates
-      silently on a mid-stream failure, and the changelog heading fix is not
-      in the index. `scripts/deploy_gcp.sh`, run by hand — the sandbox
-      blocks `gcloud run deploy`.
+- [x] ~~**Deploy — `main` was 25 commits ahead of the live image**~~ **done
+      2026-10-07.** Image `58e4e00`, rev `atlas-api-00011-xcm`, build 3m1s,
+      serving 100% of traffic. Everything listed as unshipped is now live:
+      the per-model spend cap, the SSE error event, and the `ca94db8`
+      `str(exc)` redaction — that last one is **in the image but unproven in
+      production**, because forcing it needs a broken upstream key. Verified
+      live on one query (₹0.31): faithfulness 1.0, `unsupported_claims: []`,
+      grader 1.0 with 0 retries, 15 chunks, 11 citations, HyDE confirmed off
+      (`hypotheses: []`, `hyde_ms: null`), warm `/query` 13.7 s, warm
+      `/health` 1.15 s. Needed `SKIP_VERIFY=1`; see *the index gate*.
+      **`POST /query` takes `query`, not `question`** — `question` returns
+      422 with the body echoed back.
 
 - [x] ~~Add OpenAI credits~~ → switched to Gemini (2026-09-20). Same AI Studio
       key as sextant, in `atlas/.env` only. Daily spend cap: ₹50–100 across
@@ -66,13 +100,14 @@ budget alert. M3 has started: the BM25 tokeniser is the first measured change.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live x11.** Best measured (`headers` namespace): P 0.467 - R 0.938 - F 1.000 - AR 0.833 over all 15 rows, ~Rs.0.77 a run, all on `gemini-3.1-flash-lite`. Live `default` namespace is one change behind (P 0.387 - R 0.933). Context metrics skip a row only when it has no relevant document, and after the 2026-09-27 audit no row does. The dataset is checked before a run is paid for (`atlas.evaluation.dataset`): every label must resolve to something the matcher could match, and an empty label set must carry `metadata.out_of_scope: true`. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/ctx-headers_20260927-120939.json` |
+| Evaluation (D) | **Run live x16.** Current baseline (`default`, 16 rows, 2026-10-03): P 0.4667 - R 0.9378 - F 1.000 - AR 0.8377 - **AC 0.7105**, $0.0709 (~Rs.6.24) a run, all on `gemini-3.1-flash-lite`. The `default` namespace is **not** behind any more — context headers are live in it (4016/4020 chunks, verified 2026-10-07), which is why this run reproduces the old `headers` experiment's precision exactly. Context metrics skip a row only when it has no relevant document: `fq-016`, added 2026-09-29, is the first declared out-of-scope row, so the `applicable=False` guards are reachable again. The dataset is checked before a run is paid for (`atlas.evaluation.dataset`): every label must resolve to something the matcher could match, and an empty label set must carry `metadata.out_of_scope: true`. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/ctx-headers_20260927-120939.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **340 tests** green, 90% cov | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **583 tests** green, 93% cov. **There is no CI** — `.github/workflows` does not exist, so this local gate is the only gate and "green" is only ever a claim about one laptop | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE: https://atlas.hulage.in** (Cloud Run rev 00004 `d280006`, Vercel rewrite, Let's Encrypt cert); `/`, `/app`, `/docs`, `/health` all 200; budget ₹200/mo | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
 ## Measured (2026-09-20, v0.1.0)
@@ -146,6 +181,9 @@ answer about a Python version.
 > relevance only if the pipeline refuses, and `answer_correctness` moves
 > either way. A router probe says it will not refuse, so the next run should
 > read **0.6975**; that is a prediction, written down to be checked.
+>
+> **Checked 2026-10-03: it read 0.7105**, 0.013 above the prediction, and
+> the router did not refuse. See the 16-row baseline below.
 
 **`fq-002`, that Python row, was chased on 2026-09-29 and is not a retrieval
 failure.** The chunks carrying the current facts were never in the candidate
@@ -201,21 +239,112 @@ below the floor.
 and its "WebSockets client" section names React. The pipeline answers the
 question from it, with citations and faithfulness 1.000 — the run that was
 being discarded as a structural zero was scoring 0.4667 precision and 1.000
-recall. The `applicable=False` guards in both context metrics are now
-unreachable from this dataset; they stay for a dataset that does carry an
-unanswerable row, and this one no longer has one (BACKLOG).
+recall. The `applicable=False` guards in both context metrics were
+unreachable from the dataset as it stood that day. They are reachable again:
+`fq-016`, added 2026-09-29, is a declared out-of-scope row, which is exactly
+what the guards are for.
 
 `fq-007` recall is 0.6667 in the headers run, not 0.5 — it has three labelled
 documents now, not two, because `OAuth2PasswordBearer` is defined on
 `tutorial/security/first-steps` and neither old label carried it.
 
-**The headers are not deployed and not even in the default namespace.** They
-were ingested into `headers` so the live collection was never touched;
-shipping them is another ~Rs.6.45 re-ingest. See BACKLOG. Precision is the
-case for shipping; recall is not.
+~~**The headers are not deployed and not even in the default namespace.**~~
+**That was wrong and is retired.** `scripts/verify_index.py` showed on
+2026-10-07 that `default` carries them on **4016 of 4020 chunks**, baked by
+the 2026-09-28 ingest — so no re-ingest was ever owed for the headers, and
+the ₹6.45 carried in these notes was for work already done. It also explains
+a coincidence that was not one: the 16-row baseline scores P 0.4667 against
+the headers experiment's P 0.467 because it is the same treatment. The
+`headers` namespace is a redundant second copy of the same 4,020 chunks;
+both are baked into the image.
+
+**Production confirmed it independently.** The single verification query on
+`58e4e00` returned citation [1] = `tutorial/query-params-str-validations.md`
+— the page this project documented as *never retrieved at all* before
+headers ("not ranked low, absent") — at rank 1, on the question that could
+not find it. Precision was the case for shipping and recall was not; that
+still holds, and the page being reachable at all is the mechanism.
 
 The "~7 s" in older notes is from 2026-09-20, measured differently, and is not
 a baseline this can be diffed against.
+
+## Measured (2026-10-03) — the current baseline, 16 rows
+
+`eval_data/reports/baseline-16_20261003-182853`, `default` namespace, ₹6.24.
+**Every report older than this one is incomparable**: `fq-016` moved both
+dataset fingerprints on 2026-09-29, and the comparator refuses the diff
+rather than printing a meaningless one.
+
+| Metric | Value |
+|---|---|
+| Context precision | **0.4667** |
+| Context recall | **0.9378** |
+| Faithfulness | **1.0000** |
+| Answer relevance | **0.8377** |
+| Answer correctness | **0.7105** |
+| Cost / run | **$0.0709 ≈ ₹6.24** |
+
+Precision and recall reproduce the 15-row `grader-window-5` run to four
+decimals, for the third time. The 0.6975 correctness prediction filed before
+`fq-016` was added came back **0.7105** — the prediction was written down to
+be checked, and it was within 0.013.
+
+Per-sample latency from the same run, **nearest-rank** percentiles as
+`reporter.percentile` computes them:
+
+| Stage | p50 ms | p95 ms |
+|---|---|---|
+| retrieval | 3,287 | 8,298 |
+| faithfulness | 1,952 | 2,974 |
+| generation | 1,609 | 2,608 |
+| grading | 1,322 | 4,236 |
+| routing | 1,126 | 2,179 |
+| decompose | 1,049 | 1,323 |
+| **total** | **10,053** | **17,072** |
+
+Production, one live query on `58e4e00` (2026-10-07): 7,986 tokens,
+**$0.0034677 ≈ ₹0.31**, warm `/query` 13.7 s. That cost figure is **n=1** and
+is the weakest number in the budget; firming it up is free on the next eval
+run that happens anyway.
+
+## M3 exit criteria
+
+| Criterion | State |
+|---|---|
+| ≥ 2 changes merged, each with `eval-compare` **in the PR** | substance yes, **form no** — zero merge commits, no PR has ever existed |
+| Faithfulness or context recall up beyond the noise floor | **met** (0.667 → 0.9378) and still unticked |
+| p95 latency and $/query inside an agreed budget | **ticked 2026-10-08**, and enforced in code 2026-10-09 |
+| `learning/` module 09 exercise written up for each | substance yes, **form no** — no DECISIONS entry cites `learning/09` |
+
+The two "form no" rows are the *Blocked on you* wording call at the top. The
+substance behind them: 16 stored before/after reports, and of the three
+shipped retrieval changes two carry real measured gains (`top_k` 5→15,
+recall 0.778→0.900; context headers, P 0.387→0.467) while `e095c7b` records
+that the tokeniser was worth nothing end to end — which is a result, and
+still leaves ≥ 2.
+
+## The index gate, and why every deploy currently overrides it
+
+`scripts/deploy_gcp.sh` runs `scripts/verify_index.py` before building and
+refuses on a mismatch. It exists because of two real incidents: a
+wrong-namespace ingest on 2026-09-27, and 37 of 155 files lost to Qdrant
+timeouts on 2026-09-28 (dense 2090/4020 against sparse 3950/4020).
+
+It fails on `main` today, and the override is the right call:
+
+- dense and sparse agree perfectly in both namespaces — 4020 = 4020, 0 id
+  drift, **0 of 4020 content hashes differ**;
+- the only failing check is the third, header text against what current code
+  would write: **4 chunks** of `release-notes.md` lack the
+  `0.104.0 (2023-10-18) > Upgrades > Internal` heading that unshipped commit
+  `eccc01d` adds to the heading trail;
+- `apply_context_headers` is imported by **`ingestion/indexer.py` only** and
+  is never on the query path, so this cannot affect serving.
+
+That is drift between code and an already-baked index, which is exactly what
+the gate's own "if you know why the two differ" clause is for. Only the
+≈₹6.45 re-ingest clears it, and until then `eccc01d`'s `fq-002` date fix stays
+dormant in the tree.
 
 ## Known defects
 
@@ -223,8 +352,40 @@ See [BACKLOG.md](BACKLOG.md). Nothing blocks M2. Post-M1 sweep closed six
 items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
-## Last three sessions
+## Recent sessions
 
+- 2026-10-09 (budget made enforceable, ₹0) — `compare()` was metric-only: it
+  printed **Overall winner** from `aggregate_scores` and never read
+  `stage_ms` or `token_usage`, both of which the report already stored, so a
+  change buying +0.03 recall at twice the p95 would have won with the
+  regression printed nowhere. It now measures warm p50/p95 and run cost
+  against both a ceiling and a regression allowance and renders **Overall
+  winner: withheld** on a breach, naming the breach and the DECISIONS entry
+  it needs. Writing it found two defects in the budget accepted the day
+  before, both mine: every percentile in BUDGET.md was *interpolated* where
+  the reporter is nearest-rank (p50 10,062 → 10,053, p95 16,859 → 17,072,
+  inside the ceilings either way, so the M3 tick stands), and the per-stage
+  sub-ceiling table had no row for `decompose` at all. 583 tests, 93%,
+  `comparator.py` at 100%. `6f8f039`.
+- 2026-10-08 (budget drafted and accepted, ₹0) — the hard question was what
+  "not worse" measures against. Taking M1 literally (≈7 s, ≈₹0.03) would
+  make M3 uncloseable or force reverting accuracy one measured PR at a time,
+  because that pipeline scored recall 0.667 against today's 0.938. So the
+  M1→now increase (+44% p50, ≈10x cost, +0.271 recall) is ratified in
+  writing and the budget runs forward from the 2026-10-03 measurement.
+  `planning/BUDGET.md`, M3 criterion 3 ticked. `18d7882`, `e649122`.
+- 2026-10-07 (deploy + keep-warm + key rotation, ≈₹0.31) — rev 00011-xcm,
+  image `58e4e00`, `main` and production finally in agreement after a
+  25-commit backlog. The Gemini key was dead and had been 401ing every live
+  query with `ACCESS_TOKEN_TYPE_UNSUPPORTED`; rotated to secret version 3,
+  which required a `services update` afterwards because `:latest` resolves at
+  revision creation. Keep-warm job created and verified. Two findings worth
+  more than the deploy: the headers *were* already live in `default` (the
+  note saying otherwise was wrong for over a week), and **Atlas has no CI**,
+  so every "gate green" in this file is a claim about one laptop.
+- 2026-10-03 (new 16-row baseline, ₹6.24) — `baseline-16`. AC came back
+  0.7105 against the 0.6975 filed in advance. HyDE did not run: it is
+  CPU-heavy enough to hang the laptop at the default `--concurrency 4`.
 - 2026-09-23 (M2 done + M3 opened, ≈₹1.1) — four Cloud Run revisions. Three
   defects only the cloud could find: missing Qdrant payload indexes, the
   missing `.gcloudignore`, and a Redis client cached before its ping (the
@@ -278,16 +439,23 @@ daily spend cap, console markdown.
 
 ## Next
 
-- **One paid pass, two arms, Rs.~6 plus HyDE's extra calls — the next thing
-  to spend on.** The baseline has to be re-measured regardless: `fq-016`
-  moved both dataset fingerprints on 2026-09-29, so the comparator will
-  refuse to diff anything against the 2026-09-28 report and every number in
-  the table below is now the last of its kind. Since that run is
-  unavoidable, run it twice — bare, then `--set hyde.enabled=true` — and it
-  answers three things at once: the new 16-row baseline, whether HyDE moves
-  `fq-012`, and whether the 0.6975 correctness prediction holds.
-  Predictions are filed in BACKLOG *before* the run, including the one
-  saying HyDE should make `fq-016` worse.
+- ~~**One paid pass, two arms**~~ **half done 2026-10-03.** The baseline arm
+  ran (`baseline-16`, ₹6.24) and settled two of the three questions: the
+  16-row baseline exists, and the 0.6975 correctness prediction came back
+  0.7105. **The HyDE arm did not run** — it is CPU-heavy enough to hang the
+  laptop at the default `--concurrency 4` — so it is still the only
+  unmeasured thing in M3, at ≈₹6.24 and `--concurrency 1`. The pre-filed
+  predictions in BACKLOG, including the one saying HyDE should make `fq-016`
+  worse, are still unchecked.
+- **Teach `EvalResult` per-sample `token_usage`, ₹0 to write.** It is the
+  last gap in budget enforcement: run-wide totals are contaminated by the
+  metric judges (~7.8 chat calls a sample against production's ~4), so cost
+  *per query* stays hand-checked while latency and run cost are automatic.
+  Piggyback the measurement on whichever eval run happens next.
+- **Atlas has no CI.** Adding it is ₹0 and would turn "the gate is green"
+  from a claim about this laptop into a checked fact. Every gate command has
+  to run there, not three of four — that is how sextant's CI was red for 17
+  days while five commits reported green.
 - **HyDE is built and off** (2026-09-29, Rs.0). `HYDE_ENABLED=false`;
   `--set hyde.enabled=true`, `--set hyde.mode=replace` for the paper's
   variant. Nothing about it is measured. Two previous interventions aimed
