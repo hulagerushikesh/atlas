@@ -6,7 +6,7 @@ there was no agreed budget, so it could not be evaluated either way.
 
 This file is that budget. **Accepted 2026-10-08**, and the M3 criterion is
 ticked on it: every measured value sat inside its ceiling at acceptance
-(warm p50 10,062 / p95 16,859 ms against 12,000 / 20,000; $0.0034677 a query
+(warm p50 10,053 / p95 17,072 ms against 12,000 / 20,000; $0.0034677 a query
 against $0.005; $0.0709 an eval run against $0.100). It was a decision, not a
 measurement — the measurements are below it, and every ceiling says which
 number it was derived from.
@@ -30,7 +30,7 @@ The increase from M1 to now is therefore **ratified, not hidden**:
 | | M1 (2026-09-20) | now (2026-10-03/07) | change |
 |---|---|---|---|
 | context recall | 0.667 | **0.938** | +0.271 |
-| p50 latency | ≈7,000 ms | 10,062 ms | +44% |
+| p50 latency | ≈7,000 ms | 10,053 ms | +44% |
 | cost / query | ≈₹0.03 | ₹0.31 | ≈10x |
 
 Ten times the cost for 0.27 recall was the right trade at this corpus size and
@@ -45,14 +45,30 @@ Warm, 16 rows, `baseline-16_20261003-182853`, `default` namespace, rev
 they transfer; the report's token count does not, because an eval run also pays
 for metric graders.
 
-| Stage | p50 ms | p95 ms | max ms |
-|---|---|---|---|
-| routing | 1,130 | 1,783 | 2,179 |
-| retrieval | 3,288 | 7,225 | 8,298 |
-| grading | 1,378 | 3,773 | 4,236 |
-| generation | 1,639 | 2,100 | 2,608 |
-| faithfulness | 1,974 | 2,495 | 2,974 |
-| **total** | **10,062** | **16,859** | **17,072** |
+| Stage | p50 ms | p95 ms |
+|---|---|---|
+| retrieval | 3,287 | 8,298 |
+| faithfulness | 1,952 | 2,974 |
+| generation | 1,609 | 2,608 |
+| grading | 1,322 | 4,236 |
+| routing | 1,126 | 2,179 |
+| decompose | 1,049 | 1,323 |
+| **total** | **10,053** | **17,072** |
+
+**Percentiles are nearest-rank**, as `atlas.evaluation.reporter.percentile`
+computes them and as `baseline-16_20261003-182853.md` prints them — the
+comparator's budget check imports that same function, so the number a change
+is judged on is the number the report shows. The first draft of this file
+quoted interpolated values (p50 10,062 / p95 16,859) from a one-off script,
+which is two conventions under one name; the project's own choice is
+nearest-rank, on the stated grounds that interpolating between two of sixteen
+samples implies a precision the sample size has not got. Every ceiling below
+held under both readings, so the correction moves the figures and not the
+decision.
+
+At n=16, nearest-rank p95 *is* the slowest sample, for the total and for every
+stage. That is a conservative read of the budget, not a lenient one, and it
+stops being true once the dataset passes 20 rows.
 
 Cost, live production query on `58e4e00` (2026-10-07): 7,986 tokens,
 **$0.0034677 ≈ ₹0.31**. Eval run, 16 rows: **$0.0709 ≈ ₹6.24**.
@@ -66,8 +82,8 @@ today's number fails on noise and teaches everyone to ignore it.
 
 | What | Ceiling | Measured | Headroom |
 |---|---|---|---|
-| warm p50, total | **12,000 ms** | 10,062 | +19% |
-| warm p95, total | **20,000 ms** | 16,859 | +19% |
+| warm p50, total | **12,000 ms** | 10,053 | +19% |
+| warm p95, total | **20,000 ms** | 17,072 | +17% |
 | cold start | **60,000 ms** | 49,000 | +22% |
 | cost / query | **$0.005** (≈₹0.44) | $0.0034677 | +44% |
 | eval run, 16 rows | **$0.100** (≈₹8.80) | $0.0709 | +41% |
@@ -77,15 +93,20 @@ Per-stage p95 sub-ceilings, so a breach of the total says where to look:
 
 | Stage | p95 ceiling | Measured |
 |---|---|---|
-| retrieval | 9,000 ms | 7,225 |
-| grading | 5,000 ms | 3,773 |
-| faithfulness | 3,500 ms | 2,495 |
-| generation | 3,000 ms | 2,100 |
-| routing | 2,500 ms | 1,783 |
+| retrieval | 9,000 ms | 8,298 |
+| grading | 5,000 ms | 4,236 |
+| faithfulness | 3,500 ms | 2,974 |
+| generation | 3,000 ms | 2,608 |
+| routing | 2,500 ms | 2,179 |
+| decompose | 2,000 ms | 1,323 |
 
-These sum to 23,000 ms against a 20,000 ms total ceiling. That is deliberate,
+`decompose` was missing from the first draft of this file — it is a stage the
+pipeline runs and the report prints, so leaving it out meant a slowdown there
+had no line to breach.
+
+These sum to 25,000 ms against a 20,000 ms total ceiling. That is deliberate,
 not an arithmetic slip: the stages do not peak on the same query, and the
-measured per-stage p95s sum to 17,376 against a measured total p95 of 16,859
+measured per-stage p95s sum to 21,618 against a measured total p95 of 17,072
 for the same reason.
 
 ## Cold start is budgeted separately, and conditionally
@@ -111,18 +132,51 @@ Faithfulness is pinned at 1.000 and cannot go up, so "quality gain" in
 practice means context recall, context precision, answer relevance or answer
 correctness, each against the 0.02 significance floor.
 
-## Enforcement: manual today, and that is a gap
+## Enforcement: the comparator, since 2026-10-09
 
-`atlas.evaluation.comparator.compare()` is **metric-only**. It ends in
-"**Overall winner**" computed from aggregate scores alone and never reads
-`stage_ms` or token usage. A change that bought +0.03 recall while doubling
-p95 and tripling cost would be declared the winner, with the regression
-printed nowhere.
+`atlas.evaluation.comparator.compare()` was **metric-only** when this file was
+accepted: it ended in "**Overall winner**" computed from aggregate scores
+alone and never read `stage_ms` or token usage, so a change buying +0.03
+recall while doubling p95 and tripling cost would have been declared the
+winner with the regression printed nowhere. The budget was hand-checked by
+reading the latency table in the report, which was the weakest part of this
+document.
 
-So until the comparator learns these two numbers, this budget is checked by
-reading the latency table in the report by hand. That is the weakest part of
-this document and the obvious next piece of work: teach `compare()` the two
-thresholds above and have it refuse the word "winner" when either is breached.
+It now measures both. `compare()` builds a `budget` list from the two reports
+— warm p50 and p95 from per-sample `stage_ms`, run cost from per-model
+`token_usage` priced by `atlas.cost` — checks each against its ceiling **and**
+its regression allowance above, and on a breach **withholds the winner**:
+
+```
+| Budgeted | baseline-16 | candidate | Change | Allowed | Ceiling | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| warm p95 latency | 17,072 ms | 20,700 ms | +21.2% | +15% | 20,000 ms | **BREACH** |
+
+**Overall winner: withheld** — B wins on quality, but the agreed budget is breached:
+
+- warm p95 latency is 20,700 ms, over the 20,000 ms ceiling; warm p95 latency
+  rose +21.2% (17,072 ms → 20,700 ms) against an allowed +15%
+```
+
+Four things it deliberately does not do, each for a reason:
+
+- **It does not block.** A breach is still shippable with a DECISIONS.md
+  entry, exactly as the rule above says. The markdown says so in the same
+  breath as the breach.
+- **It judges cost per *run*, not per query.** An eval run pays for the metric
+  judges too — ~7.8 chat calls a sample against production's ~4 — so it checks
+  the $0.100 run ceiling and the run-to-run regression. The $0.005 per-query
+  ceiling stays hand-checked against production, and would need per-sample
+  token accounting to automate. See the next section.
+- **It skips the cost line when the two runs measured different metrics**, and
+  says so. The judges spend tokens, so the run carrying an extra metric looks
+  more expensive for that reason alone.
+- **It skips what it cannot measure and names it** rather than passing it. A
+  report written before `stage_ms` existed gets a note, not a green line: an
+  unmeasurable run must not read as a compliant one.
+
+Percentiles come from `reporter.percentile`, the same function the report
+prints with, so the number a change is judged on is the number on the page.
 
 ## Weakest number
 

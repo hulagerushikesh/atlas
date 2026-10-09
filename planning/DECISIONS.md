@@ -1527,7 +1527,57 @@ Format: date — decision — alternatives — reason.
   `stage_ms` or token usage, so a change that bought +0.03 recall while
   doubling p95 would be declared the winner with the regression printed
   nowhere. Until `compare()` learns the two thresholds, the budget is checked
-  by reading the report's latency table by hand.
+  by reading the report's latency table by hand. (Superseded the next day —
+  see 2026-10-09; it learned them, and found two defects in this budget while
+  being taught.)
 
   `cost / query` rests on n=1 — one live query on `58e4e00` with a long
   answer — which is why its headroom is +44% against the latency lines' +19%.
+
+- **2026-10-09** — `compare()` enforces the budget, and withholds the winner
+  rather than annotating it. *Alt:* print the latency and cost deltas beside
+  the metric table and leave **Overall winner** as it was. *Why:* that line
+  is the one that gets pasted into a commit message, and "Overall winner: B"
+  with a caveat three paragraphs below it is how a regression ships. On a
+  breach the markdown now says **Overall winner: withheld**, names the
+  breach, and says a breach is shippable with a decision entry naming the
+  quality gain. `overall_winner` itself still means the quality verdict and
+  nothing else, so nothing that reads it programmatically changed meaning.
+
+  *Alt considered and rejected:* block the merge. The budget's own rule says
+  a breach is not a block, and a gate that refuses work gets bypassed with a
+  flag — the 2026-10-07 deploy needed `SKIP_VERIFY=1` for a legitimate
+  reason, and the lesson there was that an override with a stated condition
+  beats a wall.
+
+  *Alt considered and rejected:* wait for per-sample `token_usage`, which is
+  what the backlog entry said this fix needed. No stored report carries it,
+  so a cost check that required it could not have been run against a single
+  baseline on disk. Instead the comparator judges the whole eval run against
+  the $0.100 run ceiling and the +20% run-to-run rule, states in its own
+  output that this is not the production cost per query (an eval run also
+  pays the metric judges, ~7.8 chat calls a sample against production's ~4),
+  and skips the cost line entirely when the two runs measured different
+  metrics — the judges spend tokens, so a run carrying a fifth metric looks
+  dearer for that reason alone. Cost per query stays hand-checked against
+  production and the residual is still filed.
+
+  **Writing it found two defects in the budget accepted the day before.**
+  First, every percentile in `planning/BUDGET.md` was interpolated, while
+  `reporter.percentile` — the function the stored report prints with — is
+  nearest-rank on the stated grounds that interpolating between two of
+  sixteen samples implies a precision the sample size has not got. So the
+  document quoted p50 10,062 / p95 16,859 where the report says 10,053 /
+  17,072: two conventions under one name, and the enforced number would not
+  have been the published one. Corrected to nearest-rank, which is also the
+  conservative read (at n=16 the p95 *is* the slowest sample), and the
+  comparator imports that same function rather than computing its own.
+  Every ceiling held under both readings, so the correction moved the figures
+  and not the decision or the M3 tick.
+
+  Second, the per-stage sub-ceiling table had no row for `decompose`, a stage
+  the pipeline runs and the report prints at p50 1,049 / p95 1,323 ms — a
+  slowdown there had no line to breach. Added at 2,000 ms.
+
+  Both were mine, both found by making the document executable, which is the
+  argument for doing that rather than for writing a more careful document.

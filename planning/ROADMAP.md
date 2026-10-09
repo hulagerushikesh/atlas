@@ -57,10 +57,14 @@ Exit criteria:
 - [x] p95 latency and $/query not worse by more than an agreed budget
       → **budget agreed and accepted 2026-10-08: `planning/BUDGET.md`**
       (warm p95 ≤ 20 s, cost ≤ $0.005/query, +15% / +20% regression rule).
-      Measured at acceptance, all inside the ceilings: warm p50 10,062 ms /
-      p95 16,859 ms against 12,000 / 20,000; cost $0.0034677 against $0.005;
-      eval run $0.0709 against $0.100. Enforcement is manual until
-      `comparator.compare()` reads `stage_ms` and tokens — see BACKLOG.
+      Measured at acceptance, all inside the ceilings: warm p50 10,053 ms /
+      p95 17,072 ms against 12,000 / 20,000; cost $0.0034677 against $0.005;
+      eval run $0.0709 against $0.100. (Nearest-rank, as the reporter prints
+      them — the figures first recorded here were interpolated, and inside
+      the ceilings under either reading.) **Enforced since 2026-10-09:**
+      `comparator.compare()` measures latency and run cost against the
+      budget and withholds "Overall winner" on a breach. Cost per *query*
+      stays hand-checked — an eval run also pays the metric judges.
 - [ ] `learning/` module 09 exercise written up for each in DECISIONS.md
 
 ## M4 — Product hardening

@@ -17,25 +17,32 @@ Newest at the bottom of each section.
   loads from `/opt/hf` and never reaches the Hub (M2).
 - ~~Eval metrics in README are placeholders~~ replaced with measured numbers (M1).
 
-- **`compare()` calls a winner without reading latency or cost.**
-  `atlas.evaluation.comparator.compare()` builds its verdict from
-  `aggregate_scores` alone and ends in **Overall winner**. It never touches
-  `stage_ms` or `token_usage`, both of which the report already stores and
-  the reporter already renders as a p50/p95 table. So a change that bought
-  +0.03 context recall while doubling p95 latency and tripling cost per query
-  is declared the winner, with the regression printed nowhere in the
-  comparison a PR quotes.
+- ~~**`compare()` calls a winner without reading latency or cost.**~~ **done
+  2026-10-09.** It builds a `budget` list beside the metric deltas — warm p50
+  and p95 from per-sample `stage_ms`, run cost from per-model `token_usage`
+  priced by `atlas.cost` — checks each against both its ceiling and its
+  regression allowance from `planning/BUDGET.md`, and on a breach renders
+  **Overall winner: withheld** with the breach named and a pointer to the
+  DECISIONS entry a breach needs. Percentiles come from
+  `reporter.percentile`, now public for that reason, so a change is judged on
+  the number its own report prints. 18 tests; `comparator.py` at 100%.
 
-  This is the whole reason `planning/BUDGET.md` has to be checked by hand.
-  Fix: give `compare()` the two thresholds from that file (p95 total +15%,
-  cost/query +20%), report both deltas in the output alongside the metric
-  deltas, and withhold the word "winner" when either is breached — a
-  comparison that says "better on recall, over budget on latency" is the
-  honest sentence and the one it cannot currently produce.
+  Writing it found two defects in BUDGET.md: the accepted figures were
+  interpolated percentiles where the project's reporter is nearest-rank
+  (p50 10,062 → 10,053, p95 16,859 → 17,072 — inside the ceilings either
+  way), and the `decompose` stage had no sub-ceiling at all. Both corrected.
 
-  Needs `EvalResult` to carry per-sample `token_usage`; it carries run-wide
-  totals today, which are contaminated by the metric graders' own calls and
-  so cannot be divided by sample count to get a production cost per query.
+  **Still open, and the reason cost/query stays hand-checked:** `EvalResult`
+  carries run-wide `token_usage` only. It is contaminated by the metric
+  graders' own calls — ~7.8 chat calls a sample against production's ~4 — so
+  it cannot be divided by sample count to get a production cost per query.
+  The comparator therefore judges the *run* against the $0.100 run ceiling
+  and the run-to-run regression, says so in its own output, and skips the
+  cost line entirely when the two runs measured different metrics. Per-sample
+  `token_usage` on `SampleResult` would close it; no stored report has it, so
+  requiring it would have made the check unusable against every baseline on
+  disk. Firm up the n=1 production figure the cheap way first: record it on
+  the next eval run that happens for another reason.
 - **A streamed answer claims a faithfulness check it never ran.** The SSE
   `done` event hardcodes `"is_faithful": True` (`routes/query.py`, the
   success branch), on the path whose own module docstring says it "skips the
