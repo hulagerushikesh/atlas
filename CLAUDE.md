@@ -18,10 +18,20 @@ when the code it references changes.
 `index.html` (the console, served at `/app`) and `landing.html` (served at `/`).
 `make console-build` writes both to `src/atlas/api/static/`. The built
 output is committed so the Python package and Docker image need no Node.
-Rebuild and commit `static/` whenever `console/src` changes.
+Rebuild and commit `static/` whenever `console/src` changes — CI fails
+if you forget.
 
 ## Quality gate
 `make lint && make typecheck && make test` must pass before commit.
 Tests mock all infrastructure; a green suite does not prove a live path
 works. Validate against real API surfaces (`create_autospec`, qdrant local
 mode) rather than permissive mocks.
+
+`.github/workflows/ci.yml` runs those three targets on every push and PR, so
+"the gate is green" is checkable rather than a claim about one laptop. It
+also runs `cd console && npm run lint && npm run build` and fails if the
+committed `src/atlas/api/static/` differs from a fresh build. The workflow
+calls the make targets rather than its own copy of the commands — change the
+Makefile and CI follows. Note the suite needs `OPENAI_API_KEY` set to
+anything at all (`OpenAIConfig.api_key` is required), which `.env` supplies
+locally and the workflow supplies as a dummy.

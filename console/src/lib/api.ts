@@ -90,7 +90,7 @@ const BASE = "atlas_api_base"
 
 export const store = {
   get(k: string) { try { return localStorage.getItem(k) ?? "" } catch { return "" } },
-  set(k: string, v: string) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k) } catch { /* private mode */ } },
+  set(k: string, v: string) { try { if (v) localStorage.setItem(k, v); else localStorage.removeItem(k) } catch { /* private mode */ } },
 }
 
 export class ApiError extends Error {

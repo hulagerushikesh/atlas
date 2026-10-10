@@ -429,6 +429,33 @@ Newest at the bottom of each section.
   `X-Request-ID` already on every response, with the detail left in the log.
   One decision, one convention, both endpoints.
 
+- **`tiktoken` is a declared dependency that nothing imports.** `grep -rn
+  tiktoken src tests` returns nothing; it is in `[project.dependencies]`, so
+  every install and every image build carries it. Either something was meant
+  to count tokens with it and uses the provider's reported usage instead, or
+  it is residue. Found while auditing what CI would download (2026-10-10).
+  Removing it is a one-line change plus a lockfile-free reinstall; the only
+  care needed is checking `scripts/` too, which `make lint` covers but
+  nothing imports from.
+
+- **The `gcp` extra is never type-checked.** `mypy` runs with
+  `ignore_missing_imports = true` and `google-cloud-firestore` is not in
+  `[dev]`, so the Firestore key store — the one production actually uses,
+  `AUTH_STORE=firestore` — is checked against `Any` on every gate run,
+  locally and in CI alike. Nothing is wrong with the code; it is simply
+  unverified in the exact place strict mode would otherwise be most useful.
+  The fix is to install `.[dev,gcp]` in CI and accept whatever strict mode
+  then says, which is unknown and could be a handful of errors. Deliberately
+  not bundled with the CI commit: a first CI run should fail for real reasons
+  or pass, not fail on a type surface nobody has looked at yet.
+
+- **No coverage floor.** `addopts` prints `--cov-report=term-missing` but
+  sets no `--cov-fail-under`, so 93% is reported and never defended; a commit
+  can take it to 60% and the gate stays green. Now that CI exists this is
+  worth a number — but picking one is a decision about the project, not a
+  chore, so it is filed rather than guessed. The honest floor is today's
+  figure rounded down.
+
 ## Ideas (research-backed, see learning/09)
 
 - ~~HyDE retriever behind a config flag~~ built 2026-09-29, off by default,

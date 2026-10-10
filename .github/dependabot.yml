@@ -1,0 +1,8 @@
+# Action majors move, and a workflow pinned once and never touched is how the
+# gate's own toolchain goes stale without anyone noticing.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

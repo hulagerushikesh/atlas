@@ -25,4 +25,14 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // shadcn ships these files exporting a `*Variants` cva object beside the
+    // component, which is what the rule objects to. Changing them means
+    // diverging from the registry every time one is re-added. Exempt by path
+    // so that `--max-warnings=0` can mean something everywhere else.
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )
