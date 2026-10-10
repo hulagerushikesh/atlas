@@ -1581,3 +1581,63 @@ Format: date — decision — alternatives — reason.
 
   Both were mine, both found by making the document executable, which is the
   argument for doing that rather than for writing a more careful document.
+
+- **2026-10-10** — CI runs the `make` targets, not its own copy of the gate
+  commands. *Alt:* call `ruff`/`mypy`/`pytest` directly in the workflow, which
+  is what sextant does. *Why:* the gate already has a definition in the
+  Makefile and CLAUDE.md names it, so a second spelling in YAML is a second
+  thing to keep in step. `make lint` deliberately covers `scripts/` after that
+  directory shipped three bugs unlinted; a hand-written CI step would have had
+  to remember that, and sextant's CI spent seventeen days red partly because
+  it ran three of the gate's four commands. Calling `make install` first costs
+  a venv build per run, which pip's cache makes cheap.
+
+  *Deliberate difference from local, stated rather than discovered later:* the
+  venv is pre-seeded with the CPU-only torch wheel before `make install` runs,
+  because torch's default Linux wheel bundles CUDA and pulls ~2.5 GB of
+  `nvidia-*` packages that nothing in Atlas can use. `python3 -m venv` over an
+  existing venv is non-destructive — checked — so `make install` still runs
+  verbatim and finds the requirement satisfied. On the Macs this project is
+  developed on, the CPU build is the only build, so this narrows the gap with
+  local rather than widening it.
+
+  *The environment is pinned, not inherited:* `ubuntu-26.04` and Python 3.11,
+  the latter matching `requires-python` and mypy's `python_version`. A gate
+  whose environment GitHub chooses on the morning of the run is a gate that
+  can change meaning without a commit.
+
+  **A dummy `OPENAI_API_KEY` is set in the workflow env, and that is the
+  finding.** `OpenAIConfig.api_key` is a required field, so `Settings()`
+  raises without it and the suite fails for an environment reason rather than
+  a code one. Checked rather than assumed: hiding `.env` locally,
+  `test_keys_endpoint_needs_no_bearer` failed first, and with a dummy value
+  the whole suite passed — 583, 93%, exit 0. Every test mocks its provider, so
+  the value is never sent anywhere. This is the precise shape of the failure
+  that kept sextant's CI red for seventeen days while five commits reported
+  green: an environment difference, not a defect.
+
+- **2026-10-10** — The console's own two commands join the gate, and its
+  committed build is checked for drift. *Why:* `npm run lint` was configured
+  at the UI port and had **never once run** in this repo; its first run
+  reported a real error (`console/src/lib/api.ts`, a ternary used as a
+  statement — behaviourally fine, which is why it survived, and `eslint`'s
+  objection is that a ternary statement is usually a mistake). Its two
+  remaining warnings are shadcn's `ui/` files exporting a `cva` object beside
+  the component, so the rule is switched off for that path by name and the
+  script now runs `--max-warnings=0`: a warning nobody fails on is a warning
+  nobody reads, and exempting the vendored files is what lets the zero mean
+  something everywhere else.
+
+  CLAUDE.md requires `src/atlas/api/static/` to be rebuilt and committed
+  whenever `console/src` changes, because the Python package and the image
+  carry no Node. Nothing checked it, so `/app` could lag its source by any
+  number of commits with no symptom but a UI that does not match the code.
+  The check uses `git status --porcelain`, **not** `git diff --exit-code`:
+  planting a changed string literal showed vite writes content-hashed
+  filenames, so a build that adds a chunk leaves the new file *untracked*,
+  which `git diff` does not see. The weaker form passed on planted drift that
+  the stronger one caught.
+
+  Every step after `Install` carries `if: always()`. Five independent claims
+  are being made about the tree, and a lint failure should not leave the type,
+  test and drift results unknown — which is how one red run hides four facts.

@@ -1,0 +1,111 @@
+name: ci
+
+# The gate CLAUDE.md names — `make lint && make typecheck && make test` — plus
+# the console's own two commands, which were configured at the UI port and run
+# by nothing since.
+#
+# It calls the make targets rather than re-spelling ruff/mypy/pytest, so the
+# gate has one definition. When `make lint` changes which directories it
+# covers, CI follows without anyone remembering to edit this file.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    # Pinned, not `ubuntu-latest`: the environment the gate runs in should be a
+    # decision in this file, not GitHub's choice on the morning of the run.
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+
+    env:
+      # `OpenAIConfig.api_key` is a required field, so `Settings()` raises
+      # without it and the suite fails for an environment reason rather than a
+      # code one — verified by hiding `.env` locally, where
+      # `test_keys_endpoint_needs_no_bearer` was the first to go. Every test
+      # mocks its provider, so this value is never sent anywhere; the real key
+      # lives in `.env` locally and Secret Manager in production.
+      OPENAI_API_KEY: ci-not-a-real-key
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          # Matches `requires-python` and mypy's `python_version`. `make
+          # install` runs `python3 -m venv`, so this is the interpreter the
+          # venv inherits.
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # torch's default PyPI wheel bundles CUDA and drags in ~2.5 GB of
+      # nvidia-* packages that nothing here can use. Creating the venv first
+      # and putting the CPU build in it leaves `make install` to find the
+      # requirement already satisfied, so the gate command below is still run
+      # verbatim. On this project's Macs the CPU build is all there is, so this
+      # narrows the gap with local rather than widening it.
+      - name: Pre-seed the venv with CPU-only torch
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --index-url https://download.pytorch.org/whl/cpu torch
+
+      - name: Install
+        run: make install
+
+      - name: Lint
+        run: make lint
+
+      # `if: always()` from here on: each of these is a separate claim about
+      # the tree, and a lint failure should not leave the type and test results
+      # unknown.
+      - name: Type check
+        if: always()
+        run: make typecheck
+
+      - name: Test
+        if: always()
+        run: make test
+
+      - uses: actions/setup-node@v7
+        if: always()
+        with:
+          # 20 is what this project's machine runs; nothing here needs newer.
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+
+      - name: Console install
+        if: always()
+        working-directory: console
+        run: npm ci
+
+      - name: Console lint
+        if: always()
+        working-directory: console
+        run: npm run lint
+
+      - name: Console build
+        if: always()
+        working-directory: console
+        run: npm run build
+
+      # CLAUDE.md requires the built console to be committed, because the
+      # Python package and the Docker image carry no Node. Nothing checked it,
+      # so the served `/app` could lag `console/src` by any number of commits
+      # and the only symptom would be a UI that does not match its source. The
+      # build writes into this path, so a diff here means the commit forgot
+      # `make console-build`.
+      # `git status`, not `git diff`: vite writes content-hashed filenames, so a
+      # build that adds a chunk leaves the new file untracked, which `git diff`
+      # does not see. Verified by planting a changed string literal — the diff
+      # form passed on added assets alone.
+      - name: Committed console build is current
+        if: always()
+        run: |
+          git status --porcelain -- src/atlas/api/static
+          test -z "$(git status --porcelain -- src/atlas/api/static)"
+

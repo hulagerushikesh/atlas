@@ -1,4 +1,4 @@
-# Status — 2026-10-09 (v0.1.0, M2 done, M3 at 3 of 4)
+# Status — 2026-10-10 (v0.1.0, M2 done, M3 at 3 of 4)
 
 ## One line
 
@@ -104,7 +104,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **583 tests** green, 93% cov. **There is no CI** — `.github/workflows` does not exist, so this local gate is the only gate and "green" is only ever a claim about one laptop | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **583 tests** green, 93% cov. **CI since 2026-10-10** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -354,6 +354,23 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-10 (CI, ₹0) — Atlas had no `.github/` at all, so "the gate is
+  green" had always been a claim about one laptop. The workflow calls
+  `make install`/`lint`/`typecheck`/`test` instead of re-spelling the
+  commands, pins `ubuntu-26.04` and Python 3.11, and pre-seeds the venv with
+  the CPU-only torch wheel so the default build does not drag ~2.5 GB of
+  unusable `nvidia-*` packages into every run. Three things only an attempt
+  at CI could find: the suite **fails without `.env`** because
+  `OpenAIConfig.api_key` is required (`test_keys_endpoint_needs_no_bearer`
+  goes first), which is the environment difference that kept sextant's CI red
+  for 17 days — a dummy key in the workflow env settles it, verified by
+  hiding `.env` locally and getting 583 passed; `npm run lint` had **never
+  once run** in this repo and reported a real error in
+  `console/src/lib/api.ts`; and nothing checked that the committed
+  `src/atlas/api/static/` matches `console/src`, which CLAUDE.md requires
+  because the image carries no Node. That last check uses `git status`, not
+  `git diff` — planting a changed string literal showed vite's content-hashed
+  filenames land as *untracked*, which `git diff` does not see.
 - 2026-10-09 (budget made enforceable, ₹0) — `compare()` was metric-only: it
   printed **Overall winner** from `aggregate_scores` and never read
   `stage_ms` or `token_usage`, both of which the report already stored, so a
@@ -382,7 +399,8 @@ daily spend cap, console markdown.
   revision creation. Keep-warm job created and verified. Two findings worth
   more than the deploy: the headers *were* already live in `default` (the
   note saying otherwise was wrong for over a week), and **Atlas has no CI**,
-  so every "gate green" in this file is a claim about one laptop.
+  so every "gate green" in this file is a claim about one laptop. (The second
+  of those was fixed 2026-10-10 — see the entry at the top of this section.)
 - 2026-10-03 (new 16-row baseline, ₹6.24) — `baseline-16`. AC came back
   0.7105 against the 0.6975 filed in advance. HyDE did not run: it is
   CPU-heavy enough to hang the laptop at the default `--concurrency 4`.
@@ -452,10 +470,12 @@ daily spend cap, console markdown.
   metric judges (~7.8 chat calls a sample against production's ~4), so cost
   *per query* stays hand-checked while latency and run cost are automatic.
   Piggyback the measurement on whichever eval run happens next.
-- **Atlas has no CI.** Adding it is ₹0 and would turn "the gate is green"
-  from a claim about this laptop into a checked fact. Every gate command has
-  to run there, not three of four — that is how sextant's CI was red for 17
-  days while five commits reported green.
+- ~~**Atlas has no CI.**~~ Done 2026-10-10, ₹0. `.github/workflows/ci.yml`
+  runs the make targets rather than re-spelling ruff/mypy/pytest, so the gate
+  keeps one definition. The *first* run is the one that matters: CI has never
+  executed here, so nothing about it is a checked fact until a run goes green
+  on GitHub. Watch it rather than trusting this line — sextant's first fix
+  moved the failure to a second real bug.
 - **HyDE is built and off** (2026-09-29, Rs.0). `HYDE_ENABLED=false`;
   `--set hyde.enabled=true`, `--set hyde.mode=replace` for the paper's
   variant. Nothing about it is measured. Two previous interventions aimed
