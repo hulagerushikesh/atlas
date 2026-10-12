@@ -429,6 +429,21 @@ Newest at the bottom of each section.
   `X-Request-ID` already on every response, with the detail left in the log.
   One decision, one convention, both endpoints.
 
+- **`pytest.importorskip` hides four tests behind an optional extra.**
+  `tests/unit/api/test_keystore.py:117` gates the `firestore_store` fixture
+  on `importorskip("google.cloud.firestore_v1")`, so all four
+  `TestFirestoreKeyStore` tests skip when the `gcp` extra is absent — which
+  is exactly what CI's first run did on 2026-10-12, silently, while two
+  neighbouring tests that import `google.cloud` at module level failed loudly
+  and got the attention. `make install` now installs `.[dev,gcp]`, so they
+  run; nothing *pins* that. Drop the `importorskip` and let the import fail,
+  or assert the extra is present in a conftest check: Firestore is the
+  production key store, so a skip there is not a graceful degradation, it is
+  the gate declining to test shipped code. The generalisable half: an
+  optional dependency plus `importorskip` reports success for code it never
+  ran, and the test count stays reassuring either way (583 both ways; only
+  the skip line moved).
+
 - **`tiktoken` is a declared dependency that nothing imports.** `grep -rn
   tiktoken src tests` returns nothing; it is in `[project.dependencies]`, so
   every install and every image build carries it. Either something was meant
