@@ -104,7 +104,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **584 tests** green locally (**581 + 3 corpus skips** in CI), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **595 tests** green locally (**594 + 1 skip** in CI; the three dataset guards now run there, off a tracked file listing), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -494,8 +494,12 @@ daily spend cap, console markdown.
   make targets rather than re-spelling ruff/mypy/pytest, so the gate keeps one
   definition. The first run (`38220215949`) failed, as it should have — it
   found two things that had been invisible for months, and the fix for them is
-  what went green. The three remaining skips are the corpus-dependent dataset
-  guards and they print their reason, so a skip cannot read as a pass.
+  what went green. Confirmed green again on `3667e88`. The three
+  corpus-dependent dataset guards skipped for two days and **run in CI as of
+  2026-10-12**: label resolution only ever needed the documents' *names*, so
+  the names are tracked in `data/corpus/fastapi.files.json` while the
+  documents stay unvendored. One skip remains, the listing-versus-disk
+  comparison, which has no second operand on a machine with no corpus.
 - **HyDE is built and off** (2026-09-29, Rs.0). `HYDE_ENABLED=false`;
   `--set hyde.enabled=true`, `--set hyde.mode=replace` for the paper's
   variant. Nothing about it is measured. Two previous interventions aimed

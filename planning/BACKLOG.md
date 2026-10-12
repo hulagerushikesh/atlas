@@ -475,7 +475,7 @@ Newest at the bottom of each section.
   lesson is the method, not the dependency: **a check whose own failure is
   silenced reports whatever you expected.**
 
-- **`fetch_corpus.py` writes a `commit_sha` it never reads.** The manifest
+- ~~**`fetch_corpus.py` writes a `commit_sha` it never reads.**~~ Fixed 2026-10-12. The manifest
   records which FastAPI commit the 155 markdown files came from, but the
   fetcher always pulls `master`, so `make fetch-corpus` tomorrow gives a
   different corpus than the one `eval_data/fastapi_dataset.json` was
@@ -491,6 +491,25 @@ Newest at the bottom of each section.
   CI can fetch and cache it and the guard becomes real everywhere. Until
   then, the guard that caught the 2026-09-27 mislabels runs **only on a
   machine that has already run `make fetch-corpus`.**
+
+  *Done, and the filed plan was wrong about the fix.* The entry says to pin
+  the fetch to the manifest's `commit_sha` — which cannot work, because
+  `manifest.json` is written *inside* the gitignored corpus directory, so a
+  clean clone has no manifest and the pin would be read from the file the
+  fetch itself produces. The pin is now a tracked constant in the script.
+  And pinning turned out not to be enough on its own: CI fetching 155 files
+  from GitHub on every run makes the gate fail on GitHub's outages instead of
+  on our commits. The guards never needed the documents — `check_dataset`
+  resolves labels through `doc_keys`, which is pure string work over
+  *names* — so the names are committed in `data/corpus/fastapi.files.json`
+  (5 KB, a file, so `data/corpus/*/` does not match it) and the three guards
+  now run everywhere with no corpus and no network: **594 passed, 1 skipped**
+  with the corpus hidden, where it was 580 passed, 3 skipped. Two further
+  defects fell out of reading the fetcher: `--max-files` defaulted to **120**
+  against a 155-file corpus, so the documented command reproduced a corpus 35
+  files short and 7 of 16 rows then named missing documents; and a failed
+  download printed `SKIP` to stderr and exited 0. Nine tests now cover the
+  fetcher — it had none, though `make lint` had always linted it.
 
 - **No coverage floor.** `addopts` prints `--cov-report=term-missing` but
   sets no `--cov-fail-under`, so 93% is reported and never defended; a commit
