@@ -121,7 +121,7 @@ atlas/
 ├── tests/
 │   ├── conftest.py       # Shared fixtures (Documents, Chunks, etc.)
 │   ├── unit/             # Pure unit tests, no I/O
-│   └── integration/      # Tests against real Qdrant/Redis (docker-compose up first)
+│   └── integration/      # Tests against real Qdrant/Redis (`make docker-up` first)
 ├── eval_data/            # Evaluation datasets (JSON) and reports
 ├── docs/                 # Per-module design docs
 ├── learning/             # Study path: basics → research, mapped to the code
@@ -135,27 +135,63 @@ atlas/
 
 ## Quick Start
 
+Clone to a cited answer. Timings are measured on an M-series Mac from a clean
+clone (2026-10-12), not estimated.
+
 ```bash
-# 1. Copy env and fill in your API key (OpenAI, or Gemini via OPENAI_BASE_URL)
+# 1. Install into a local venv                                    (~60s)
+make install
+
+# 2. Copy env, then put your API key in .env                      (~60s, yours)
+#    OpenAI, or Gemini via OPENAI_BASE_URL. Nothing else needs changing:
+#    QDRANT_URL already points at the container step 3 starts, and
+#    AUTH_ENABLED defaults to false, so no API key of your own is needed yet.
 cp .env.example .env && $EDITOR .env
 
-# 2. Start infrastructure
-docker-compose up qdrant redis -d
+# 3. Start Qdrant and Redis                                       (~12s to healthy)
+make docker-up
 
-# 3. Install the package (editable)
-uv pip install -e ".[dev]"
+# 4. Download the document corpus                                 (~55s)
+#    155 FastAPI markdown pages, MIT, pinned to one commit so you get the
+#    same corpus every number in this README was measured against.
+make fetch-corpus
 
-# 4. Run tests
-pytest
+# 5. Index one page, so the first answer costs ~Rs.0.01 instead of ~Rs.6.45
+.venv/bin/python scripts/ingest.py \
+    data/corpus/fastapi/tutorial/first-steps.md \
+    --namespace quickstart --source-root data/corpus/fastapi
 
-# 5. Start the API
-uvicorn atlas.api.asgi:app --reload
+# 6. Start the API                                                 (~5s)
+make serve
+
+# 7. Ask it something that page can answer                         (one call)
+curl -s localhost:8010/query \
+  -H 'content-type: application/json' \
+  -d '{"query": "What does the FastAPI first steps guide say to import?",
+       "namespace": "quickstart"}' | python3 -m json.tool
+```
+
+The answer carries citations pointing back at the file in step 5. To index the
+whole corpus instead, `make ingest` (~Rs.6.45 of embeddings, a few minutes);
+`make eval` then reproduces the numbers in [Results](#results).
+
+Steps 1, 3 and 4 are about **2m 15s** together and cost nothing. Steps 5 and 7
+are the only ones that spend money, because embeddings and the answer are API
+calls -- a single page and a single question are fractions of a rupee.
+
+```bash
+make test       # 595 tests. Works before step 4: the dataset guards resolve
+                # their labels from data/corpus/fastapi.files.json, so a clean
+                # clone checks them with no corpus and no network.
+make help       # every target, with a one-line description
 ```
 
 ### Docker (all-in-one)
 ```bash
-docker-compose up --build
+docker compose up --build     # adds the `api` service to steps 3's two
 ```
+`docker-compose` with a hyphen is Compose v1, which is end-of-life; v2 is a
+`docker` subcommand. Needs `.env` present, since the `api` service reads it.
 
 ---
 

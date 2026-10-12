@@ -114,6 +114,27 @@ class TestThePin:
         assert manifest["commit_sha"] == "a" * 40
 
 
+class TestTheCommittedListing:
+    """The tracked listing must be exactly what this script would write.
+
+    Caught by running `make fetch-corpus` in a genuine clean clone, which is
+    the only place that shows it: the first committed listing was generated
+    from the corpus already on my machine, whose manifest still said
+    `tiangolo/fastapi`, while the script writes the canonical
+    `fastapi/fastapi`. A fetch therefore dirtied the tree, which is how a
+    generated file stops being trusted. The dataset guards only read `files`,
+    so nothing there could notice.
+    """
+
+    def test_the_committed_listing_agrees_with_this_script(self, fc: Any) -> None:
+        listing = json.loads(
+            (Path(fc.__file__).resolve().parents[1] / "data/corpus/fastapi.files.json")
+            .read_text()
+        )
+        assert listing["repo"] == fc._REPO
+        assert listing["commit_sha"] == fc._PINNED_COMMIT
+
+
 class TestCompleteness:
     def test_every_match_is_fetched_when_no_cap_is_given(
         self, fc: Any, stubbed: dict, tmp_path: Path
