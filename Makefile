@@ -98,8 +98,12 @@ eval-compare: ## Compare latest eval against a baseline (set BASELINE=path/to/re
 
 # ── Infrastructure ─────────────────────────────────────────────────────────────
 
+# Named services, because a bare `docker compose up -d` also starts `api`,
+# which builds the image -- not what this target says it does, and not what
+# the local workflow wants (`make serve` runs the API from the venv). The
+# all-in-one stack is `docker compose up --build`, as README says.
 docker-up: ## Start Qdrant + Redis via docker-compose
-	docker compose up -d
+	docker compose up -d qdrant redis
 
 docker-down: ## Stop Qdrant + Redis
 	docker compose down

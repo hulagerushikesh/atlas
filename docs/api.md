@@ -411,7 +411,7 @@ Key schema decisions:
 
 ```bash
 # Start infrastructure
-docker-compose up qdrant redis -d
+make docker-up
 
 # Start the API with hot reload
 uvicorn atlas.api.app:app --reload --port 8000

@@ -11,7 +11,21 @@ services:
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/readyz"]
+      # Not curl: the qdrant image does not ship it (nor wget), so the old
+      # `curl -f http://localhost:6333/readyz` could never run and the
+      # container was permanently unhealthy -- which made `docker compose
+      # up -d` fail outright, because `api` waits on service_healthy. The
+      # service itself was fine the whole time. bash *is* in the image, so
+      # the check speaks HTTP over /dev/tcp. Verified both ways: exit 0
+      # against the running service, non-zero against a closed port.
+      test:
+        - CMD
+        - bash
+        - -c
+        - >-
+          exec 3<>/dev/tcp/127.0.0.1/6333 &&
+          printf 'GET /readyz HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '200 OK' <&3
       interval: 10s
       timeout: 5s
       retries: 5
