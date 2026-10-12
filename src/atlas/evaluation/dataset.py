@@ -48,6 +48,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import Iterable
 from pathlib import Path
 
 from atlas.ingestion.hashing import hash_text
@@ -141,11 +142,49 @@ def doc_keys(source: str, corpus_root: Path | None = None) -> set[str]:
 
 def corpus_doc_keys(corpus_root: Path) -> set[str]:
     """Keys for every document on disk under *corpus_root*."""
+    return corpus_doc_keys_from_listing(
+        (str(p.relative_to(corpus_root)) for p in sorted(corpus_root.rglob("*")) if p.is_file()),
+        corpus_root,
+    )
+
+
+def corpus_doc_keys_from_listing(
+    relative_paths: Iterable[str], corpus_root: Path
+) -> set[str]:
+    """Keys for documents named by *relative_paths*, without reading any file.
+
+    `doc_keys` is pure string work -- `document_id` is a uuid5 of the source
+    string -- so label resolution never needed the documents themselves, only
+    their names. That is what makes `corpus_listing_path` possible: a corpus
+    too large or too third-party to commit can still have its *names*
+    committed, and the one check that matters here runs anywhere.
+    """
     keys: set[str] = set()
-    for path in sorted(corpus_root.rglob("*")):
-        if path.is_file():
-            keys |= doc_keys(str(path), corpus_root)
+    for rel in relative_paths:
+        keys |= doc_keys(str(corpus_root / rel), corpus_root)
     return keys
+
+
+def corpus_listing_path(corpus_root: Path) -> Path:
+    """The tracked sidecar naming a corpus's files, beside the corpus itself.
+
+    `data/corpus/fastapi` -> `data/corpus/fastapi.files.json`. A *file*, so
+    `.gitignore`'s `data/corpus/*/` does not reach it: the fetched documents
+    stay unvendored (they are third-party and reproducible) while the list of
+    their names, which is ours and is 4 KB, is committed. Without it the
+    dataset guards cannot run on a clean clone at all, which is how a
+    mislabelled set got as far as it did.
+    """
+    return corpus_root.with_name(corpus_root.name + ".files.json")
+
+
+def listed_corpus_doc_keys(corpus_root: Path) -> set[str] | None:
+    """Keys from the tracked listing for *corpus_root*, or None if there is none."""
+    listing = corpus_listing_path(corpus_root)
+    if not listing.is_file():
+        return None
+    data = json.loads(listing.read_text())
+    return corpus_doc_keys_from_listing(data["files"], corpus_root)
 
 
 def indexed_doc_keys(sparse_index: Path, corpus_root: Path | None = None) -> set[str] | None:
@@ -232,11 +271,22 @@ def check_dataset(dataset: EvalDataset, corpus_root: Path | None = None) -> list
     if corpus_root is None:
         return problems
 
-    if not corpus_root.is_dir():
-        problems.append(f"corpus_root {corpus_root} is not a directory.")
-        return problems
-
-    known = corpus_doc_keys(corpus_root)
+    if corpus_root.is_dir():
+        known = corpus_doc_keys(corpus_root)
+    else:
+        # No corpus on disk is the normal state of a clean clone, since the
+        # fetched docs are gitignored. Fall back to the tracked listing of
+        # their names, which answers this exact question and needs no network;
+        # only if there is no listing either is this unanswerable.
+        listed = listed_corpus_doc_keys(corpus_root)
+        if listed is None:
+            problems.append(
+                f"corpus_root {corpus_root} is not a directory and "
+                f"{corpus_listing_path(corpus_root)} does not exist, so labels "
+                f"were not resolved against anything."
+            )
+            return problems
+        known = listed
     for sample in dataset.samples:
         unresolved = [i for i in sample.relevant_doc_ids if i not in known]
         if unresolved:

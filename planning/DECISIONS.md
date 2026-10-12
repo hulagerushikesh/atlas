@@ -1729,3 +1729,62 @@ Format: date — decision — alternatives — reason.
   which is why nothing failed in production and nothing went red on this
   laptop — the two environments that mattered both happened to be right, and
   the one that was wrong was the one nobody ran from scratch.
+
+- **2026-10-12** — the corpus fetch is pinned in *source*, and the dataset
+  guards run in CI off a tracked list of **names**, not the documents.
+
+  *The filed plan was wrong.* Yesterday's backlog entry said to pin
+  `fetch_corpus.py` to the manifest's `commit_sha`. That cannot work:
+  `manifest.json` is written inside `data/corpus/fastapi/`, which is
+  gitignored, so a clean clone has no manifest and the pin would be read out
+  of the file the fetch itself produces. A pin has to be source, not data —
+  `_PINNED_COMMIT` is now a constant in the script, with `--ref` to move it
+  deliberately.
+
+  *Pinning alone was also not enough.* The point of pinning was to let CI
+  fetch the corpus. But a gate that pulls 155 files from GitHub on every run
+  goes red on GitHub's outages rather than on our commits, which is the same
+  objection that rejected fetching in the first place. The way out was to
+  read what the guard actually needs: `check_dataset` resolves labels through
+  `doc_keys`, which is pure string work — `document_id` is a `uuid5` of the
+  path — so it never needed the documents, only their *names*. So the names
+  are committed, in `data/corpus/fastapi.files.json`: 155 lines, 5 KB, a
+  *file* so `.gitignore`'s `data/corpus/*/` does not reach it. The documents
+  stay unvendored, which is what the `.gitignore` decision asked for, and the
+  guard that caught 9 of 15 mislabelled rows now runs on every commit.
+  **594 passed, 1 skipped** with the corpus hidden, against 580 passed,
+  3 skipped before.
+
+  *The listing is a second copy of the truth,* so `TestTheTrackedListing`
+  fails if it disagrees with a corpus that is actually present — verified by
+  planting a 156th name and watching both guards go red. And the fallback was
+  proved to be load-bearing rather than decorative by hiding the corpus and
+  removing `tutorial/first-steps.md` from the listing: all three guards failed
+  naming `fq-004`. A fallback nobody has seen fail is a fallback that passes
+  vacuously.
+
+  *Two further defects, found by reading the fetcher rather than by any
+  failure.* `--max-files` defaulted to **120** against a 155-file corpus, so
+  the documented `make fetch-corpus` reproduced a corpus 35 files short —
+  measured, and the guards then failed with **7 of the 16 rows** naming
+  documents that did not exist. That is the M4 "outsider from a clean clone"
+  criterion failing silently. And a failed download printed `SKIP` to stderr
+  and exited 0: a partial corpus that reported success. Both now fail loudly.
+
+  *Verified, not assumed:* a fresh pinned fetch into a scratch directory is
+  **byte-for-byte identical** to the committed corpus across all 155 files,
+  and the listing it writes matches the committed listing exactly. Nine tests
+  now cover the fetcher, which had none — `make lint` had always linted
+  `scripts/`, so ruff and mypy had opinions about this file while no test ever
+  executed a line of it. Each of the four original behaviours was planted back
+  and fails exactly one test; the `--max-files` default is caught only by the
+  CLI test, because the other tests call `fetch()` directly and the regression
+  lived in `argparse`.
+
+  *A smaller correction:* the manifest's `commit_sha` was never mislabelled. I
+  suspected the trees API returned the *tree* sha under that name, which would
+  have made the pin unusable; `git/commits/50113da…` resolves to a real
+  commit ("Update release notes", 2026-09-01) and the API echoes the resolved
+  commit sha, so the field was right. Checked before writing anything that
+  depended on it. The repo path moved to `fastapi/fastapi`, which the script
+  now uses instead of relying on GitHub's rename redirect.
