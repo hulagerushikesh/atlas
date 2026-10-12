@@ -1,4 +1,4 @@
-# Status — 2026-10-10 (v0.1.0, M2 done, M3 at 3 of 4)
+# Status — 2026-10-12 (v0.1.0, M2 done, M3 at 3 of 4, CI green)
 
 ## One line
 
@@ -104,7 +104,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **583 tests** green, 93% cov. **CI since 2026-10-10** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **583 tests** green locally (**580 + 3 corpus skips** in CI), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -354,6 +354,24 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-12 (CI's first run read, both causes fixed, ₹0) — run
+  `38220215949` failed with 11 of 12 steps green and `make test` at exit 2:
+  `5 failed, 574 passed, 4 skipped`. Two real causes. (1) `make install`
+  asked for `.[dev]`, but `tests/unit/api/test_spendstore.py::TestFirestore`
+  imports `google.cloud` directly — and Firestore is what production
+  actually uses (`AUTH_STORE=firestore`), so the extra is optional at runtime
+  and not for the gate. `make install` now takes `.[dev,gcp]`. (2) Three
+  `test_dataset_guards.py` tests need `data/corpus/fastapi`, which is
+  gitignored, so they fail on **every clean clone**; they now skip with a
+  reason ending `this guard DID NOT RUN`, and `-rs` is in `addopts` so the
+  reason prints. Run `38223889425` on `9ba1fd5` is green: 13 of 13 steps,
+  `580 passed, 3 skipped`, 93%.
+  **The louder failure was not the bigger one.** Fixing the extra turned 2
+  errors into passes and also un-skipped **4 more** tests —
+  `TestFirestoreKeyStore` is gated by `pytest.importorskip` on
+  `google.cloud.firestore_v1`, so the entire Firestore *key store* had been
+  skipping with nothing red to show it. An optional dependency plus
+  `importorskip` is a test suite that reports success for code it never ran.
 - 2026-10-10 (CI, ₹0) — Atlas had no `.github/` at all, so "the gate is
   green" had always been a claim about one laptop. The workflow calls
   `make install`/`lint`/`typecheck`/`test` instead of re-spelling the
@@ -470,12 +488,14 @@ daily spend cap, console markdown.
   metric judges (~7.8 chat calls a sample against production's ~4), so cost
   *per query* stays hand-checked while latency and run cost are automatic.
   Piggyback the measurement on whichever eval run happens next.
-- ~~**Atlas has no CI.**~~ Done 2026-10-10, ₹0. `.github/workflows/ci.yml`
-  runs the make targets rather than re-spelling ruff/mypy/pytest, so the gate
-  keeps one definition. The *first* run is the one that matters: CI has never
-  executed here, so nothing about it is a checked fact until a run goes green
-  on GitHub. Watch it rather than trusting this line — sextant's first fix
-  moved the failure to a second real bug.
+- ~~**Atlas has no CI.**~~ Done 2026-10-10, ₹0, and **green on GitHub since
+  2026-10-12** (run `38223889425`, commit `9ba1fd5`): all 13 steps success,
+  `580 passed, 3 skipped`, 93% coverage. `.github/workflows/ci.yml` runs the
+  make targets rather than re-spelling ruff/mypy/pytest, so the gate keeps one
+  definition. The first run (`38220215949`) failed, as it should have — it
+  found two things that had been invisible for months, and the fix for them is
+  what went green. The three remaining skips are the corpus-dependent dataset
+  guards and they print their reason, so a skip cannot read as a pass.
 - **HyDE is built and off** (2026-09-29, Rs.0). `HYDE_ENABLED=false`;
   `--set hyde.enabled=true`, `--set hyde.mode=replace` for the paper's
   variant. Nothing about it is measured. Two previous interventions aimed

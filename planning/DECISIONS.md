@@ -1681,3 +1681,20 @@ Format: date — decision — alternatives — reason.
   own looks like nothing happened, and these three skips need to be read.
   The guard they implement is the one that caught 9 of 15 mislabelled rows,
   so its absence in CI is a known hole, not a solved problem.
+
+  **What the green run then showed, which the red one hid.** Run
+  `38223889425` on `9ba1fd5`: 13 of 13 steps, `580 passed, 3 skipped`, 93%.
+  The arithmetic is the finding — the red run was `574 passed, 5 failed,
+  4 skipped` and the green one `580 passed, 3 skipped`, both totalling 583.
+  Two failures became passes and three became skips, which leaves **four
+  tests that had been skipping and now run**: `TestFirestoreKeyStore`, gated
+  by `pytest.importorskip("google.cloud.firestore_v1")` at
+  `test_keystore.py:117`. So the missing extra was costing six tests, not
+  two, and the four it cost silently covered the Firestore *key store* —
+  production's authentication path. *The louder failure was not the bigger
+  one.* `importorskip` is the right tool for a dependency that is genuinely
+  optional to the product; it is the wrong tool for one the product requires
+  in production, because it converts a missing dependency into a quiet
+  success. Filed in BACKLOG as the next fix; not fixed here, because this
+  commit's claim is "CI is green" and bundling a second change into it would
+  make that claim ambiguous.
