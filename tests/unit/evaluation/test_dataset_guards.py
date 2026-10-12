@@ -26,6 +26,30 @@ from atlas.evaluation.dataset import (
 )
 from atlas.interfaces.evaluator import EvalDataset, EvalSample
 
+# `data/corpus/*/` is gitignored on the stated grounds that third-party docs
+# are not ours to vendor, so the corpus these three guards resolve labels
+# against is absent from every clean clone — CI's first run failed all three
+# with `corpus_root data/corpus/fastapi is not a directory`. They are skipped
+# rather than softened, because a guard that passed without the files it
+# checks against would be worse than one that says it did not run. Run
+# `make fetch-corpus` to get them.
+#
+# This is not the same as having them run in CI. Doing that needs the fetcher
+# pinned to the manifest's `commit_sha` first: it writes that field but reads
+# `master`, so a CI fetch would resolve the 2026-09-27 labels against whatever
+# upstream FastAPI's docs say today, and the gate would go red on someone
+# else's commit. See planning/BACKLOG.md.
+_FASTAPI_CORPUS = Path("data/corpus/fastapi")
+
+needs_fetched_corpus = pytest.mark.skipif(
+    not _FASTAPI_CORPUS.is_dir(),
+    reason=(
+        f"{_FASTAPI_CORPUS} is absent (gitignored; run `make fetch-corpus`), "
+        "so the shipped dataset's labels cannot be resolved against it and "
+        "this guard DID NOT RUN"
+    ),
+)
+
 
 def _sample(sid: str, doc_ids: list[str], **metadata: object) -> EvalSample:
     return EvalSample(
@@ -200,6 +224,7 @@ class TestLoadDataset:
 
 
 class TestTheShippedDataset:
+    @needs_fetched_corpus
     def test_the_fastapi_set_passes_its_own_guards(self) -> None:
         # The set this project's every published number is measured against.
         # It failed both halves of this on 2026-09-27.
@@ -207,6 +232,7 @@ class TestTheShippedDataset:
         assert notes == []
         assert len(dataset.samples) == 16
 
+    @needs_fetched_corpus
     def test_the_set_carries_exactly_one_declared_out_of_scope_row(self) -> None:
         # Added 2026-09-29. Empty labels are only legal with the flag, so this
         # also pins that the guard is being satisfied deliberately rather than
@@ -216,6 +242,7 @@ class TestTheShippedDataset:
         assert [s.id for s in flagged] == ["fq-016"]
         assert flagged[0].relevant_doc_ids == []
 
+    @needs_fetched_corpus
     def test_every_other_row_still_names_at_least_one_document(self) -> None:
         dataset, _ = load_dataset(Path("eval_data/fastapi_dataset.json"))
         unlabelled = [s.id for s in dataset.samples

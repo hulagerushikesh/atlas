@@ -438,16 +438,36 @@ Newest at the bottom of each section.
   care needed is checking `scripts/` too, which `make lint` covers but
   nothing imports from.
 
-- **The `gcp` extra is never type-checked.** `mypy` runs with
-  `ignore_missing_imports = true` and `google-cloud-firestore` is not in
-  `[dev]`, so the Firestore key store — the one production actually uses,
-  `AUTH_STORE=firestore` — is checked against `Any` on every gate run,
-  locally and in CI alike. Nothing is wrong with the code; it is simply
-  unverified in the exact place strict mode would otherwise be most useful.
-  The fix is to install `.[dev,gcp]` in CI and accept whatever strict mode
-  then says, which is unknown and could be a handful of errors. Deliberately
-  not bundled with the CI commit: a first CI run should fail for real reasons
-  or pass, not fail on a type surface nobody has looked at yet.
+- ~~**The `gcp` extra is never type-checked.**~~ **This entry was wrong**,
+  filed 2026-10-10 and withdrawn 2026-10-12. It rested on `.venv/bin/pip
+  list` returning nothing for Firestore — but this venv was built by `uv`,
+  which installs no `pip` shim, so the command never ran and its failure was
+  hidden behind a `2>/dev/null`. `python -m pip list` shows
+  `google-cloud-firestore 2.31.0` installed with full metadata, and mypy has
+  therefore been strict-checking the real Firestore types all along, green.
+  What was *actually* wrong is now fixed: `make install` asked for `.[dev]`
+  while the local venv carried `[gcp]`, so CI's first run failed
+  `test_spendstore.py::TestFirestore` on `ModuleNotFoundError: No module
+  named 'google.cloud'`. `make install` now installs `.[dev,gcp]`. The
+  lesson is the method, not the dependency: **a check whose own failure is
+  silenced reports whatever you expected.**
+
+- **`fetch_corpus.py` writes a `commit_sha` it never reads.** The manifest
+  records which FastAPI commit the 155 markdown files came from, but the
+  fetcher always pulls `master`, so `make fetch-corpus` tomorrow gives a
+  different corpus than the one `eval_data/fastapi_dataset.json` was
+  relabelled against on 2026-09-27 — when 9 of 15 rows turned out wrong. The
+  `.gitignore` says the corpus is "reproducible from the manifest"; today it
+  is reproducible only from `master`.
+
+  This is the prerequisite for the three `TestTheShippedDataset` guards
+  running in CI at all. They are skipped there (loudly, with a reason, since
+  2026-10-12) because the corpus is gitignored; fetching it in CI instead
+  would resolve our pinned labels against upstream's current docs and turn
+  the gate red on someone else's commit. Pin the fetch to `commit_sha`, then
+  CI can fetch and cache it and the guard becomes real everywhere. Until
+  then, the guard that caught the 2026-09-27 mislabels runs **only on a
+  machine that has already run `make fetch-corpus`.**
 
 - **No coverage floor.** `addopts` prints `--cov-report=term-missing` but
   sets no `--cov-fail-under`, so 93% is reported and never defended; a commit
