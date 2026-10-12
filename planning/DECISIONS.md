@@ -1698,3 +1698,34 @@ Format: date — decision — alternatives — reason.
   success. Filed in BACKLOG as the next fix; not fixed here, because this
   commit's claim is "CI is green" and bundling a second change into it would
   make that claim ambiguous.
+
+- **2026-10-12** — `pytest.importorskip` removed from the Firestore key-store
+  fixture; the `gcp` extra is pinned by a test instead.
+
+  *Why not leave the skip:* Firestore is the production key store
+  (`AUTH_STORE=firestore`), so the extra is optional at *import* time by
+  design — `keystore.py` builds its client lazily and says so — but it is not
+  optional for the gate. `importorskip` on the fixture gated all four
+  `TestFirestoreKeyStore` tests, though only `test_usage_counters` touches
+  google at all (`log_usage` needs `Increment`); the other three run entirely
+  against the fake client. One test's dependency was silencing four.
+
+  *Why a pin rather than just deleting the line:* `log_usage` catches every
+  exception, `ImportError` included, and logs `usage_log_failed` at warning
+  level. That is a deliberate choice — usage accounting must not fail a
+  user's query — but it means a missing extra degrades softly, and the only
+  remaining symptom is `assert 0 == 2` in a counter test that never mentions
+  google. `test_the_gcp_extra_is_installed` turns that into one failure that
+  names the module and the reason.
+
+  *Verified by simulation, not assumed:* a meta-path finder that raises on
+  `google.cloud` gives **0 skipped**, the pin failing with `ImportError`, and
+  `test_usage_counters` failing on the counter — while the other three pass,
+  which is the evidence that three of the four skips had never been
+  necessary. 584 tests green with the extra present.
+
+  *Where it was never broken:* the production `Dockerfile` installs
+  `.[gcp]`, and always did. The wrong declaration was `make install`'s alone,
+  which is why nothing failed in production and nothing went red on this
+  laptop — the two environments that mattered both happened to be right, and
+  the one that was wrong was the one nobody ran from scratch.

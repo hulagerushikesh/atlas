@@ -114,8 +114,36 @@ class _FakeClient:
 
 @pytest.fixture
 def firestore_store() -> FirestoreKeyStore:
-    pytest.importorskip("google.cloud.firestore_v1")
+    # No importorskip here. It used to gate this fixture on
+    # google.cloud.firestore_v1, which skipped all four tests below whenever
+    # the `gcp` extra was absent -- and `make install` asked for `.[dev]`
+    # until 2026-10-12, so CI's first run skipped the lot without a word
+    # while two neighbouring tests that import google.cloud at module level
+    # failed loudly and took the attention. Only test_usage_counters touches
+    # google at all (log_usage needs Increment); the other three run entirely
+    # against _FakeClient. Firestore is the production key store, so a
+    # missing extra is a broken gate, not a degraded one -- see
+    # test_the_gcp_extra_is_installed for the pin that says so in one line.
     return FirestoreKeyStore(client=_FakeClient())
+
+
+def test_the_gcp_extra_is_installed() -> None:
+    """
+    Production authenticates against Firestore (AUTH_STORE=firestore), so the
+    `gcp` extra is required for the gate even though it is optional at import
+    time -- keystore.py builds its client lazily on purpose. This test exists
+    so that a missing extra produces one failure that names the cause instead
+    of four quiet skips: `FirestoreKeyStore.log_usage` swallows every
+    exception, ImportError included, and logs `usage_log_failed` at warning
+    level, so without this pin the only other symptom is a counter assertion
+    that does not mention google at all.
+    """
+    import google.cloud.firestore_v1  # noqa: PLC0415 - the point of the test
+
+    assert hasattr(google.cloud.firestore_v1, "Increment"), (
+        "google-cloud-firestore is importable but has no Increment; "
+        "log_usage builds every usage counter out of it"
+    )
 
 
 class TestFirestoreKeyStore:

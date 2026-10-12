@@ -429,7 +429,7 @@ Newest at the bottom of each section.
   `X-Request-ID` already on every response, with the detail left in the log.
   One decision, one convention, both endpoints.
 
-- **`pytest.importorskip` hides four tests behind an optional extra.**
+- ~~**`pytest.importorskip` hides four tests behind an optional extra.**~~ Fixed 2026-10-12.
   `tests/unit/api/test_keystore.py:117` gates the `firestore_store` fixture
   on `importorskip("google.cloud.firestore_v1")`, so all four
   `TestFirestoreKeyStore` tests skip when the `gcp` extra is absent — which
@@ -443,6 +443,14 @@ Newest at the bottom of each section.
   optional dependency plus `importorskip` reports success for code it never
   ran, and the test count stays reassuring either way (583 both ways; only
   the skip line moved).
+  *Done:* the `importorskip` is gone and `test_the_gcp_extra_is_installed`
+  pins the requirement in one line, because the alternative symptom is
+  illegible — `log_usage` catches every exception, ImportError included, and
+  logs `usage_log_failed` at warning level, so a missing extra shows up only
+  as `assert 0 == 2` in `test_usage_counters`. Verified by blocking
+  `google.cloud` at import: 0 skipped, the pin fails naming the module, and
+  the other three tests pass because they never needed google — only
+  `log_usage` does, via `Increment`. 584 tests.
 
 - **`tiktoken` is a declared dependency that nothing imports.** `grep -rn
   tiktoken src tests` returns nothing; it is in `[project.dependencies]`, so
