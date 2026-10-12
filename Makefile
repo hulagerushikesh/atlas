@@ -19,9 +19,15 @@ help:
 
 # ── Setup ──────────────────────────────────────────────────────────────────────
 
+# `gcp` is not optional for the gate even though it is optional at runtime:
+# the Firestore spend store is what production actually uses (AUTH_STORE=
+# firestore), and tests/unit/api/test_spendstore.py::TestFirestore imports it
+# directly. Installing only [dev] passed locally for months because this
+# machine's venv happened to carry it, and CI's first run failed on
+# ModuleNotFoundError: No module named 'google.cloud'.
 install: ## Create venv and install all dependencies
 	python3 -m venv .venv
-	.venv/bin/pip install -e ".[dev]"
+	.venv/bin/pip install -e ".[dev,gcp]"
 	@echo "\n✓ Installed. Copy .env.example → .env and fill OPENAI_API_KEY."
 
 # ── Dev server ─────────────────────────────────────────────────────────────────

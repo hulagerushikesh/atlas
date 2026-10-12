@@ -1641,3 +1641,43 @@ Format: date — decision — alternatives — reason.
   Every step after `Install` carries `if: always()`. Five independent claims
   are being made about the tree, and a lint failure should not leave the type,
   test and drift results unknown — which is how one red run hides four facts.
+
+- **2026-10-12** — CI's first run went red, and both failures were real. Kept
+  as a record because the commit that added CI predicted this and should be
+  held to it. 11 of 12 steps passed; `make test` exited 2 with 5 failures.
+
+  **`make install` now installs `.[dev,gcp]`, not `.[dev]`.** *Why:* the
+  Firestore spend store is what production runs (`AUTH_STORE=firestore`) and
+  `test_spendstore.py::TestFirestore` imports it directly, so the extra is
+  optional at runtime but not optional for the gate. It passed locally for
+  months because this machine's venv carries `google-cloud-firestore 2.31.0`
+  while the documented install asks for neither. CI, building from the
+  declaration alone, failed on `ModuleNotFoundError: No module named
+  'google.cloud'` — which is the whole argument for having CI, made on its
+  first run.
+
+  *A correction belongs here too:* the 2026-10-10 backlog entry claiming the
+  `gcp` extra was never type-checked was wrong. It came from
+  `.venv/bin/pip list` returning nothing — and this venv was built by `uv`,
+  which ships no `pip` shim, so the command failed into a `2>/dev/null` and
+  the empty output read as an answer. mypy had been strict-checking the real
+  Firestore types all along. **A check whose own failure is silenced reports
+  whatever you expected**, which is the same shape as a pin that cannot fail.
+
+  **Three dataset guards now skip, loudly, when the corpus is absent.**
+  *Alt 1, rejected:* vendor `data/corpus/fastapi` into the repo — 156 files,
+  1.8 MB, MIT. Rejected because `.gitignore` carries a deliberate decision
+  against it ("third-party docs … not ours to vendor"), and overturning a
+  stated project decision to make a test pass is the wrong direction of
+  travel. *Alt 2, rejected:* run `make fetch-corpus` in CI. Rejected because
+  `fetch_corpus.py` writes a manifest `commit_sha` but always fetches
+  `master`, so CI would resolve the labels pinned on 2026-09-27 against
+  whatever upstream's docs say today — a gate that goes red on someone
+  else's commit is worse than one that admits it did not run. *Chosen:* skip
+  with a reason that says `this guard DID NOT RUN`, and file the pinning work
+  as its prerequisite.
+
+  `-rs` added to pytest's `addopts` for the same reason: `4 skipped` on its
+  own looks like nothing happened, and these three skips need to be read.
+  The guard they implement is the one that caught 9 of 15 mislabelled rows,
+  so its absence in CI is a known hole, not a solved problem.
