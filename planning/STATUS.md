@@ -1,4 +1,4 @@
-# Status — 2026-10-12 (v0.1.0, M2 done, M3 at 3 of 4, CI green)
+# Status — 2026-10-13 (v0.1.0, M2 done, M3 at 3 of 4, CI green)
 
 ## One line
 
@@ -104,7 +104,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **595 tests** green locally (**594 + 1 skip** in CI; the three dataset guards now run there, off a tracked file listing), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **596 tests** green locally (**595 + 1 skip** in CI on `212157c`, run `38389533285`; the three dataset guards now run there, off a tracked file listing, and the one skip is the staleness comparison that needs a corpus on disk), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -354,6 +354,37 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-13 (`make docker-up` was broken for everyone, and the quick start
+  could never reach an answer, ₹0) — audited M4's "outsider follows the README
+  from clone to first answer in < 15 minutes" by being the outsider: a real
+  clone of public `main`, then every documented step. Three faults, none about
+  time. (1) The Quick Start had no `make fetch-corpus` and no ingest step, so
+  an outsider queries an empty index; it ended at "start the API" with no
+  example query, and told them to `uv pip install -e ".[dev]"` — assumes `uv`,
+  creates no venv, wrong extras. (2) **`make docker-up` failed for everyone,
+  always**: the qdrant healthcheck ran `curl -f .../readyz` and the qdrant
+  image ships neither `curl` nor `wget` (`docker exec atlas_qdrant curl
+  --version` → `executable file not found in $PATH`), so the container could
+  never be healthy and `api` waits on `service_healthy` — 53 s to
+  `dependency failed to start: container atlas_qdrant is unhealthy` while the
+  service answered 200 on `/readyz` from the host the whole time. `bash` *is*
+  in the image, so the check now speaks HTTP over `/dev/tcp`; verified exit 0
+  against the live service and non-zero against a closed port. (3)
+  `make docker-up` also ran a bare `docker compose up -d`, which starts and
+  builds `api` — contradicting its own help; it names `qdrant redis` now.
+  And a defect in the previous commit's own work, visible only from a clean
+  clone: the committed listing said `"repo": "tiangolo/fastapi"` (inherited
+  from this machine's older manifest) while the fetcher writes
+  `fastapi/fastapi`, so `make fetch-corpus` **dirtied a clean tree**. The
+  dataset guards read only `files`, so nothing there could have caught it;
+  `test_the_committed_listing_agrees_with_this_script` now pins the listing
+  against the script's constants. Measured on the clean clone: clone 1.3 s,
+  `make install` 59 s, `make docker-up` 0.4 s + 12 s to healthy,
+  `make fetch-corpus` 55 s / 155 files, `make test` with no corpus
+  **594 passed, 1 skipped** — ≈2 m 15 s of setup at ₹0, leaving ~12 of the 15
+  minutes for the two paid steps. The criterion stays **open**: the path is
+  correct and the free half is verified end to end, but it asks for an
+  *answer*, and the ingest + query (≈₹0.5) have not been run.
 - 2026-10-12 (CI's first run read, both causes fixed, ₹0) — run
   `38220215949` failed with 11 of 12 steps green and `make test` at exit 2:
   `5 failed, 574 passed, 4 skipped`. Two real causes. (1) `make install`
