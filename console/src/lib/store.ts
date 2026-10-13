@@ -100,6 +100,7 @@ interface AtlasState {
 
   boot: () => Promise<void>
   setSheet: (s: string) => void
+  addSheet: (s: string) => void
   loadSources: () => Promise<void>
   ask: (q: string, opts: { top_k: number; stream: boolean }) => Promise<void>
   jumpTo: (chunkId: string) => void
@@ -153,6 +154,19 @@ export const useAtlas = create<AtlasState>((set, get) => ({
     ls.set("atlas_sheet", s)
     set({ sheet: s })
     void get().loadSources()
+  },
+
+  // Put a corpus in the picker before the server knows about it. A namespace
+  // is a Qdrant collection, and the collection does not exist until something
+  // is indexed into it -- so /namespaces cannot list a corpus you have only
+  // named, and without this you could not select the thing you just created
+  // in order to upload into it.
+  addSheet: (s) => {
+    const name = s.trim()
+    if (!name) return
+    const { sheets } = get()
+    if (!sheets.includes(name)) set({ sheets: [...sheets, name] })
+    get().setSheet(name)
   },
 
   loadSources: async () => {

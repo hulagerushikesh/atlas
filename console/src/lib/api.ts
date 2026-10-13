@@ -71,6 +71,17 @@ export interface IngestResult {
   total_tokens: number; duration_seconds: number
 }
 
+export interface RejectedUpload { filename: string; reason: string }
+
+export interface UploadResult extends IngestResult {
+  namespace: string
+  accepted: string[]
+  // Files the server would not index, each with a reason. Surfaced in the UI
+  // rather than summarised: an upload that drops 3 of 10 files and reports
+  // "7 indexed" is indistinguishable from a complete one.
+  rejected: RejectedUpload[]
+}
+
 /** Streaming events as emitted by _stream_query. */
 export type StreamEvent =
   | { type: "stage"; name: string; status: "start" }
@@ -100,7 +111,12 @@ export const store = {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) { super(message); this.status = status }
+  // The raw `detail`, kept because some errors carry structure a string
+  // cannot hold -- /ingest/upload's 422 lists every refused file and why.
+  detail?: unknown
+  constructor(status: number, message: string, detail?: unknown) {
+    super(message); this.status = status; this.detail = detail
+  }
 }
 
 function base() { return store.get(BASE).replace(/\/$/, "") }
@@ -117,9 +133,10 @@ export async function api(path: string, init: RequestInit = {}, timeoutMs?: numb
     throw new ApiError(0, e instanceof Error ? e.message : "network error")
   }
   if (!r.ok) {
-    let detail = r.statusText
+    let detail: unknown = r.statusText
     try { const j = await r.json(); detail = j.detail ?? detail } catch { /* not json */ }
-    throw new ApiError(r.status, detail)
+    const message = typeof detail === "string" ? detail : r.statusText
+    throw new ApiError(r.status, message, detail)
   }
   return r
 }
@@ -132,6 +149,35 @@ export const getSources = (sheet: string) =>
 export const postIngest = (path: string, namespace: string) =>
   api("/ingest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path, namespace }) })
     .then((r) => r.json() as Promise<IngestResult>)
+
+/**
+ * Upload files and index them into `namespace`, creating it if it is new.
+ *
+ * Multipart, because `/ingest` takes a path on the *server* and a browser has
+ * no way to give it one -- the console may be talking to a container in
+ * another region. No Content-Type is set: the browser must add the multipart
+ * boundary itself, and setting it by hand produces a request the server
+ * cannot parse.
+ */
+export async function postUpload(files: File[], namespace: string): Promise<UploadResult> {
+  const form = new FormData()
+  for (const f of files) form.append("files", f, f.name)
+  form.append("namespace", namespace)
+  try {
+    const r = await api("/ingest/upload", { method: "POST", body: form })
+    return await r.json() as UploadResult
+  } catch (e) {
+    // A 422 means every file was refused, and its `detail` is an object whose
+    // reasons are the whole answer; the generic handler would stringify it to
+    // "[object Object]".
+    if (e instanceof ApiError && e.status === 422) {
+      const d = e.detail as { rejected?: RejectedUpload[] } | undefined
+      const why = d?.rejected?.map((r) => `${r.filename}: ${r.reason}`).join("; ")
+      throw new ApiError(422, why ? `nothing could be indexed — ${why}` : e.message)
+    }
+    throw e
+  }
+}
 
 export const postQuery = (query: string, namespace: string, top_k: number) =>
   api("/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, namespace, top_k, stream: false }) })

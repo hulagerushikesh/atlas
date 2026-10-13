@@ -8,7 +8,7 @@ Import the registry for the normal use case:
 from atlas.ingestion.loaders.html import HTMLLoader
 from atlas.ingestion.loaders.markdown import MarkdownLoader
 from atlas.ingestion.loaders.pdf import PDFLoader
-from atlas.ingestion.loaders.registry import LoaderRegistry, get_loader
+from atlas.ingestion.loaders.registry import LoaderRegistry, get_loader, is_supported
 from atlas.ingestion.loaders.text import TextLoader
 
 __all__ = [
@@ -18,4 +18,5 @@ __all__ = [
     "HTMLLoader",
     "LoaderRegistry",
     "get_loader",
+    "is_supported",
 ]

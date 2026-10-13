@@ -1,22 +1,64 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, FolderInput, PanelLeftClose, PanelLeftOpen } from "lucide-react"
+import { FileText, FolderInput, PanelLeftClose, PanelLeftOpen, Plus, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { postIngest } from "@/lib/api"
+import { postIngest, postUpload } from "@/lib/api"
 import { fmt, useAtlas } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
 export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { sheet, sheets, sources, sourcesLoading, setSheet, loadSources } = useAtlas()
+  const { sheet, sheets, sources, sourcesLoading, setSheet, addSheet, loadSources } = useAtlas()
   const [path, setPath] = useState("")
   const [busy, setBusy] = useState(false)
+  const [newSheet, setNewSheet] = useState("")
+  const [naming, setNaming] = useState(false)
+  const [dragging, setDragging] = useState(false)
+  const picker = useRef<HTMLInputElement>(null)
+
+  const create = (e: React.FormEvent) => {
+    e.preventDefault()
+    const name = newSheet.trim()
+    if (!name) return
+    addSheet(name)
+    setNewSheet("")
+    setNaming(false)
+    toast.success(`Corpus "${name}" selected`, {
+      description: "It exists once you add the first document.",
+    })
+  }
+
+  const upload = async (files: File[]) => {
+    if (!files.length || busy) return
+    setBusy(true)
+    const id = toast.loading(`Uploading ${files.length} file${files.length > 1 ? "s" : ""} to ${sheet}…`)
+    try {
+      const r = await postUpload(files, sheet)
+      // Both halves, always. A toast that reports only the successes is how a
+      // corpus ends up quietly short of what you thought you gave it.
+      const refused = r.rejected.length
+        ? ` · ${r.rejected.length} refused: ${r.rejected.map((x) => `${x.filename} (${x.reason})`).join(", ")}`
+        : ""
+      const show = refused ? toast.warning : toast.success
+      show(`Indexed ${fmt(r.documents_processed)} of ${fmt(files.length)} into ${r.namespace}`, {
+        id,
+        description: `${fmt(r.chunks_indexed)} refs · ${r.duration_seconds.toFixed(1)} s${refused}`,
+        duration: refused ? 12000 : 5000,
+      })
+      void loadSources()
+    } catch (err) {
+      toast.error("Upload failed", { id, description: err instanceof Error ? err.message : String(err) })
+    } finally {
+      setBusy(false)
+      if (picker.current) picker.current.value = ""
+    }
+  }
 
   const ingest = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -62,13 +104,50 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
             className="flex min-h-0 flex-1 flex-col"
           >
             <div className="space-y-1.5 px-4 pt-3">
-              <label className="label" htmlFor="sheet">Sheet</label>
+              <div className="flex items-center justify-between">
+                <label className="label" htmlFor="sheet">Sheet</label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon-sm" className="press -mr-1 size-6" onClick={() => setNaming((v) => !v)} aria-label="New corpus">
+                      <Plus className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">New corpus</TooltipContent>
+                </Tooltip>
+              </div>
               <Select value={sheet} onValueChange={setSheet}>
                 <SelectTrigger id="sheet" className="w-full font-mono text-[13px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {sheets.map((s) => <SelectItem key={s} value={s} className="font-mono text-[13px]">{s}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <AnimatePresence initial={false}>
+                {naming && (
+                  <motion.form
+                    key="new-sheet"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.18, ease: EASE }}
+                    onSubmit={create}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex gap-1.5 pt-1.5">
+                      <Input
+                        value={newSheet}
+                        onChange={(e) => setNewSheet(e.target.value)}
+                        placeholder="my-notes"
+                        autoFocus
+                        className="font-mono text-[12px]"
+                        aria-label="New corpus name"
+                      />
+                      <Button type="submit" size="sm" variant="outline" disabled={!newSheet.trim()} className="press font-mono text-[11px]">
+                        Add
+                      </Button>
+                    </div>
+                  </motion.form>
+                )}
+              </AnimatePresence>
             </div>
 
             <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4">
@@ -81,8 +160,8 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
                   ))
                 ) : sources.length === 0 ? (
                   <li className="label mt-2 normal-case tracking-normal leading-relaxed">
-                    No sources on this sheet.<br />
-                    <code className="mt-1 inline-block rounded-sm border bg-well px-1.5 py-0.5 text-[11px]">make ingest</code>
+                    No documents on this sheet yet.<br />
+                    <span className="text-ink-3">Add some below.</span>
                   </li>
                 ) : (
                   sources.map((s, i) => (
@@ -102,18 +181,59 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
               </ul>
             </div>
 
-            <form onSubmit={ingest} className="border-t px-4 py-3">
-              <div className="label mb-2">Ingest</div>
-              <div className="flex gap-1.5">
-                <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="data/corpus/fastapi" className="font-mono text-[12px]" aria-label="Path to ingest" />
-                <Button type="submit" size="sm" variant="outline" disabled={busy || !path.trim()} className="press font-mono text-[11px] uppercase tracking-wider">
-                  <FolderInput className="size-3.5" />
-                </Button>
+            <div className="border-t px-4 py-3">
+              <div className="label mb-2">Add documents</div>
+
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                className="sr-only"
+                aria-label="Choose documents to upload"
+                onChange={(e) => void upload(Array.from(e.target.files ?? []))}
+              />
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragging(false)
+                  void upload(Array.from(e.dataTransfer.files))
+                }}
+                onClick={() => picker.current?.click()}
+                className={cn(
+                  "flex cursor-pointer flex-col items-center gap-1 rounded-sm border border-dashed px-3 py-4 text-center transition-colors",
+                  dragging ? "border-blue bg-blue/5" : "border-border hover:border-ink-3",
+                  busy && "pointer-events-none opacity-60",
+                )}
+              >
+                <Upload className="size-4 text-ink-3" />
+                <span className="label normal-case tracking-normal text-[11px] leading-snug">
+                  Drop files or click to choose
+                </span>
+                <span className="font-mono text-[10px] text-ink-3">md · txt · pdf · html</span>
               </div>
+
+              <details className="mt-3">
+                <summary className="label cursor-pointer select-none text-[10px]">Server path</summary>
+                <form onSubmit={ingest} className="mt-2">
+                  <div className="flex gap-1.5">
+                    <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="data/corpus/fastapi" className="font-mono text-[12px]" aria-label="Path to ingest" />
+                    <Button type="submit" size="sm" variant="outline" disabled={busy || !path.trim()} className="press font-mono text-[11px] uppercase tracking-wider">
+                      <FolderInput className="size-3.5" />
+                    </Button>
+                  </div>
+                  <p className="label mt-1.5 normal-case tracking-normal text-[10px] leading-snug text-ink-3">
+                    A path on the machine running the API, under its ingest root — not on this computer.
+                  </p>
+                </form>
+              </details>
+
               <div className="relative mt-3 h-1 overflow-hidden rounded-[1px] bg-well">
                 {busy && <i className="absolute inset-y-0 w-1/3 bg-good animate-sweep" />}
               </div>
-            </form>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

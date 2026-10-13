@@ -13,6 +13,11 @@ dependencies = [
     "fastapi>=0.111.0",
     "uvicorn[standard]>=0.29.0",
     "httpx>=0.27.0",
+    # Required by FastAPI for multipart/form-data, which is how POST
+    # /ingest/upload receives files. FastAPI raises at *request* time without
+    # it, not at import, so an undeclared dependency here would be a 500 on
+    # one route with a green suite everywhere else.
+    "python-multipart>=0.0.9",
 
     # Config & validation
     "pydantic>=2.7.0",

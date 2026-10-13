@@ -118,6 +118,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         ),
         embedding_model=shared.settings.openai.embedding_model,
         chat_model=shared.settings.openai.primary_model,
+        ingest=settings.ingest,
         spend=SpendMeter(
             budget_usd=settings.budget.daily_usd,
             backend=build_spend_backend(

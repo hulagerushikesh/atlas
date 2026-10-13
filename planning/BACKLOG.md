@@ -58,6 +58,21 @@ Newest at the bottom of each section.
 
 ## Debts
 
+- **`/namespaces/{ns}/sources` can advertise documents the vector store does
+  not have.** It reads the in-memory BM25 corpus, which is persisted
+  separately from Qdrant, so the two can disagree — and when they do the
+  console shows a populated corpus for a namespace that answers nothing.
+  Found on 2026-10-13 with a local Qdrant holding only `atlas_quickstart`
+  while the console cheerfully reported **155 sources / 4,020 refs** on
+  `default`, because the sparse index on disk still held the full FastAPI
+  corpus from earlier work. Harmless locally; in production it would mean a
+  corpus listing that survives a collection being dropped or recreated. The
+  endpoint's own docstring says the BM25 corpus "mirrors the dense index",
+  which is the assumption, not a guarantee. Options: cross-check the
+  collection's point count on this read, rebuild the sparse index from Qdrant
+  at startup, or state plainly in the response that the number is the sparse
+  side's.
+
 - **Turning the faithfulness check off would report a perfect score, not an
   absent one.** `FaithfulnessChecker.check` opens with
   `if not self.enabled: return FaithfulnessResult(score=1.0, is_faithful=True,
