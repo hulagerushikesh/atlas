@@ -1788,3 +1788,28 @@ Format: date — decision — alternatives — reason.
   commit sha, so the field was right. Checked before writing anything that
   depended on it. The repo path moved to `fastapi/fastapi`, which the script
   now uses instead of relying on GitHub's rename redirect.
+- **2026-10-13** — `scripts/ingest.py` prints the Qdrant it is about to write
+  to, in the banner *and* in the dry run, flagged `<-- NOT local` when the
+  host is not one of localhost / 127.0.0.1 / ::1 / the `qdrant` compose
+  service. *Alt:* refuse to run against a non-local cluster without a
+  `--yes-production` flag; print nothing and rely on the operator knowing
+  their own `.env`. *Why:* the second is what we had, and it nearly cost a
+  stray `quickstart` namespace in the production cluster — the README's
+  `.env.example` points at the local container, but a developer's `.env`
+  points at the managed cluster the moment they have deployed, and the two
+  commands are identical. A refusal flag was rejected because the normal use
+  of this script *is* production ingest (`make ingest`), so the flag would be
+  on in every real invocation and would stop meaning anything. Printing the
+  destination costs nothing and is read exactly when money is about to be
+  spent. The label is built from `hostname`/`port`, never `netloc`, because
+  `netloc` carries `user:password@` — the first draft printed a password and
+  its own test caught it.
+- **2026-10-13** — M4's "outsider from clone to first answer in < 15 minutes"
+  is ticked on a measured run, not an estimate: ~3.5 minutes, ₹0.18,
+  faithfulness 1.0, citations resolving to the page indexed two steps earlier.
+  *Alt:* tick it when the audit fixed the blockers (`212157c`). *Why:* the
+  criterion says *to first answer*; an unobstructed path is not an answer, and
+  the two paid steps were the only part nobody had ever run. They cost ₹0.18
+  against a ₹1 budget, and running them is what confirmed the spend counter
+  agrees with the invoice ($0.0019647 charged, $0.001965 reported).
+

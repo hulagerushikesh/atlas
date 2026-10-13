@@ -1,4 +1,8 @@
-# Status — 2026-10-13 (v0.1.0, M2 done, M3 at 3 of 4, CI green)
+# Status — 2026-10-13 (v0.1.0, M2 done, M3 at 3 of 4, M4 at 2 of 3, CI green)
+
+**13 of the 17 ROADMAP exit criteria are ticked (≈76%).** That fraction is
+the project's progress number; count it from `planning/ROADMAP.md` rather
+than quoting it from anywhere else.
 
 ## One line
 
@@ -104,7 +108,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **596 tests** green locally (**595 + 1 skip** in CI on `212157c`, run `38389533285`; the three dataset guards now run there, off a tracked file listing, and the one skip is the staleness comparison that needs a corpus on disk), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **603 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -382,9 +386,29 @@ daily spend cap, console markdown.
   `make install` 59 s, `make docker-up` 0.4 s + 12 s to healthy,
   `make fetch-corpus` 55 s / 155 files, `make test` with no corpus
   **594 passed, 1 skipped** — ≈2 m 15 s of setup at ₹0, leaving ~12 of the 15
-  minutes for the two paid steps. The criterion stays **open**: the path is
-  correct and the free half is verified end to end, but it asks for an
-  *answer*, and the ingest + query (≈₹0.5) have not been run.
+  minutes for the two paid steps.
+- 2026-10-13 (the M4 outsider criterion **MET**, ₹0.18) — ran the two paid
+  steps the audit above stopped short of, and the criterion is now ticked in
+  ROADMAP: **about 3.5 minutes, ₹0.18, from clone to a cited answer.** The
+  one-page ingest took 8 s for 35 chunks / 4,610 tokens (**₹0.01**); the API
+  was healthy 10 s after `make serve`; the documented query answered in 7 s
+  for **₹0.17** ($0.0019647, which `/health` then reported as the day's spend,
+  so budget accounting agrees with the invoice). The answer — "instructs you
+  to import `FastAPI` [1][4]" — carried **faithfulness 1.0**, grader 1.0, no
+  unsupported claims, and citations resolving to
+  `tutorial/first-steps.md`, the page indexed two steps earlier. Machine time
+  2 m 33 s; the README's step-6 "~5s" was wrong (10 s) and is corrected along
+  with the measured costs.
+  **Found by doing it: `scripts/ingest.py` never said which Qdrant it writes
+  to.** A developer's `.env` points at the managed cluster as soon as they
+  have deployed, while the `.env.example` the README describes points at the
+  local container — so the documented quick-start ingest writes a new
+  namespace **straight into production** with nothing on screen to say so. I
+  caught it only by checking `QDRANT_URL` before spending. The banner and the
+  dry run now print `host:port/collection`, flagged `<-- NOT local` when it is
+  not, built from `hostname`/`port` and never from `netloc` — which my own
+  test caught carrying `user:password@` in the first draft. Each of the three
+  pins was proved by planting the defect back.
 - 2026-10-12 (CI's first run read, both causes fixed, ₹0) — run
   `38220215949` failed with 11 of 12 steps green and `make test` at exit 2:
   `5 failed, 574 passed, 4 skipped`. Two real causes. (1) `make install`
