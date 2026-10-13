@@ -155,7 +155,7 @@ lands.
 | `stage` | `{"type":"stage","name":"retrieval","status":"done","chunks":15,"ms":840,"evidence":[…]}` | evidence ships before generation, so the trail renders while tokens stream |
 | `stage` | `{"type":"stage","name":"grading","status":"done","score":0.82,"sufficient":true,"ms":390}` | grading finished |
 | `delta` | `{"type":"delta","text":"…"}` | one token span |
-| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":true}` | the answer is complete |
+| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":null}` | the answer is complete. `is_faithful` is **always `null` on this path** — streaming skips the faithfulness check, because the check needs the whole answer. Null means *unchecked*, not *failed*; ask without `stream` for a verdict |
 | `error` | `{"type":"error","error":"…","stage":"grading","request_id":"…"}` | the pipeline threw after streaming began |
 
 ```
@@ -164,7 +164,7 @@ data: {"type": "stage", "name": "routing", "status": "done", "classification": "
 data: {"type": "delta", "text": "Employees"}
 data: {"type": "delta", "text": " receive"}
 ...
-data: {"type": "done", "classification": "simple", "citations": [...], "is_faithful": true}
+data: {"type": "done", "classification": "simple", "citations": [...], "is_faithful": null}
 data: [DONE]
 ```
 

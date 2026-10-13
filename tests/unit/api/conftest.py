@@ -82,6 +82,15 @@ def client() -> TestClient:
     mock_pipeline._retrieve_all = AsyncMock(return_value=RetrievalPass(chunks=[], evidence=[]))
     mock_pipeline._generator = MagicMock()
 
+    # Awaitable, because `MagicMock()._grader.grade(...)` is not: the streaming
+    # path awaits it at stage 4, so with an auto-mock here every streamed
+    # request died there and became an `error` event. Tests that only read the
+    # early stages still passed, which is how it survived -- a fixture that
+    # cannot reach `done` makes every success-path assertion below it a
+    # comment. Tests that want the failure opt in by setting a side_effect.
+    mock_pipeline._grader = MagicMock()
+    mock_pipeline._grader.grade = AsyncMock(return_value=(True, 0.9, "sufficient"))
+
     async def _gen_stream(*args, **kwargs):  # type: ignore[return]
         yield "Hello "
         yield "world"

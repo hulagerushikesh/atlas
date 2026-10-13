@@ -1812,4 +1812,28 @@ Format: date — decision — alternatives — reason.
   the two paid steps were the only part nobody had ever run. They cost ₹0.18
   against a ₹1 budget, and running them is what confirmed the spend counter
   agrees with the invoice ($0.0019647 charged, $0.001965 reported).
+- **2026-10-13** — the SSE `done` event sends `is_faithful: null`, on both the
+  success branch and the `out_of_scope` one. *Alt:* run the faithfulness check
+  after the stream completes and emit a second event; drop the field from the
+  streaming contract. *Why:* the streaming path cannot check faithfulness
+  without buffering the whole answer, which is what streaming exists to avoid,
+  so there is no verdict to report — and `true` is indistinguishable, to any
+  client, from a verified answer. Running the check afterwards is the better
+  product answer but costs a judge call per stream and changes what `done`
+  means; it stays open. The field is null rather than omitted because an
+  absent key is `undefined` in JS, which is falsey, flipping the error to
+  "not faithful". The console was never affected either way: it renders
+  "Unchecked" off a null *score*, which is why the UI was more honest than the
+  API for six days.
+- **2026-10-13** — `tests/unit/api/conftest.py` grades successfully by
+  default. *Alt:* leave the auto-MagicMock and let each test set up its own
+  grader, as the two tests that needed it already did. *Why:* a non-awaitable
+  `_grader.grade` meant **every** streamed request in the suite failed at
+  stage 4 and became an `error` event, so any test reading only the early
+  stages passed while asserting nothing about the path it named. One existing
+  comment recorded the problem and worked around it rather than fixing it,
+  which is how it survived. A shared fixture that cannot reach `done` makes
+  every success-path assertion beneath it a comment — the `importorskip`
+  lesson of 2026-10-12 in a different costume. Failure is now opt-in via
+  `side_effect`, which is the direction that cannot silently mislead.
 
