@@ -135,8 +135,9 @@ atlas/
 
 ## Quick Start
 
-Clone to a cited answer. Timings are measured on an M-series Mac from a clean
-clone (2026-10-12), not estimated.
+Clone to a cited answer. Every timing and the cost are measured on an
+M-series Mac from a clean clone, not estimated: steps 1-4 on 2026-10-12, the
+whole path through to the answer on 2026-10-13.
 
 ```bash
 # 1. Install into a local venv                                    (~60s)
@@ -157,14 +158,16 @@ make docker-up
 make fetch-corpus
 
 # 5. Index one page, so the first answer costs ~Rs.0.01 instead of ~Rs.6.45
+#    (~8s: 35 chunks, 4,610 tokens of embeddings. Prints which Qdrant it is
+#    writing to -- check it says localhost before you spend anything.)
 .venv/bin/python scripts/ingest.py \
     data/corpus/fastapi/tutorial/first-steps.md \
     --namespace quickstart --source-root data/corpus/fastapi
 
-# 6. Start the API                                                 (~5s)
+# 6. Start the API                                        (~10s to healthy)
 make serve
 
-# 7. Ask it something that page can answer                         (one call)
+# 7. Ask it something that page can answer              (one call, ~7s, Rs.0.17)
 curl -s localhost:8010/query \
   -H 'content-type: application/json' \
   -d '{"query": "What does the FastAPI first steps guide say to import?",
@@ -177,10 +180,15 @@ whole corpus instead, `make ingest` (~Rs.6.45 of embeddings, a few minutes);
 
 Steps 1, 3 and 4 are about **2m 15s** together and cost nothing. Steps 5 and 7
 are the only ones that spend money, because embeddings and the answer are API
-calls -- a single page and a single question are fractions of a rupee.
+calls. Measured on 2026-10-13: the ingest cost **Rs.0.01** (4,610 tokens) and
+the query **Rs.0.17** ($0.0019647, which `/health` then reports as the day's
+spend), for **Rs.0.18** from clone to cited answer. End to end, including the
+minute of pasting a key in step 2, that run took **about 3.5 minutes** -- the
+answer came back with faithfulness 1.0 and citations resolving to the file from
+step 5.
 
 ```bash
-make test       # 595 tests. Works before step 4: the dataset guards resolve
+make test       # 603 tests. Works before step 4: the dataset guards resolve
                 # their labels from data/corpus/fastapi.files.json, so a clean
                 # clone checks them with no corpus and no network.
 make help       # every target, with a one-line description

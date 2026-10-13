@@ -97,6 +97,30 @@ def _collect_files(path: Path, glob: str) -> list[Path]:
     return sorted(p for p in path.glob(glob) if p.is_file())
 
 
+def _describe_destination(url: str, collection: str) -> str:
+    """
+    Name the Qdrant this run is about to write to.
+
+    Printed because a developer's `.env` and the `.env.example` the README
+    describes are not the same file: once you have deployed, QDRANT_URL points
+    at the managed cluster, and the documented quick-start ingest then writes a
+    new namespace straight into production without anything on screen saying
+    so. Host only -- the url carries no credential (QDRANT_API_KEY is separate)
+    but the cluster id is enough to tell local from managed at a glance.
+    """
+    from urllib.parse import urlsplit
+
+    # netloc, not hostname, is what carries `user:password@` -- so this builds
+    # the label from hostname and port and never from netloc. A url with no
+    # scheme puts the whole authority in .path, hence the "//" prefix.
+    parts = urlsplit(url if "//" in url else f"//{url}")
+    host = parts.hostname or "unknown-host"
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    local = parts.hostname in {"localhost", "127.0.0.1", "::1", "qdrant"}
+    return f"{host}/{collection}" + ("" if local else "   <-- NOT local")
+
+
 async def main(args: argparse.Namespace) -> int:
     from atlas.config import get_settings
     from atlas.logging import configure_logging
@@ -126,15 +150,21 @@ async def main(args: argparse.Namespace) -> int:
             "  note: adding to a corpus indexed from a higher directory? "
             "pass --source-root so the headers match."
         )
+    destination = _describe_destination(
+        settings.qdrant.url, settings.qdrant.collection_name
+    )
+
     if args.dry_run:
         for f in files:
             print(f"  {f}")
+        print(f"Would write to: {destination}")
         print("Dry run complete. No data was indexed.")
         return 0
 
     print(f"Chunker : {args.chunker or 'default (from settings)'}")
     print(f"Namespace: {args.namespace}")
     print(f"Target  : {target}")
+    print(f"Writing to: {destination}")
     print("─" * 50)
 
     indexer = _build_indexer(settings, args.chunker, args.namespace)

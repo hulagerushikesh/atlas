@@ -105,8 +105,19 @@ PDF quality (layout-aware parser); export of a query's evidence as JSON.
 
 Exit criteria:
 - [ ] A new corpus can be created, ingested and queried entirely from the console
-- [ ] An outsider follows README from clone to first answer in < 15 minutes
-- [x] 300+ tests, still ruff/mypy clean — **583 tests**, 92–93% coverage,
+- [x] An outsider follows README from clone to first answer in < 15 minutes —
+      **demonstrated end to end 2026-10-13, about 3.5 minutes, Rs.0.18.** Done
+      by being the outsider: a real clone of public `main`, then every
+      documented step. Measured: clone 1.3s, `make install` 59s,
+      `make docker-up` 13s to healthy, `make fetch-corpus` 55s/155 files,
+      one-page ingest 8s (Rs.0.01), API healthy 10s, query 7s (Rs.0.17) —
+      about 2m 33s of machine time plus the minute spent pasting a key. The
+      answer carried faithfulness 1.0 and citations resolving to the page
+      indexed two steps earlier. The audit that got here (`212157c`) found the
+      quick start could never reach an answer at all and that `make docker-up`
+      had been failing for everyone, so the criterion was never close to
+      passing on time -- it was failing on structure.
+- [x] 300+ tests, still ruff/mypy clean — **603 tests**, 93% coverage,
       ruff and mypy strict both clean, and since 2026-10-10 all three are
       checked by CI rather than asserted from one laptop. Met well before M4
       was opened, so this is the one M4 criterion that came free; the two
