@@ -29,6 +29,7 @@ from fastapi import Request
 from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
 from atlas.api.namespaces import NamespaceRegistry
+from atlas.config import IngestConfig
 from atlas.ingestion.indexer import DocumentIndexer
 from atlas.orchestration.pipeline import RAGPipeline
 
@@ -41,6 +42,9 @@ class AppState:
     embedding_model: str   # surfaced for cost estimation in routes
     chat_model: str = "unknown"
     spend: SpendMeter = field(default_factory=SpendMeter)
+    # Carried here rather than read from get_settings() in the route, so a test
+    # can confine or unconfine one app without touching process-wide state.
+    ingest: IngestConfig = field(default_factory=IngestConfig)
 
 
 def get_app_state(request: Request) -> AppState:

@@ -145,6 +145,30 @@ class IngestResponse(BaseModel):
     duration_seconds: float
 
 
+class RejectedUpload(BaseModel):
+    """One file the upload would not index, and why."""
+
+    filename: str
+    reason: str
+
+
+class UploadIngestResponse(IngestResponse):
+    """
+    An upload's result, plus what it refused.
+
+    `rejected` is the reason this is not just IngestResponse. A request that
+    drops three of its ten files and reports a cheerful `documents_processed:
+    7` is how a corpus goes quietly short -- the caller has no way to tell
+    that number from a complete one. Every refusal is named here, and
+    `namespace` is echoed because the console lets you type a new one and
+    should be able to show what it actually created.
+    """
+
+    namespace: str
+    accepted: list[str] = []
+    rejected: list[RejectedUpload] = []
+
+
 # ── /health ───────────────────────────────────────────────────────────────────
 
 class ComponentHealth(BaseModel):

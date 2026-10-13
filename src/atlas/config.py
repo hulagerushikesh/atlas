@@ -203,6 +203,26 @@ class APIConfig(BaseSettings):
     workers: int = 1
 
 
+class IngestConfig(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="INGEST_", env_file=_ENV_FILE, extra="ignore")
+
+    # The only directory `POST /ingest` will read a caller-supplied path from.
+    # That endpoint takes a path on the *server*, so without this an authorised
+    # caller could name any file the process can read and then retrieve it
+    # through /query -- the index is a read-back channel. Confined to the
+    # corpus directory by default; set INGEST_ROOT="" to allow any path, which
+    # is only reasonable when the API is a single-user process on a laptop.
+    root: str = "data"
+
+    # Upload limits. The console cannot send a server path, so uploads are how
+    # a corpus is built from a browser; these bound what one request can cost.
+    # A rejected file is reported by name rather than dropped, because a
+    # partial ingest that reports success is how a corpus goes quietly short.
+    max_upload_files: int = 50
+    max_upload_bytes: int = 20 * 1024 * 1024
+    max_upload_total_bytes: int = 100 * 1024 * 1024
+
+
 class Settings(BaseSettings):
     """Top-level settings aggregating all sub-configs."""
 
@@ -233,6 +253,7 @@ class Settings(BaseSettings):
     hyde: HyDEConfig = Field(default_factory=HyDEConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     api: APIConfig = Field(default_factory=APIConfig)
+    ingest: IngestConfig = Field(default_factory=IngestConfig)
 
 
 @lru_cache(maxsize=1)

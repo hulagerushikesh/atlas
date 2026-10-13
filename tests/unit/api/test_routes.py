@@ -164,11 +164,23 @@ class TestQueryRoute:
 # ── /ingest ───────────────────────────────────────────────────────────────────
 
 class TestIngestRoute:
-    def test_path_not_found_returns_404(self, client: TestClient) -> None:
-        resp = client.post("/ingest", json={"path": "/nonexistent/path/xyz"})
+    # These tests are about 404 and 200, not about the ingest root, so each one
+    # declares the root it wants. Leaving the fixture unconfined instead would
+    # make the default under test differ from the shipped default, which is the
+    # one that matters: `/ingest` reads server files and `/query` reads them
+    # back out.
+    @staticmethod
+    def _allow(client: TestClient, root) -> None:  # type: ignore[no-untyped-def]
+        from atlas.config import IngestConfig
+        client.app.state.atlas.ingest = IngestConfig(root=str(root))
+
+    def test_path_not_found_returns_404(self, client: TestClient, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        self._allow(client, tmp_path)
+        resp = client.post("/ingest", json={"path": str(tmp_path / "nope.txt")})
         assert resp.status_code == 404
 
     def test_valid_path_returns_200(self, client: TestClient, tmp_path) -> None:
+        self._allow(client, tmp_path)
         f = tmp_path / "test.txt"
         f.write_text("hello world")
 

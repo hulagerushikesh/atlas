@@ -108,7 +108,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **610 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **629 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -358,6 +358,43 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-13 (console ingest: the corpus can now be built from a browser, and
+  the endpoint it used stops being a file-read channel, ₹0 so far) — M4's
+  first criterion asks for a corpus *created, ingested and queried entirely
+  from the console*, and three things were in the way. (1) A namespace is a
+  Qdrant collection and a collection does not exist until something is
+  indexed, so `/namespaces` could never list a corpus you had only named —
+  the picker had no way to select the thing you were about to create. The
+  store now holds a named corpus locally until the first upload makes it
+  real. (2) **`/ingest` takes a path on the server**, which a browser cannot
+  supply; the console's existing path box only ever worked when the API ran
+  on the same laptop, and means nothing against Cloud Run. New
+  `POST /ingest/upload` takes multipart bytes, indexes them from a temp dir
+  deleted in a `finally`, and uses that dir as the `source_root` so headers
+  are not machine-specific. (3) The path endpoint was **unsandboxed**: since
+  anything indexed is retrievable through `/query`, any caller with a key
+  could index `/etc/...` or a mounted secret and read it back. It is confined
+  to `INGEST_ROOT` (default `data`) with a resolve-then-compare check that
+  refuses `..` and symlinks, running *before* the existence check so 403-vs-404
+  cannot be used to probe the filesystem.
+  Every refusal is reported by name — unsupported extension, empty, oversized,
+  past the file count, over the request total — and a request where everything
+  was refused is a 422 carrying the reasons, because an upload that drops 3 of
+  10 files and reports "7 indexed" is how a corpus goes quietly short.
+  **Verified in the browser at ₹0:** created the `console-demo` corpus from
+  the UI (top bar went to `CONSOLE-DEMO · 0 SOURCES · 0 REFS`), and an
+  unsupported file produced the toast *"nothing could be indexed — notes.exe:
+  no loader handles '.exe'"*, which is the structured 422 rendered readably.
+  **629 tests**; seven planted defects each redden exactly their own pins,
+  including the one that proves `.resolve()` is what stops `..` and symlinks.
+  `python-multipart` is now a declared dependency — FastAPI raises at request
+  time without it, not at import, so an undeclared one would be a 500 on a
+  single route with a green suite everywhere else.
+  **Also found, filed not fixed:** `/namespaces/{ns}/sources` reads the BM25
+  index, not Qdrant, so it advertised **155 sources / 4,020 refs** on a local
+  `default` whose Qdrant collection does not exist.
+  **Still open on this criterion:** the end-to-end *upload → query* run, which
+  costs ≈₹0.2 and needs a go-ahead.
 - 2026-10-13 (the SSE pair: a claim nothing checked, and a fixture that
   could not succeed, ₹0) — the `done` event hardcoded `"is_faithful": true` on
   a path whose own docstring says it skips the faithfulness check. Live at

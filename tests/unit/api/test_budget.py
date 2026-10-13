@@ -115,6 +115,8 @@ class TestBudgetAtRoutes:
         assert second.json()["cached"] is True
 
     def test_ingest_returns_429(self, client: TestClient, tmp_path) -> None:  # type: ignore[no-untyped-def]
+        from atlas.config import IngestConfig
+        client.app.state.atlas.ingest = IngestConfig(root=str(tmp_path))
         self._trip(client)
         f = tmp_path / "t.txt"
         f.write_text("hello")

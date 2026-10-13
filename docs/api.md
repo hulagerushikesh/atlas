@@ -231,12 +231,76 @@ Index a file or directory into Qdrant + BM25.
 `documents_skipped` counts files whose content hash matched the stored hash — no
 re-embedding was performed. This is the idempotency guarantee from Module A.
 
+**`path` is read on the server, and is confined to `INGEST_ROOT` (default
+`data`).** Whatever is indexed can be retrieved through `/query`, so an
+unconfined path would let any caller holding a key read any file the process
+can open. The check resolves the path first, so `..` and a symlink out of the
+root are both refused, and it runs *before* the existence check — otherwise the
+404-vs-403 difference would answer "does this file exist on the server?" for
+any path at all. Set `INGEST_ROOT=""` to disable it, which is only reasonable
+for a single-user API on your own machine.
+
 **Error responses**
 
 | Status | Condition |
 |--------|-----------|
+| 403 | `path` resolves outside `INGEST_ROOT` |
 | 404 | `path` does not exist on the filesystem |
+| 429 | the daily spend cap is exhausted |
 | 500 | Indexing failed (partial results possible) |
+
+---
+
+### `POST /ingest/upload`
+
+Index uploaded files into a namespace, creating the corpus if it is new. This
+is how the console adds documents: `/ingest` names a path on the *server*, and
+a browser has no way to give it one.
+
+`multipart/form-data` with repeated `files` parts and a `namespace` field:
+
+```bash
+curl -X POST localhost:8010/ingest/upload \
+  -F 'files=@notes.md' -F 'files=@handbook.pdf' \
+  -F 'namespace=my-notes'
+```
+
+**Response** — `IngestResponse`, plus what the request refused:
+
+```json
+{
+  "namespace": "my-notes",
+  "documents_processed": 1,
+  "documents_skipped": 0,
+  "chunks_indexed": 12,
+  "total_tokens": 3400,
+  "duration_seconds": 2.1,
+  "accepted": ["notes.md"],
+  "rejected": [{"filename": "handbook.pdf", "reason": "file is empty"}]
+}
+```
+
+**Every refusal is named.** A request that drops three of ten files and reports
+`documents_processed: 7` is indistinguishable from a complete one, which is how
+a corpus goes quietly short. A file is refused when no loader handles its
+extension, it is empty, it is over `INGEST_MAX_UPLOAD_BYTES`, it is past
+`INGEST_MAX_UPLOAD_FILES`, or it would take the request over
+`INGEST_MAX_UPLOAD_TOTAL_BYTES`.
+
+Uploads land in a temp directory that is deleted in a `finally`, including when
+indexing raises. That directory is also the `source_root`, so a chunk's context
+header reads `notes.md` rather than `/var/folders/T/tmpXXXX/notes.md` — without
+that, every upload would carry a machine-specific prefix into the index and
+disagree with the same file ingested any other way. The client-supplied
+`filename` is reduced to its basename, so it cannot choose where the bytes land.
+
+**Error responses**
+
+| Status | Condition |
+|--------|-----------|
+| 422 | every uploaded file was refused; `detail.rejected` lists each one and why |
+| 429 | the daily spend cap is exhausted |
+| 500 | Indexing failed (the temp directory is still cleaned up) |
 
 ---
 

@@ -1836,4 +1836,31 @@ Format: date — decision — alternatives — reason.
   every success-path assertion beneath it a comment — the `importorskip`
   lesson of 2026-10-12 in a different costume. Failure is now opt-in via
   `side_effect`, which is the direction that cannot silently mislead.
+- **2026-10-13** — a second ingest endpoint, `POST /ingest/upload`, rather than
+  teaching `/ingest` to take bytes. *Alt:* one endpoint with an optional file
+  part; a presigned-upload dance. *Why:* the two have genuinely different
+  inputs and different threat models. `/ingest` names a path the server already
+  has and is the cron and local-dev case; upload carries bytes from a browser
+  that cannot name a server path at all. Folding them together would give one
+  route two validation regimes and make the confinement rule conditional on
+  which field was set, which is how a guard gets skipped.
+- **2026-10-13** — `POST /ingest` is confined to `INGEST_ROOT`, default `data`.
+  *Alt:* leave it open and rely on the API key; allow-list by extension
+  instead. *Why:* whatever is indexed can be read back through `/query`, so an
+  unconfined server-side path turns the index into a file-read channel for
+  anything the process can open — a key buys you query access, not the
+  filesystem. An extension allow-list does not help, since `.md` and `.txt`
+  are exactly the formats secrets and configs are kept in. The check resolves
+  before comparing, because a string prefix test passes for both
+  `root/../secret` and a symlink inside the root; and it runs before the
+  existence check, because otherwise 403-vs-404 answers "does this path exist
+  on the server?" for any path. `INGEST_ROOT=""` is the documented opt-out for
+  a single-user process on a laptop.
+- **2026-10-13** — an upload reports every file it refused, and a request where
+  all files were refused is a 422, not a 200 with zeroes. *Alt:* skip silently
+  and return the counts, which is what the path endpoint does. *Why:* a caller
+  who sent ten files and reads `documents_processed: 7` cannot tell which three
+  are missing or why, and a corpus that is quietly short is worse than one that
+  failed loudly. The console surfaces the reasons in the toast for the same
+  reason.
 
