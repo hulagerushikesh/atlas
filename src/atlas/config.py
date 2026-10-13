@@ -80,13 +80,31 @@ class RetrievalConfig(BaseSettings):
     top_k: int = 20  # candidates from each retriever before fusion
 
 
+# What the router is told when nothing describes the corpus. Deliberately
+# contentless: it says "whatever was ingested", so the classifier judges the
+# question on its own terms rather than against someone else's corpus.
+GENERIC_DOMAIN = "the documents that have been ingested into this knowledge base"
+
+
 class RouterConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="ROUTER_", env_file=_ENV_FILE, extra="ignore")
 
     # What the knowledge base covers, in one sentence. The router uses it to
     # decide what is out of scope; without it a generic prompt rejected every
     # FastAPI question as "general coding help" on the first live run.
-    domain: str = "the documents that have been ingested into this knowledge base"
+    domain: str = GENERIC_DOMAIN
+    # Which namespace `domain` describes. A namespace is a separate corpus, so
+    # one prose description cannot be true of all of them -- and the failure is
+    # silent in the worst way: on 2026-10-13 a corpus uploaded through the
+    # console was refused at the router ("not concepts defined by the FastAPI
+    # framework") before retrieval ever ran, and the console then told the user
+    # the sheet had no references covering it. It had exactly those references.
+    # Every other namespace gets GENERIC_DOMAIN unless this names it.
+    domain_namespace: str = "default"
+
+    def domain_for(self, namespace: str) -> str:
+        """The domain sentence to classify against for *namespace*."""
+        return self.domain if namespace == self.domain_namespace else GENERIC_DOMAIN
 
 
 class GraderConfig(BaseSettings):

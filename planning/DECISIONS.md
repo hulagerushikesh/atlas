@@ -1864,3 +1864,31 @@ Format: date — decision — alternatives — reason.
   failed loudly. The console surfaces the reasons in the toast for the same
   reason.
 
+- **2026-10-13** — The router's domain sentence is resolved per namespace, not
+  per process. *Alt:* leave `ROUTER_DOMAIN` global; make it a per-namespace
+  JSON map; drop the domain and let the router judge blind. *Why:* a namespace
+  *is* a separate corpus, so one prose description cannot be true of all of
+  them. The first corpus uploaded through the console was classified
+  `out_of_scope` — "not concepts defined or managed by the FastAPI framework"
+  — before retrieval ran, because `.env` described the FastAPI docs. A map was
+  the richer answer and is still available later; `ROUTER_DOMAIN_NAMESPACE`
+  says which single corpus the sentence describes and costs one setting.
+  Dropping the domain was rejected outright: a generic prompt rejected every
+  FastAPI question on the first live run, which is why the setting exists.
+- **2026-10-13** — Uploaded documents store a source relative to the temp
+  directory; ingest from disk still stores the absolute path. *Alt:* relative
+  everywhere; basename everywhere; leave uploads absolute. *Why:* `source_root`
+  governed only the context header, so a citation read
+  `/var/folders/nt/.../T/atlas-upload-g154heox/field-notes.md` — a path the
+  caller cannot use, since the directory is deleted before they see it, and a
+  published description of the server's filesystem. Relative everywhere would
+  change what every existing index cites, so a partially re-ingested corpus
+  would cite two ways; the flag is off by default and on for the one caller
+  whose absolute path is meaningless.
+- **2026-10-13** — The console's out-of-scope copy no longer says the sheet
+  holds no references covering the question. *Alt:* keep it; surface the
+  router's own `reasoning`. *Why:* the router decides before retrieval, so
+  nothing has looked at the sheet when that renders — and it was false in the
+  first real case, on a sheet holding exactly those references. Surfacing the
+  reasoning needs it carried through `PipelineResult`, the response schema and
+  both SSE paths; filed, not done here.

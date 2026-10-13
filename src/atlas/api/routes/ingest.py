@@ -150,10 +150,13 @@ async def ingest_upload(
     the request and land in a temp directory that is deleted in a `finally`
     whatever happens.
 
-    The temp directory is also the `source_root`, so a chunk's context header
-    reads `notes.md` and not `/var/folders/T/tmpXXXX/notes.md` -- without that
-    every upload would carry a machine-specific prefix into the index and
-    disagree with the same file ingested any other way.
+    The temp directory is also the `source_root`, and `relative_sources` makes
+    it govern the stored source as well as the context header, so both read
+    `notes.md` and not `/var/folders/T/tmpXXXX/notes.md`. Without the first,
+    every upload carries a machine-specific prefix into the index and
+    disagrees with the same file ingested any other way; without the second,
+    that prefix is also what citations show the user and what
+    `/namespaces/{namespace}/sources` lists back.
 
     Refusals are reported, not dropped: unsupported extension, empty file,
     oversized file, too many files, or a total over the request cap. A caller
@@ -236,7 +239,9 @@ async def ingest_upload(
                     files=len(accepted), bytes=total)
         start = time.perf_counter()
         try:
-            result = await indexer.index_directory(tmpdir, source_root=tmpdir)
+            result = await indexer.index_directory(
+                tmpdir, source_root=tmpdir, relative_sources=True
+            )
         except Exception as exc:
             logger.error("ingest_upload_failed", error=str(exc))
             raise HTTPException(status_code=500, detail=str(exc)) from exc

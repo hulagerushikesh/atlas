@@ -104,7 +104,19 @@ polished (refusal copy, suggestions); dataset upload for per-corpus eval;
 PDF quality (layout-aware parser); export of a query's evidence as JSON.
 
 Exit criteria:
-- [ ] A new corpus can be created, ingested and queried entirely from the console
+- [x] A new corpus can be created, ingested and queried entirely from the console —
+      **demonstrated end to end 2026-10-13, Rs.0.07.** Named `field-notes` in the
+      sheet picker, dropped a markdown file on the upload zone, asked a question
+      about it: "The default write quorum (`ATLAS_WRITE_QUORUM`) is 3" and "the
+      orphan sweep (`chunk_reaper`) runs every 17 minutes", both cited to
+      `field-notes.md`, 5 stages in 6.9s. The file held invented facts, so an
+      answer could not have come from the model's own knowledge.
+      The first attempt failed twice and both were real: the router judged the
+      question out of scope before retrieval ran, because ROUTER_DOMAIN
+      described the FastAPI corpus and every namespace was handed it; and the
+      stored source was the server's temp directory, so the citation read
+      `/var/folders/nt/.../atlas-upload-g154heox/field-notes.md`. Fixed in the
+      same commit. See DECISIONS 2026-10-13.
 - [x] An outsider follows README from clone to first answer in < 15 minutes —
       **demonstrated end to end 2026-10-13, about 3.5 minutes, Rs.0.18.** Done
       by being the outsider: a real clone of public `main`, then every
@@ -117,7 +129,7 @@ Exit criteria:
       quick start could never reach an answer at all and that `make docker-up`
       had been failing for everyone, so the criterion was never close to
       passing on time -- it was failing on structure.
-- [x] 300+ tests, still ruff/mypy clean — **629 tests**, 93% coverage,
+- [x] 300+ tests, still ruff/mypy clean — **644 tests**, 93% coverage,
       ruff and mypy strict both clean, and since 2026-10-10 all three are
       checked by CI rather than asserted from one laptop. Met well before M4
       was opened, so this is the one M4 criterion that came free; the two

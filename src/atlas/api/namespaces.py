@@ -135,6 +135,14 @@ class NamespaceRegistry:
         # Override collection name for this namespace
         qdrant_cfg = cfg.qdrant.model_copy(update={"collection_name": collection})
 
+        # The router's domain sentence belongs to one corpus, not to the
+        # process. Resolving it per namespace is what stops a corpus uploaded
+        # from the console being refused for not being the corpus ROUTER_DOMAIN
+        # happens to describe.
+        router_cfg = cfg.router.model_copy(
+            update={"domain": cfg.router.domain_for(namespace)}
+        )
+
         sparse = BM25SparseIndex(persist_path=sparse_index_path(namespace))
 
         hybrid = HybridRetriever(
@@ -149,7 +157,7 @@ class NamespaceRegistry:
 
         pipeline = RAGPipeline(
             retriever=hybrid,
-            router=QueryRouter(s.llm, cfg.router),
+            router=QueryRouter(s.llm, router_cfg),
             decomposer=QueryDecomposer(s.llm),
             grader=RetrievalGrader(s.llm, cfg.grader),
             generator=AnswerGenerator(s.llm),
