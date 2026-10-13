@@ -586,7 +586,16 @@ Newest at the bottom of each section.
   (2026-09-24), so such samples would score the refusal rate directly
   instead of poisoning the mean.
 - Citation precision metric: does the cited chunk support *that* sentence.
-- Console: per-key usage page; ingest-from-console with progress events.
+- Console: per-key usage page; ~~ingest-from-console~~ shipped b0af497, with
+  progress events still open (an upload is one blocking request today).
+- Surface the router's `reasoning` to the caller. It is logged and thrown away,
+  so a refusal can only say *that* the question was judged out of scope, never
+  *why* — and the one useful action ("your ROUTER_DOMAIN describes a different
+  corpus") is exactly what the reasoning string says. Needs carrying through
+  `PipelineResult`, `QueryResponse` and both SSE paths.
+- Per-namespace router domains as a map, so a deployment with several corpora
+  can describe each one instead of falling back to the generic sentence for all
+  but one. `ROUTER_DOMAIN_NAMESPACE` (2026-10-13) is the one-corpus version.
 
 ## Nice to have
 

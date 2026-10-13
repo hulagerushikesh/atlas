@@ -41,6 +41,22 @@ from atlas.interfaces.index import BaseIndex
 logger = structlog.get_logger(__name__)
 
 
+def _relative_source(source: str, source_root: Path) -> str:
+    """*source* as a path under *source_root*, or unchanged if it is not one.
+
+    Unchanged rather than raising: a document whose source is a URL, or which
+    a loader named something other than a filesystem path, still has to index.
+    Resolving both sides first, because the caller's root and the loader's
+    path can describe the same directory with different symlinks -- on macOS
+    a temp dir is /var/folders/... to the caller and /private/var/folders/...
+    once resolved, and a plain relative_to() on those two raises.
+    """
+    try:
+        return str(Path(source).resolve().relative_to(Path(source_root).resolve()))
+    except (ValueError, OSError):
+        return source
+
+
 class IndexResult:
     """Summary of one indexing run."""
 
@@ -85,7 +101,12 @@ class DocumentIndexer:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def index_path(self, path: Path, source_root: Path | None = None) -> IndexResult:
+    async def index_path(
+        self,
+        path: Path,
+        source_root: Path | None = None,
+        relative_sources: bool = False,
+    ) -> IndexResult:
         """Load and index a single file.
 
         *source_root* is stripped from the source path in each chunk's context
@@ -100,9 +121,23 @@ class DocumentIndexer:
         content_hash, a re-embed, and a corpus that disagrees with itself.
         `scripts/ingest.py` and the /ingest route both pass the file's parent
         rather than nothing, and both let the caller say otherwise.
+
+        *relative_sources* additionally rewrites each document's stored source
+        to its path under *source_root*, which changes what citations name and
+        what /namespaces/{ns}/sources lists. Off by default, because for a
+        corpus on disk the absolute path is a real location and existing
+        indexes hold it. On for uploads, where it is not: the bytes were
+        written to a temp directory this process invented, so an absolute
+        source is both useless to the caller and a published description of
+        the server's filesystem. A citation read
+        `/var/folders/nt/brcjvzln1.../T/atlas-upload-g154heox/field-notes.md`
+        on 2026-10-13 before this existed.
         """
         loader = get_loader(path)
         documents = await loader.load(path)
+        if relative_sources and source_root is not None:
+            for document in documents:
+                document.source = _relative_source(document.source, source_root)
         return await self.index_documents(documents, source_root)
 
     async def index_directory(
@@ -110,6 +145,7 @@ class DocumentIndexer:
         directory: Path,
         glob: str = "**/*",
         source_root: Path | None = None,
+        relative_sources: bool = False,
     ) -> IndexResult:
         """Recursively index all supported files under *directory*.
 
@@ -129,7 +165,9 @@ class DocumentIndexer:
             "indexing_directory", path=str(directory), file_count=len(paths), ignored=ignored
         )
 
-        tasks = [self.index_path(p, source_root or directory) for p in paths]
+        tasks = [
+            self.index_path(p, source_root or directory, relative_sources) for p in paths
+        ]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         combined = IndexResult()

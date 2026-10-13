@@ -173,6 +173,23 @@ class TestUploadingACorpus:
         target = index.await_args.args[0]
         assert index.await_args.kwargs["source_root"] == target
 
+    def test_the_stored_source_is_the_filename_not_the_temp_path(
+        self, client: TestClient
+    ) -> None:
+        # source_root alone only governs the context header. Without this the
+        # stored source stays absolute, and a citation in the console read
+        # `/var/folders/nt/brcjvzln1.../T/atlas-upload-g154heox/field-notes.md`
+        # on 2026-10-13 -- unusable to the reader, and a published map of the
+        # server's filesystem.
+        index = _indexer(client)
+
+        client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"hello", "text/markdown"))],
+        )
+
+        assert index.await_args.kwargs["relative_sources"] is True
+
     def test_the_temp_dir_is_gone_afterwards(self, client: TestClient) -> None:
         index = _indexer(client)
 

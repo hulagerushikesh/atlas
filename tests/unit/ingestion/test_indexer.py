@@ -356,3 +356,95 @@ class TestSourceRoot:
 
         header = self._first_header(mock_sparse)
         assert "corpus tutorial body" in header
+
+
+class TestWhatACitationIsAllowedToName:
+    """A stored source is shown to the user and listed back by the API.
+
+    For a corpus on disk the absolute path is a real location, so it stays.
+    For an upload it is a temp directory this process invented: useless to the
+    caller, and a published description of the server's filesystem. A citation
+    read `/var/folders/nt/brcjvzln1.../T/atlas-upload-g154heox/field-notes.md`
+    on 2026-10-13, which is how this came to exist.
+    """
+
+    @staticmethod
+    def _sources(mock_dense: MagicMock) -> list[str]:
+        # Distinct sources: a file is many chunks and every one of them carries
+        # the source, so the claim under test is which strings appear at all.
+        chunks = mock_dense.upsert.await_args.args[0]
+        return sorted({c.metadata.source for c in chunks})
+
+    @pytest.mark.asyncio
+    async def test_relative_sources_strips_the_root(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        f = tmp_path / "field-notes.md"
+        f.write_text("hello world " * 40)
+        await indexer.index_path(f, source_root=tmp_path, relative_sources=True)
+        assert self._sources(mock_dense) == ["field-notes.md"]
+
+    @pytest.mark.asyncio
+    async def test_a_nested_upload_keeps_its_subpath(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        nested = tmp_path / "guide"
+        nested.mkdir()
+        f = nested / "intro.md"
+        f.write_text("hello world " * 40)
+        await indexer.index_path(f, source_root=tmp_path, relative_sources=True)
+        assert self._sources(mock_dense) == [str(Path("guide") / "intro.md")]
+
+    @pytest.mark.asyncio
+    async def test_it_is_off_by_default(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        # Existing indexes hold absolute sources; turning this on everywhere
+        # would make a partially re-ingested corpus cite two ways.
+        f = tmp_path / "field-notes.md"
+        f.write_text("hello world " * 40)
+        await indexer.index_path(f, source_root=tmp_path)
+        assert self._sources(mock_dense) == [str(f)]
+
+    @pytest.mark.asyncio
+    async def test_a_symlinked_root_still_relativises(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        # The two sides reach the same directory by different names: the file
+        # through the real path, the root through a symlink to it. macOS does
+        # exactly this with temp dirs (/var/folders/... vs the resolved
+        # /private/var/folders/...), and a relative_to() that compares the
+        # strings raises -- leaving the absolute temp path in place, which is
+        # the whole bug. Deliberately mismatched, because handing both sides
+        # the same spelling passes with or without the resolve and so pins
+        # nothing.
+        real = tmp_path / "real"
+        real.mkdir()
+        (real / "notes.md").write_text("hello world " * 40)
+        link = tmp_path / "link"
+        link.symlink_to(real)
+        await indexer.index_path(real / "notes.md", source_root=link, relative_sources=True)
+        assert self._sources(mock_dense) == ["notes.md"]
+
+    @pytest.mark.asyncio
+    async def test_a_source_outside_the_root_is_left_alone(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        # Unchanged beats raising: a document the loader named something other
+        # than a path under the root still has to index.
+        outside = tmp_path / "outside.md"
+        outside.write_text("hello world " * 40)
+        root = tmp_path / "elsewhere"
+        root.mkdir()
+        await indexer.index_path(outside, source_root=root, relative_sources=True)
+        assert self._sources(mock_dense) == [str(outside)]
+
+    @pytest.mark.asyncio
+    async def test_index_directory_threads_the_flag_down(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        # The upload route calls index_directory, not index_path: a flag that
+        # stops at the directory level is a flag the one caller never gets.
+        (tmp_path / "a.md").write_text("hello world " * 40)
+        await indexer.index_directory(tmp_path, source_root=tmp_path, relative_sources=True)
+        assert self._sources(mock_dense) == ["a.md"]

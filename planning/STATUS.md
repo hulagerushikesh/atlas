@@ -1,6 +1,6 @@
-# Status — 2026-10-13 (v0.1.0, M2 done, M3 at 3 of 4, M4 at 2 of 3, CI green)
+# Status — 2026-10-13 (v0.1.0, M2 done, M3 at 3 of 4, M4 at 3 of 3, CI green)
 
-**13 of the 17 ROADMAP exit criteria are ticked (≈76%).** That fraction is
+**14 of the 17 ROADMAP exit criteria are ticked (≈82%).** That fraction is
 the project's progress number; count it from `planning/ROADMAP.md` rather
 than quoting it from anywhere else.
 
@@ -108,7 +108,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **629 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **644 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -385,7 +385,7 @@ daily spend cap, console markdown.
   the UI (top bar went to `CONSOLE-DEMO · 0 SOURCES · 0 REFS`), and an
   unsupported file produced the toast *"nothing could be indexed — notes.exe:
   no loader handles '.exe'"*, which is the structured 422 rendered readably.
-  **629 tests**; seven planted defects each redden exactly their own pins,
+  **644 tests**; seven planted defects each redden exactly their own pins,
   including the one that proves `.resolve()` is what stops `..` and symlinks.
   `python-multipart` is now a declared dependency — FastAPI raises at request
   time without it, not at import, so an undeclared one would be a 500 on a
@@ -395,6 +395,45 @@ daily spend cap, console markdown.
   `default` whose Qdrant collection does not exist.
   **Still open on this criterion:** the end-to-end *upload → query* run, which
   costs ≈₹0.2 and needs a go-ahead.
+- 2026-10-13 (the end-to-end run, and the two defects it found, ₹0.07) —
+  **M4's first criterion is met.** A corpus named `field-notes` in the sheet
+  picker, a markdown file dropped on the upload zone, a question answered from
+  it: *"The default write quorum (`ATLAS_WRITE_QUORUM`) is 3"* and *"the orphan
+  sweep (`chunk_reaper` task) runs every 17 minutes"*, both cited to
+  `field-notes.md`, 5 stages in 6.9 s. The file held invented facts, so the
+  answer could not have come from the model's own knowledge.
+  The first attempt failed twice, and the demo is the only thing that would
+  have found either.
+  **The router judged the question out of scope before retrieval ran.**
+  `ROUTER_DOMAIN` described the FastAPI docs and every namespace was handed the
+  same sentence, so the moment anyone uploads their own corpus every question
+  about it is refused — the feature shipped unusable for its only purpose, with
+  a green suite. Resolved per namespace now (`ROUTER_DOMAIN_NAMESPACE` names
+  the one corpus the sentence describes; everything else gets the generic
+  default). This is the shape worth remembering: *a setting that was correct
+  when there was one corpus becomes a silent refusal when there are many.*
+  **And the console then blamed the sheet.** The refusal copy read "the
+  `console-demo` sheet has no references covering this" — about a sheet holding
+  exactly those references, and asserted at a point where nothing had looked.
+  **The stored source was the server's temp directory.** `source_root` governed
+  only the context header, so the citation read
+  `/var/folders/nt/.../T/atlas-upload-g154heox/field-notes.md`: a path deleted
+  before the reader sees it, and a published map of the server's filesystem.
+  Uploads now store the name relative to the temp root; ingest from disk is
+  unchanged, so no existing index starts citing two ways.
+  Fourteen new tests, each planted: the global-domain revert reddens 3 of 5
+  router pins and 1 registry pin; ignoring `relative_sources` reddens 4; not
+  threading it through `index_directory` reddens exactly 1.
+  One of my own tests could not fail for the reason it named — a symlink case
+  where both sides were spelled the same way, so it passed with and without
+  the `.resolve()` it claimed to pin. Rewritten to hand the two sides different
+  spellings of the same directory, which is what macOS temp dirs actually do.
+  Another read this laptop's `.env`: `RouterConfig()` picked up the real
+  `ROUTER_DOMAIN` and asserted what one machine happens to hold. Pinned with
+  `_env_file=None`.
+  **Filed, not fixed:** the router's `reasoning` is logged but never leaves the
+  server, so the console cannot say *why* a question was refused — it needs
+  carrying through `PipelineResult`, the response schema and both SSE paths.
 - 2026-10-13 (the SSE pair: a claim nothing checked, and a fixture that
   could not succeed, ₹0) — the `done` event hardcoded `"is_faithful": true` on
   a path whose own docstring says it skips the faithfulness check. Live at

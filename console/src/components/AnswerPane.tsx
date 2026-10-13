@@ -248,8 +248,13 @@ export function AnswerPane() {
 
                 {run.phase === "refused" ? (
                   <div>
-                    <h3 className="mb-2 font-display text-[22px] font-semibold">Not on this sheet.</h3>
-                    <p className="text-ink-2">The <b className="font-semibold text-foreground">{sheet}</b> sheet has no references covering this. Try another sheet, or ingest the source that does.</p>
+                    <h3 className="mb-2 font-display text-[22px] font-semibold">Routed out of scope.</h3>
+                    {/* Not "this sheet has no references covering it": the router
+                        decides before anything is retrieved, so nothing has looked
+                        at the sheet when this renders. A corpus uploaded from the
+                        console was refused here on 2026-10-13 while holding exactly
+                        the references the old copy said it lacked. */}
+                    <p className="text-ink-2">The question was judged outside what <b className="font-semibold text-foreground">{sheet}</b> covers, before any reference was read. Try another sheet — or, if this sheet does cover it, the corpus description the router was given is wrong.</p>
                   </div>
                 ) : run.phase === "failed" && run.failure ? (
                   <div className="max-w-[68ch] rounded-[3px] border-l-[3px] border-bad bg-bad-soft px-4 py-3 font-mono text-[13px] leading-relaxed">

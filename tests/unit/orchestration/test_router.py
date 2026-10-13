@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from atlas.config import GENERIC_DOMAIN, RouterConfig
 from atlas.interfaces.llm import GenerationResponse
 from atlas.orchestration.router import QueryRouter
 
@@ -63,3 +64,45 @@ class TestQueryRouter:
         router = QueryRouter(llm)
         result = await router.classify("some query")
         assert result == "simple"
+
+
+class TestTheDomainBelongsToACorpusNotTheProcess:
+    """A namespace is a separate corpus; one prose description cannot be true
+    of all of them.
+
+    On 2026-10-13 a corpus uploaded through the console was refused at the
+    router -- "not concepts defined by the FastAPI framework" -- because
+    ROUTER_DOMAIN described the FastAPI docs and every namespace was handed
+    the same sentence. Nothing had looked at the corpus when that was decided.
+    """
+
+    def test_the_named_namespace_gets_the_configured_domain(self) -> None:
+        cfg = RouterConfig(domain="the FastAPI docs", domain_namespace="default")
+        assert cfg.domain_for("default") == "the FastAPI docs"
+
+    def test_every_other_namespace_gets_the_generic_domain(self) -> None:
+        cfg = RouterConfig(domain="the FastAPI docs", domain_namespace="default")
+        assert cfg.domain_for("console-demo") == GENERIC_DOMAIN
+        assert "FastAPI" not in cfg.domain_for("console-demo")
+
+    def test_the_scope_is_configurable_not_hardcoded_to_default(self) -> None:
+        # A single-corpus deployment need not call its namespace "default".
+        cfg = RouterConfig(domain="our internal runbooks", domain_namespace="ops")
+        assert cfg.domain_for("ops") == "our internal runbooks"
+        assert cfg.domain_for("default") == GENERIC_DOMAIN
+
+    def test_an_unconfigured_domain_is_generic_everywhere(self) -> None:
+        # _env_file=None, because the shipped default is the claim under test
+        # and this developer's .env sets ROUTER_DOMAIN. Without it the test
+        # asserts what one machine happens to hold and passes in CI for a
+        # different reason than it passes here.
+        cfg = RouterConfig(_env_file=None)
+        assert cfg.domain_for("default") == GENERIC_DOMAIN
+        assert cfg.domain_for("anything") == GENERIC_DOMAIN
+
+    def test_the_prompt_carries_the_domain_it_was_built_with(self) -> None:
+        cfg = RouterConfig(domain="the FastAPI docs", domain_namespace="default")
+        for namespace, expected in (("default", "the FastAPI docs"), ("other", GENERIC_DOMAIN)):
+            scoped = cfg.model_copy(update={"domain": cfg.domain_for(namespace)})
+            router = QueryRouter(_mock_llm("simple"), scoped)
+            assert expected in router._system_prompt

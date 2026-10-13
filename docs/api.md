@@ -291,8 +291,12 @@ Uploads land in a temp directory that is deleted in a `finally`, including when
 indexing raises. That directory is also the `source_root`, so a chunk's context
 header reads `notes.md` rather than `/var/folders/T/tmpXXXX/notes.md` — without
 that, every upload would carry a machine-specific prefix into the index and
-disagree with the same file ingested any other way. The client-supplied
-`filename` is reduced to its basename, so it cannot choose where the bytes land.
+disagree with the same file ingested any other way. The *stored source* is
+relative to it too, so citations and `/namespaces/{namespace}/sources` name
+`notes.md` and not the temp path: an absolute path here is useless to the
+caller — the directory is gone by the time they read it — and is a published
+description of the server's filesystem. The client-supplied `filename` is
+reduced to its basename, so it cannot choose where the bytes land.
 
 **Error responses**
 
