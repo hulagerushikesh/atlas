@@ -270,7 +270,7 @@ async def _stream_events(
         {"type":"stage","name":"routing","status":"start"}
         {"type":"stage","name":"routing","status":"done","classification":"simple","ms":45}
         {"type":"delta","text":"token text"}
-        {"type":"done","classification":"simple","citations":[...],"is_faithful":true}
+        {"type":"done","classification":"simple","citations":[...],"is_faithful":null}
         {"type":"error","error":"...","stage":"grading"}
 
     Every stream ends with `data: [DONE]`, after a `done` event or an
@@ -279,7 +279,10 @@ async def _stream_events(
     500.
 
     Faithfulness is skipped on the streaming path — we'd have to buffer the
-    full answer to check it, defeating the purpose of streaming.
+    full answer to check it, defeating the purpose of streaming. The `done`
+    event therefore carries `is_faithful: null`, which is the difference
+    between "unchecked" and "checked and passed"; a client that wants the
+    verdict must ask without `stream`.
     """
     def _evt(data: dict[str, Any]) -> str:
         return f"data: {json.dumps(data)}\n\n"
@@ -293,11 +296,15 @@ async def _stream_events(
                 "classification": classification, "ms": routing_ms})
 
     if classification == "out_of_scope":
+        # `is_faithful` is null, not true: no check ran. A refusal grounds
+        # nothing and cites nothing, so there is no sense in which it passed
+        # one -- and `true` here is indistinguishable, to any client, from a
+        # verified answer.
         yield _evt({"type": "done", "classification": "out_of_scope",
                     "answer": "This question appears to be outside the scope "
                     "of the knowledge base. "
                               "Please ask a question related to the available documentation.",
-                    "citations": [], "is_faithful": True})
+                    "citations": [], "is_faithful": None})
         yield "data: [DONE]\n\n"
         return
 
@@ -363,8 +370,14 @@ async def _stream_events(
         prompt_tokens=prompt_chars // 4,
         completion_tokens=len(full_answer) // 4,
     )
+    # Null, because this path never runs the faithfulness check -- the
+    # docstring above says so, and it used to send `true` anyway. The console
+    # happened to render UNCHECKED (it keys off a missing score), so the UI was
+    # more honest than the API, and every other client was told a never-checked
+    # answer had been verified. This is the one field the project's whole claim
+    # rests on, so it must not assert what was not computed.
     yield _evt({"type": "done", "classification": classification,
-                "citations": citations, "is_faithful": True})
+                "citations": citations, "is_faithful": None})
     # The out-of-scope branch above has always sent this and the success path
     # never did, so a client could not tell "finished" from "socket closed"
     # on the one path that streams an answer. Now all three endings agree.

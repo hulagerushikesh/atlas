@@ -43,21 +43,42 @@ Newest at the bottom of each section.
   requiring it would have made the check unusable against every baseline on
   disk. Firm up the n=1 production figure the cheap way first: record it on
   the next eval run that happens for another reason.
-- **A streamed answer claims a faithfulness check it never ran.** The SSE
-  `done` event hardcodes `"is_faithful": True` (`routes/query.py`, the
-  success branch), on the path whose own module docstring says it "skips the
-  faithfulness check because we don't have the full answer until the stream
-  ends". The console happens to render `UNCHECKED` because no score arrives,
-  so the UI is more honest than the API — but any other client reading the
-  field is told a never-checked answer was verified. Observed live on
-  2026-10-07 at atlas.hulage.in. This is the one field the project's whole
-  claim rests on, so it must not assert what was not computed. Options, in
-  order of preference: (1) send `is_faithful: null` and let clients render
-  "unchecked"; (2) run the check once the stream completes and emit a second
-  event; (3) drop the field from the streaming contract entirely. (1) is the
-  smallest honest fix and matches what the console already shows.
+- ~~**A streamed answer claims a faithfulness check it never ran.**~~
+  **Fixed 2026-10-13.** Option (1) as filed: the `done` event now sends
+  `is_faithful: null`. **Two sites, not the one filed** — the success branch
+  and the `out_of_scope` early return, which asserted `true` for a canned
+  refusal that grounds and cites nothing. Null is sent rather than the field
+  omitted, because a missing key reads as `undefined` in JS, which is falsey
+  and would flip the error to "not faithful". Verified harmless to the
+  console: `strengthFrom()` returns "Unchecked" off a null *score*, so it
+  never consulted this field on the streaming path — which is exactly why the
+  UI was more honest than the API for six days. `docs/api.md` now states the
+  field is always null there, and the non-streaming response is untouched
+  (`QueryResponse.is_faithful: bool` is computed, and stays `bool`).
 
 ## Debts
+
+- **Turning the faithfulness check off would report a perfect score, not an
+  absent one.** `FaithfulnessChecker.check` opens with
+  `if not self.enabled: return FaithfulnessResult(score=1.0, is_faithful=True,
+  summary="check disabled")` (`orchestration/faithfulness.py:107`). Nothing
+  reaches it today — `namespaces.py:156` constructs
+  `FaithfulnessChecker(s.llm)` and never passes `enabled`, there is no
+  `FAITHFULNESS_ENABLED` in config or `.env.example` — so this is a loaded
+  gun rather than a live defect, which is why it is filed and not fixed. The
+  moment someone wires a flag to it, **every answer reports
+  `faithfulness_score: 1.0`**, and the console renders "Supported 1.00",
+  because `strengthFrom()` only renders "Unchecked" when the score is *null*.
+  That is strictly worse than the streaming bug fixed on 2026-10-13: there
+  the UI stayed honest by accident, here it would be actively misled. The
+  honest values are null, which needs `FaithfulnessResult.score` /
+  `.is_faithful` widened to `float | None` / `bool | None` and the ripple
+  checked through `QueryResponse.is_faithful: bool` and the eval metrics —
+  not a three-line change, hence its own item. The refusal branch below it
+  (`score=1.0` for `is_refusal(answer)`) is argued in a comment and is a
+  separate question: a refusal asserting nothing is defensible, but 1.00
+  still means "Supported" to the console for any refusal not classified
+  `out_of_scope`.
 
 - `rank-bm25` scores every chunk in Python per query (O(N)). Fine to ~50k
   chunks; replace with Qdrant sparse vectors or Tantivy after that.
@@ -109,14 +130,29 @@ Newest at the bottom of each section.
   2026-09-28. **Every rupee figure recorded before that date is
   generation-only**; the next paid run prints the real one.
 
-- **An exception mid-stream on `/query` truncates the SSE body silently.**
-  No error event, no status change — the client sees the stream stop and has
-  no way to tell a finished answer from a dead one. Found while testing the
-  streaming spend path: the fixture's grader was not awaitable and the
-  response simply ended at stage 4, with every assertion about the earlier
-  stages still passing. The fix is an `{"type":"error"}` event plus a log,
-  which is small; the reason it is filed rather than done is that it wants
-  its own test for each stage boundary.
+- ~~**An exception mid-stream on `/query` truncates the SSE body silently.**~~
+  **The code was fixed earlier; the test gap this entry describes closed
+  2026-10-13.** `_stream_query` emits an `error` event plus the `[DONE]`
+  sentinel, logs before emitting, charges the cap for what the failed request
+  spent, and re-raises `CancelledError`/`GeneratorExit` untouched. But the
+  only failure test broke the stream at **grading** — *before* a single token
+  of answer is sent — while the recovery's whole reason for existing is "an
+  exception raised after the first byte cannot become a 500". The hard side of
+  that boundary had no test. It does now: a generator that yields one delta
+  and then raises must produce the partial text, an `error` event naming
+  **generation** (the stage is read back off `status: "start"` events, so a
+  missing announcement silently misattributes the failure), the sentinel, no
+  `done`, and no leaked internals.
+  **The fixture flaw in the original entry was still live, and worse than
+  filed.** `tests/unit/api/conftest.py` left `_grader.grade` an auto-MagicMock,
+  which is not awaitable, so **every streamed request in the suite died at
+  stage 4 and became an `error` event**. An existing test comment already said
+  so and worked around it locally. A shared fixture that cannot reach `done`
+  makes every success-path assertion under it a comment — the same shape as
+  the `importorskip` finding on 2026-10-12. The fixture now grades
+  successfully by default; tests wanting the failure opt in with a
+  `side_effect`, as `_break_at_grading` already did. Four of the seven new
+  tests fail if that one line is reverted.
 - ~~**Cap and rerank the sub-query merge.**~~ **Shipped 2026-09-27.**
   `_retrieve_all` now round-robins across sub-queries and cuts back to one
   window, re-ranked against the original question when a reranker exists.

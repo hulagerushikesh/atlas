@@ -79,7 +79,12 @@ export type StreamEvent =
   | { type: "stage"; name: "retrieval"; status: "done"; chunks: number; ms: number; evidence: Evidence[] }
   | { type: "stage"; name: "grading"; status: "done"; score: number; sufficient: boolean; ms: number }
   | { type: "delta"; text: string }
-  | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean; answer?: string }
+  // `is_faithful` is always null here: the streaming path skips the
+  // faithfulness check, so there is no verdict to report. It is typed
+  // nullable rather than omitted so that reading it cannot look like a
+  // pass -- the API used to send `true` on this path, which it had not
+  // checked. The store renders "Unchecked" off the absent score.
+  | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean | null; answer?: string }
   // Sent when the pipeline throws after the first byte. The response is a 200
   // by then — the status line left before the pipeline had a chance to fail —
   // so this event is the only way the failure can reach the client at all.
