@@ -43,6 +43,21 @@ Newest at the bottom of each section.
   requiring it would have made the check unusable against every baseline on
   disk. Firm up the n=1 production figure the cheap way first: record it on
   the next eval run that happens for another reason.
+
+  **Half done 2026-10-14.** `SampleResult.token_usage` now carries the
+  pipeline's own calls, separated from the judges' by a nested usage scope
+  and merged back into the run meter so the run-wide total is unchanged. The
+  report prints **Cost per query** from it, naming what the judges added, and
+  omits the line entirely on a report that predates the field rather than
+  computing it from a total that means something else. **Still open:** the
+  comparator consuming it — meaningless until two reports carry it, so it
+  waits for the next two paid runs.
+
+  Writing it found a real defect in `usage.counted()`: it folded the inner
+  scope into the caller's meter only on success, so a call that spent its
+  prompt and then raised contributed nothing. In `/query` that is the daily
+  spend cap under-counting exactly the requests that went wrong. The merge is
+  in a `finally` now.
 - ~~**A streamed answer claims a faithfulness check it never ran.**~~
   **Fixed 2026-10-13.** Option (1) as filed: the `done` event now sends
   `is_faithful: null`. **Two sites, not the one filed** — the success branch
@@ -503,6 +518,10 @@ Newest at the bottom of each section.
   the other three tests pass because they never needed google — only
   `log_usage` does, via `Increment`. 584 tests.
 
+- ~~**`tiktoken` is a declared dependency that nothing imports.**~~
+  **Removed 2026-10-14.** Proved rather than grepped: with a module that
+  raises on `import tiktoken` ahead of it on `PYTHONPATH`, all 644 tests
+  passed, so nothing reaches it by any name. Original entry follows.
 - **`tiktoken` is a declared dependency that nothing imports.** `grep -rn
   tiktoken src tests` returns nothing; it is in `[project.dependencies]`, so
   every install and every image build carries it. Either something was meant
@@ -562,12 +581,12 @@ Newest at the bottom of each section.
   download printed `SKIP` to stderr and exited 0. Nine tests now cover the
   fetcher — it had none, though `make lint` had always linted it.
 
-- **No coverage floor.** `addopts` prints `--cov-report=term-missing` but
-  sets no `--cov-fail-under`, so 93% is reported and never defended; a commit
-  can take it to 60% and the gate stays green. Now that CI exists this is
-  worth a number — but picking one is a decision about the project, not a
-  chore, so it is filed rather than guessed. The honest floor is today's
-  figure rounded down.
+- ~~**No coverage floor.**~~ **Done 2026-10-14:** `--cov-fail-under=90`
+  against 93.38% today, so CI defends it too. 90 and not 93 because deleting
+  a well-covered module lowers the percentage without removing a test, and
+  that should be a conversation rather than a red build. Verified the floor
+  can fail — at 99 it reports `FAIL Required test coverage of 99% not
+  reached` — because a floor that cannot fail is a comment.
 
 ## Ideas (research-backed, see learning/09)
 

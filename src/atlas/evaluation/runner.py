@@ -50,7 +50,7 @@ from atlas.interfaces.evaluator import (
     SampleResult,
 )
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.usage import usage_scope
+from atlas.usage import UsageMeter, counted, usage_scope
 
 logger = structlog.get_logger(__name__)
 
@@ -91,7 +91,7 @@ class EvalRunner:
         # this run keeps its own lifetime totals and only this run's calls
         # land here.
         with usage_scope() as usage:
-            tasks = [self._score_sample(s) for s in dataset.samples]
+            tasks = [self._score_sample(s, usage) for s in dataset.samples]
             sample_results: list[SampleResult] = await asyncio.gather(*tasks)
 
         # Aggregate: mean score per metric, ignoring failed samples
@@ -133,10 +133,20 @@ class EvalRunner:
             answers_fingerprint=dataset_answers_fingerprint(dataset),
         )
 
-    async def _score_sample(self, sample: object) -> SampleResult:
+    async def _score_sample(self, sample: object, run_usage: UsageMeter) -> SampleResult:
         async with self._sem:
+            # The pipeline's own calls, counted apart from the judges'. A
+            # nested scope is what separates them -- `record` writes only to
+            # the innermost one -- and merging the result back into the run
+            # meter is what keeps the run-wide total identical to before.
+            # Without that merge this would move tokens out of the run figure
+            # rather than break them out of it.
+            sample_usage = UsageMeter()
             try:
-                result = await self._pipeline.run(sample.question)  # type: ignore[attr-defined]
+                result = await counted(
+                    sample_usage,
+                    self._pipeline.run(sample.question),  # type: ignore[attr-defined]
+                )
                 chunks: list[RetrievedChunk] = result.retrieved_chunks
                 answer: str = result.answer
 
@@ -171,6 +181,7 @@ class EvalRunner:
                     retrieved_chunk_ids=[c.chunk_id for c in chunks],
                     metrics=metric_scores,
                     stage_ms=dict(getattr(result, "stage_ms", {}) or {}),
+                    token_usage=sample_usage.by_model,
                 )
                 return sr
 
@@ -189,4 +200,12 @@ class EvalRunner:
                         MetricScore(metric_name=m.name, score=_FAILED_SENTINEL, reasoning=str(exc))
                         for m in self._metrics
                     ],
+                    # A sample that died halfway still spent what it spent;
+                    # reporting zero would make a failed run look cheap.
+                    token_usage=sample_usage.by_model,
                 )
+            finally:
+                # In a `finally`, so the run total is whole whichever way this
+                # sample ended. The nested scope took these calls off the run
+                # meter; this is what puts them back.
+                run_usage.merge(sample_usage.by_model)

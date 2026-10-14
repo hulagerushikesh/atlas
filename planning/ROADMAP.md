@@ -129,9 +129,11 @@ Exit criteria:
       quick start could never reach an answer at all and that `make docker-up`
       had been failing for everyone, so the criterion was never close to
       passing on time -- it was failing on structure.
-- [x] 300+ tests, still ruff/mypy clean — **644 tests**, 93% coverage,
-      ruff and mypy strict both clean, and since 2026-10-10 all three are
-      checked by CI rather than asserted from one laptop. Met well before M4
+- [x] 300+ tests, still ruff/mypy clean — **656 tests**, 93.38% coverage
+      against a `--cov-fail-under=90` floor the gate defends (2026-10-14;
+      before that the figure was printed and never checked), ruff and mypy
+      strict both clean, and since 2026-10-10 all three are checked by CI
+      rather than asserted from one laptop. Met well before M4
       was opened, so this is the one M4 criterion that came free; the two
       above it are the actual work.
 

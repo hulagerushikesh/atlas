@@ -134,9 +134,37 @@ def _md_tokens(result: EvalResult) -> str:
         f"| **${total_cost:.4f}** (~₹{total_cost * USD_TO_INR:.2f}) |"
     )
     rows.append("")
+    rows.append(_md_cost_per_query(result))
     rows.append(f"*estimated from list prices at {USD_TO_INR:.0f} ₹/$; "
                 f"the ratio between two runs is the part to trust*")
     return "\n".join(rows)
+
+
+def _md_cost_per_query(result: EvalResult) -> str:
+    """What one production query cost, as distinct from one sample of a run.
+
+    The run total above cannot answer this. It includes the judges -- roughly
+    twice the chat calls a production query makes -- so dividing it by sample
+    count overstates a real query by whatever the judges spent. Reports before
+    2026-10-14 carry no per-sample usage, so this line is omitted rather than
+    computed from a total that does not mean what the line would claim.
+    """
+    measured = [sr for sr in result.sample_results if sr.token_usage]
+    if not measured:
+        return ""
+
+    per_sample = [estimate_usage_cost(sr.token_usage) for sr in measured]
+    mean_cost = sum(per_sample) / len(per_sample)
+    judged = estimate_usage_cost(result.token_usage) - sum(per_sample)
+    note = ""
+    if len(measured) != len(result.sample_results):
+        note = f" over {len(measured)} of {len(result.sample_results)} samples"
+    return (
+        f"**Cost per query: ${mean_cost:.5f}** (~₹{mean_cost * USD_TO_INR:.2f}){note} — "
+        f"the pipeline's own calls, judges excluded. The judges added "
+        f"${judged:.4f} to this run, which is why the total above is not "
+        f"`n x` this number.\n"
+    )
 
 
 def _md_models(result: EvalResult) -> str:

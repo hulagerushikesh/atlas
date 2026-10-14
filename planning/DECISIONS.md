@@ -1892,3 +1892,25 @@ Format: date — decision — alternatives — reason.
   first real case, on a sheet holding exactly those references. Surfacing the
   reasoning needs it carried through `PipelineResult`, the response schema and
   both SSE paths; filed, not done here.
+- **2026-10-14** — Coverage floor at 90, against 93.38% measured. *Alt:* 93
+  (today's figure), none at all, 80. *Why:* a printed percentage that nothing
+  defends is the same shape as a pin that cannot fail — a commit could take it
+  to 60% with the gate green. 90 leaves room for deleting a well-covered
+  module, which lowers the percentage without removing a test; pinning at 93
+  would turn that into a red build instead of a conversation. Verified the
+  floor fails at 99 before trusting that it passes at 90.
+- **2026-10-14** — `SampleResult` carries the pipeline's own token usage,
+  separated from the judges' by a nested usage scope. *Alt:* divide the run
+  total by sample count; count the judges separately instead; leave cost per
+  query hand-checked. *Why:* the run total includes the judges — roughly twice
+  the chat calls a production query makes — so dividing it answers a question
+  nobody asked. The nested scope is what separates them, and merging it back
+  into the run meter in a `finally` is what keeps the run-wide figure
+  identical; without that merge this would have moved tokens out of the run
+  total rather than broken them out of it.
+- **2026-10-14** — `usage.counted()` folds its inner scope in a `finally`.
+  *Alt:* leave it folding on success only. *Why:* tokens are spent before a
+  call fails, not instead of failing. Folding only on success meant a `/query`
+  that burned its prompt and then errored added nothing to the daily spend
+  cap — the cap under-counted exactly the requests that went wrong. Found by a
+  test asserting a failed eval sample still reports what it spent.

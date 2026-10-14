@@ -14,7 +14,7 @@ import asyncio
 
 import pytest
 
-from atlas.usage import ModelUsage, UsageMeter, usage_scope
+from atlas.usage import ModelUsage, UsageMeter, counted, usage_scope
 
 
 class TestUsageMeter:
@@ -144,3 +144,51 @@ class TestModelUsage:
 
     def test_total_is_prompt_plus_completion(self) -> None:
         assert ModelUsage(prompt_tokens=8, completion_tokens=2).total_tokens == 10
+
+
+class TestCountedFoldsWhatWasSpent:
+    """`counted()` is how work that spans a yield is accounted for -- the SSE
+    path uses it, and what it folds into the caller's meter is what reaches
+    the daily spend cap.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_successful_call_is_folded(self) -> None:
+        provider, outer = UsageMeter(), UsageMeter()
+
+        async def work() -> str:
+            provider.record("chat-1", prompt_tokens=100, completion_tokens=10)
+            return "ok"
+
+        assert await counted(outer, work()) == "ok"
+        assert outer.total_tokens == 110
+
+    @pytest.mark.asyncio
+    async def test_a_failed_call_is_folded_too(self) -> None:
+        """Tokens are spent *before* a call fails, not instead of failing.
+        Folding only on success meant a /query that burned its prompt and
+        then errored added nothing to the daily cap -- the cap under-counted
+        exactly the requests that went wrong.
+        """
+        provider, outer = UsageMeter(), UsageMeter()
+
+        async def work() -> str:
+            provider.record("chat-1", prompt_tokens=100, completion_tokens=10)
+            raise RuntimeError("provider went away")
+
+        with pytest.raises(RuntimeError, match="provider went away"):
+            await counted(outer, work())
+
+        assert outer.total_tokens == 110, "a failed call's spend must still reach the meter"
+
+    @pytest.mark.asyncio
+    async def test_the_scope_does_not_outlive_the_call(self) -> None:
+        # Otherwise a later record would still land in the inner meter.
+        provider, outer = UsageMeter(), UsageMeter()
+
+        async def work() -> None:
+            provider.record("chat-1", prompt_tokens=1)
+
+        await counted(outer, work())
+        provider.record("chat-1", prompt_tokens=500)
+        assert outer.total_tokens == 1

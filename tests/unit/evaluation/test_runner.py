@@ -10,7 +10,13 @@ import pytest
 
 from atlas.evaluation.runner import _FAILED_SENTINEL, EvalRunner
 from atlas.interfaces.document import ChunkMetadata, DocumentType
-from atlas.interfaces.evaluator import EvalDataset, EvalSample, MetricScore, PipelineConfig
+from atlas.interfaces.evaluator import (
+    EvalDataset,
+    EvalSample,
+    MetricScore,
+    PipelineConfig,
+    SampleResult,
+)
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.usage import UsageMeter
 
@@ -244,3 +250,115 @@ class TestTokenAccounting:
         result = await runner.run(dataset, config)
 
         assert result.token_usage["chat-1"].prompt_tokens == 300
+
+
+class TestWhatOneQueryCost:
+    """Run-wide usage cannot answer "what does a production query cost?".
+
+    It includes the judges -- roughly 7.8 chat calls a sample against
+    production's ~4 -- so dividing it by sample count overstates a real query
+    by whatever the judges happened to spend. That is why cost per query was
+    hand-checked rather than read off a report. `SampleResult.token_usage`
+    carries the pipeline's own calls and nothing else.
+    """
+
+    @staticmethod
+    def _pipeline_and_judge(metric_name: str = "cp") -> tuple[MagicMock, MagicMock]:
+        """A pipeline and a judge that bill from separate providers."""
+        pipeline_provider = UsageMeter()
+        judge_provider = UsageMeter()
+        pipeline = MagicMock()
+
+        async def run(question: str) -> object:
+            pipeline_provider.record("chat-1", prompt_tokens=100, completion_tokens=10)
+            r = MagicMock()
+            r.answer = "a"
+            r.retrieved_chunks = [_chunk("c1")]
+            r.stage_ms = {}
+            return r
+
+        pipeline.run = run
+
+        metric = _mock_metric(metric_name, 0.5)
+
+        async def score(**kwargs: object) -> MetricScore:
+            judge_provider.record("chat-1", prompt_tokens=40, completion_tokens=4)
+            return MetricScore(metric_name=metric_name, score=0.5, reasoning="ok")
+
+        metric.score = score
+        return pipeline, metric
+
+    @pytest.mark.asyncio
+    async def test_a_sample_carries_only_the_pipelines_spend(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        pipeline, metric = self._pipeline_and_judge()
+        result = await EvalRunner(pipeline, [metric]).run(dataset, config)
+
+        for sr in result.sample_results:
+            assert sr.token_usage["chat-1"].prompt_tokens == 100
+            assert sr.token_usage["chat-1"].completion_tokens == 10
+            assert sr.pipeline_tokens == 110
+            # The judge spent 44 more against the same model name. If it
+            # leaked in, this would read 140/14.
+            assert sr.token_usage["chat-1"].calls == 1
+
+    @pytest.mark.asyncio
+    async def test_the_run_total_still_counts_both(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        """The nested scope takes the pipeline's calls off the run meter;
+        merging them back is what keeps this true. Without the merge this
+        would read 3 * 44 and the run would look two thirds cheaper."""
+        pipeline, metric = self._pipeline_and_judge()
+        result = await EvalRunner(pipeline, [metric]).run(dataset, config)
+
+        assert result.token_usage["chat-1"].prompt_tokens == 3 * (100 + 40)
+        assert result.token_usage["chat-1"].calls == 3 * 2
+        assert result.total_tokens_used == 3 * (110 + 44)
+
+    @pytest.mark.asyncio
+    async def test_the_judges_share_is_the_difference(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        """The point of the split: run minus samples is what measuring cost."""
+        pipeline, metric = self._pipeline_and_judge()
+        result = await EvalRunner(pipeline, [metric]).run(dataset, config)
+
+        pipeline_total = sum(sr.pipeline_tokens for sr in result.sample_results)
+        assert pipeline_total == 3 * 110
+        assert result.total_tokens_used - pipeline_total == 3 * 44
+
+    @pytest.mark.asyncio
+    async def test_a_failed_sample_still_reports_what_it_spent(
+        self, dataset: EvalDataset, config: PipelineConfig
+    ) -> None:
+        """Reporting zero would make a run that died halfway look cheap."""
+        provider = UsageMeter()
+        pipeline = MagicMock()
+
+        async def run(question: str) -> object:
+            provider.record("chat-1", prompt_tokens=100, completion_tokens=10)
+            raise RuntimeError("qdrant went away")
+
+        pipeline.run = run
+        result = await EvalRunner(pipeline, [_mock_metric("cp", 0.5)]).run(dataset, config)
+
+        for sr in result.sample_results:
+            assert sr.generated_answer.startswith("[ERROR:")
+            assert sr.pipeline_tokens == 110
+        assert result.total_tokens_used == 3 * 110
+
+    @pytest.mark.asyncio
+    async def test_an_old_report_reads_as_not_measured_not_as_zero(self) -> None:
+        """Every report on disk predates this field. `{}` is how a reader
+        tells "nothing recorded" from "a query that cost nothing"."""
+        sr = SampleResult(
+            sample_id="s1",
+            question="q",
+            generated_answer="a",
+            retrieved_chunk_ids=[],
+            metrics=[],
+        )
+        assert sr.token_usage == {}
+        assert sr.pipeline_tokens == 0

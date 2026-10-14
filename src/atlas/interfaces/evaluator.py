@@ -103,6 +103,18 @@ class SampleResult(BaseModel):
     # reranker.top_k 5 -> 15 was shipped on quality numbers with nobody
     # looking at latency, and the first live query after it took 23 s.
     stage_ms: dict[str, float] = Field(default_factory=dict)
+    # What the *pipeline* spent answering this one question -- the judges'
+    # own calls are deliberately not in here. EvalResult.token_usage counts
+    # both, so dividing it by sample count overstates a production query by
+    # roughly the judges' share (~7.8 chat calls a sample against
+    # production's ~4), which is why cost per query stayed hand-checked.
+    # Empty on every report written before 2026-10-14; readers must treat
+    # absent as "not measured" rather than as zero.
+    token_usage: dict[str, ModelUsage] = Field(default_factory=dict)
+
+    @property
+    def pipeline_tokens(self) -> int:
+        return sum(u.total_tokens for u in self.token_usage.values())
 
 
 class EvalResult(BaseModel):
