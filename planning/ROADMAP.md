@@ -4,6 +4,14 @@ Four milestones. Each has exit criteria; a milestone is not done until every
 one is ticked. Order is fixed — M2 without M1's numbers would deploy something
 unmeasured.
 
+**All four are done as of 2026-10-14, and 16 of the 17 exit criteria are
+ticked.** The one still open is M1's resume-bullets line, which is the user's
+to do. There is deliberately **no M5 yet**: picking one is a decision, not a
+backlog item, and the pool to pick it from is *Parked* at the bottom of this
+file plus `planning/BACKLOG.md`. Until one is opened, "what's next" is
+whatever `planning/STATUS.md` lists under *Blocked on you* — mostly two paid
+runs waiting on a spend go-ahead.
+
 ## M1 — First live run  ✅ done 2026-09-20 (v0.1.0)
 
 **Goal:** Atlas answers real questions over the real FastAPI corpus with
@@ -132,7 +140,7 @@ Exit criteria:
       *next* change: HyDE is module 09 §4, built, off by default, and still
       the only unmeasured thing in M3 at ≈₹6.24.
 
-## M4 — Product hardening
+## M4 — Product hardening  ✅ done 2026-10-13 (marked 2026-10-14)
 
 **Goal:** Something a second person could use without you in the room.
 
@@ -175,8 +183,23 @@ Exit criteria:
       was opened, so this is the one M4 criterion that came free; the two
       above it are the actual work.
 
+The last of these three was earned on 2026-10-13 and the milestone was marked
+on 2026-10-14, the same met-but-unticked gap M2 carried — recorded rather than
+tidied away, because it is the second time it has happened.
+
+**Most of M4's *scope* was not built, and the milestone is still done.** The
+scope paragraph above lists key management UI, a usage page per key, dataset
+upload for per-corpus eval, layout-aware PDF parsing and evidence export as
+JSON; none of those exist. The exit criteria are what close a milestone here,
+and they were chosen to mean "a second person could use this without you in
+the room" — a corpus they can build from a browser, a README that gets them
+to an answer, and a suite that defends the whole thing. Those are met and
+measured. The unbuilt scope items are features, not gaps in that claim, and
+they are the strongest candidates for an M5.
+
 ## Parked (not scheduled)
 
 GraphRAG / RAPTOR; multimodal (ColPali); MCP tool exposure (that is
-Sextant's job); fine-tuned embeddings (needs a labelled set M3 will start
-producing).
+Sextant's job); fine-tuned embeddings — the labelled set M3 was going to
+start producing now exists, at 16 samples, which is far short of the few
+thousand pairs this needs.
