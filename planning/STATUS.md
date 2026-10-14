@@ -1,8 +1,17 @@
-# Status — 2026-10-14 (v0.1.0, M2 done, M3 at 4 of 4, M4 at 3 of 3, CI green)
+# Status — 2026-10-14 (v0.1.0, all four milestones done, 16 of 17, CI green)
 
-**16 of the 17 ROADMAP exit criteria are ticked (≈94%).** That fraction is
-the project's progress number; count it from `planning/ROADMAP.md` rather
-than quoting it from anywhere else.
+**16 of the 17 ROADMAP exit criteria are ticked (≈94%), and all four
+milestones are marked done as of 2026-10-14.** That fraction is the project's
+progress number; count it from `planning/ROADMAP.md` rather than quoting it
+from anywhere else. The one criterion still open is M1's resume-bullets line,
+which is yours.
+
+**There is no M5, on purpose.** Opening one is a decision, not a backlog
+item. The pool to pick from is *Parked* at the bottom of ROADMAP.md, the
+unbuilt M4 scope items listed there (key management UI, usage page per key,
+dataset upload for per-corpus eval, layout-aware PDF, evidence export), and
+[BACKLOG.md](BACKLOG.md). Until one is opened, what's next is *Blocked on
+you* below — which is two paid runs needing a spend go-ahead.
 
 How to explain the project to someone else — what gap it addresses, in prose
 rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
@@ -15,11 +24,13 @@ Cloud Run rev **00011-xcm** (image `58e4e00`, deployed 2026-10-07) in
 `asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
 Firestore for keys and the spend counter, four Secret Manager secrets,
 ₹200/mo budget alert, and a `*/10` keep-warm job. `main` and production
-agree. **M3 is at four of four exit criteria as of 2026-10-14**, after the
-two that were failing on form rather than substance were reworded to ask for
-what this repo actually produces — see *M3 exit criteria* below. The single
-remaining open criterion in the whole roadmap is M1's resume-bullets line,
-which is yours.
+agree. **All four milestones are marked done as of 2026-10-14.** M3 closed at
+four of four once the two criteria that were failing on form rather than
+substance were reworded to ask for what this repo actually produces — see
+*M3 exit criteria* below. M4 closed at three of three, earned on 2026-10-13
+and marked a day later; most of its *scope* was never built and ROADMAP.md
+says which parts and why that still counts. The single remaining open
+criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 
 ## Blocked on you
 
