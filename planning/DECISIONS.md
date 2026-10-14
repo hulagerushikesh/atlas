@@ -166,6 +166,12 @@ Format: date — decision — alternatives — reason.
   more context actually threatens — did not move. 10 was not run end to end:
   the cheap harness ranked 15 above it on recall, and buying second-best for
   another ₹0.3 is not worth it.
+
+  *Source:* `learning/09-research-frontier.md` §1 (*Long context vs RAG*),
+  which names this change and its test by hand — "raise
+  `RerankerConfig.top_k` from 5 to ~15 and measure faithfulness vs cost".
+  Cross-referenced 2026-10-14, when M3's exit criteria were reworded to ask
+  for the trace from a shipped change back to the research item it came from.
 - **2026-09-23** — `retrieval.top_k` stays 20 for now, though the reranker
   keeps 15 of those 20 and so barely filters. Retrieval-only recall at 40 is
   0.964 against 0.929 at 20. *Why not ship it:* that is the harness this same
@@ -494,6 +500,15 @@ Format: date — decision — alternatives — reason.
   full pipeline: decomposition and the now-additive retry reaching the page
   the cheap harness never sees. I bought the re-ingest partly on a reason
   that turned out not to hold, and it paid off for a different one.
+
+  *Source:* `learning/09-research-frontier.md` §5 (*Ingestion quality*),
+  which lists contextual retrieval as *LLM-written* chunk context. What
+  shipped is the deterministic cousin: the source path in words plus the
+  heading trail, computed at ingest with no LLM call per chunk, so it costs
+  one re-ingest and nothing per query. The LLM-written version is still
+  unbought -- it would be one call per chunk over 4,020 chunks, and any later
+  comparison between the two has this run as its baseline.
+  Cross-referenced 2026-10-14.
 
 - **2026-09-27** — **The retrieval-only harness has now mispredicted four
   times running, and this time in both directions at once.** On the `headers`

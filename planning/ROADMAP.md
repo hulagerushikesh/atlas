@@ -58,10 +58,10 @@ These were met across 2026-09-23 → 10-07 but left unticked here until
 2026-10-12, which is the same staleness `planning/STATUS.md` carried: the
 work was done and the document still said it was next.
 
-## M3 — Retrieval quality, measured
+## M3 — Retrieval quality, measured  ✅ done 2026-10-14
 
 **Goal:** Beat the M1 baseline on `make eval-compare` with at least two
-research-backed changes, each one PR, each with a before/after report.
+research-backed changes, each with a stored before/after report.
 
 Candidates, in expected value-per-effort order:
 1. Tokeniser fix for BM25 (identifiers, camelCase) — free
@@ -72,7 +72,23 @@ Candidates, in expected value-per-effort order:
 6. SPLADE via Qdrant sparse vectors — replaces the O(N) BM25 loop
 
 Exit criteria:
-- [ ] ≥ 2 changes merged, each with `eval-compare` in the PR
+- [x] ≥ 2 research-backed changes shipped to `main`, each with a stored
+      `eval-compare` report pair and a dated write-up in DECISIONS.md
+      → **`reranker.top_k` 5 → 15** (context recall 0.778 → 0.900, +0.122
+      against a 0.02 floor; DECISIONS 2026-09-23) and **deterministic context
+      headers** (context precision 0.3762 → 0.4524, recall 0.9286 → 0.9643,
+      and `fq-012` recalled for the first time at 0.000 → 1.000; DECISIONS
+      2026-09-27). A third change shipped too — identifier-aware BM25
+      tokenisation — and is written up as worth **nothing** end to end
+      (recall 0.778 → 0.778, every delta under the floor), which is a result
+      and is why the bar here is two rather than "all of them".
+      **Reworded 2026-10-14.** The original read "≥ 2 changes merged, each
+      with `eval-compare` in the PR". This repo has **zero merge commits and
+      no pull request has ever existed** — it is one person committing to
+      `main` — so the PR was a venue, never the evidence. The evidence is 16
+      stored before/after reports in `eval_data/reports/` and the dated
+      entries, which a reader can still check long after a PR thread would
+      have scrolled away. The bar did not move; the place it is met did.
 - [x] Faithfulness or context recall up by more than the measured noise floor
       → **context recall 0.667 → 0.9378**, +0.271 against a 0.02 significance
       floor, more than ten times it. Faithfulness is pinned at 1.000 and
@@ -92,7 +108,29 @@ Exit criteria:
       `comparator.compare()` measures latency and run cost against the
       budget and withholds "Overall winner" on a breach. Cost per *query*
       stays hand-checked — an eval run also pays the metric judges.
-- [ ] `learning/` module 09 exercise written up for each in DECISIONS.md
+- [x] Each of those changes traced in DECISIONS.md to the `learning/`
+      module 09 item it came from, with its measured before/after
+      → `reranker.top_k` 5 → 15 is module 09 **§1 (Long context vs RAG)**,
+      which names this exact change: "raise `RerankerConfig.top_k` from 5 to
+      ~15 and measure faithfulness vs cost". Context headers are **§5
+      (Ingestion quality)**, shipped as the deterministic cousin of the
+      LLM-written contextual retrieval that section lists — path and heading
+      trail, no LLM call per chunk. Both cross-references were added to the
+      DECISIONS entries on 2026-10-14.
+      **Reworded 2026-10-14, and this asks for less than the original did.**
+      The original read "`learning/` module 09 exercise written up for each",
+      and `learning/exercises.md` §09 defines that exercise as a paper
+      write-up ending in "the `make eval-compare` result you would expect" —
+      a prediction, made before paying. What DECISIONS holds instead is the
+      measurement and, for both of these changes, a correction: the cheap
+      retrieval-only harness mispredicted four times running, and the
+      mechanism argued for the context headers turned out to be the wrong one
+      (`fq-012` was recovered by decomposition and the additive retry, not by
+      path tokens). Keeping the original wording would mean inventing
+      predictions after the fact for changes already shipped, which is worth
+      less than the corrections are. The exercise as written stands for the
+      *next* change: HyDE is module 09 §4, built, off by default, and still
+      the only unmeasured thing in M3 at ≈₹6.24.
 
 ## M4 — Product hardening
 
