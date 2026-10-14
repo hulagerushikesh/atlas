@@ -108,7 +108,7 @@ unticked — see *M3 exit criteria* below.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **644 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **656 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00011-xcm**, image `58e4e00`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -385,7 +385,7 @@ daily spend cap, console markdown.
   the UI (top bar went to `CONSOLE-DEMO · 0 SOURCES · 0 REFS`), and an
   unsupported file produced the toast *"nothing could be indexed — notes.exe:
   no loader handles '.exe'"*, which is the structured 422 rendered readably.
-  **644 tests**; seven planted defects each redden exactly their own pins,
+  **656 tests**; seven planted defects each redden exactly their own pins,
   including the one that proves `.resolve()` is what stops `..` and symlinks.
   `python-multipart` is now a declared dependency — FastAPI raises at request
   time without it, not at import, so an undeclared one would be a 500 on a
@@ -395,6 +395,33 @@ daily spend cap, console markdown.
   `default` whose Qdrant collection does not exist.
   **Still open on this criterion:** the end-to-end *upload → query* run, which
   costs ≈₹0.2 and needs a go-ahead.
+- 2026-10-14 (three ₹0 backlog items, and a spend-cap defect one of them
+  found, ₹0) — **a coverage floor the gate defends** (`--cov-fail-under=90`
+  against 93.38%; verified it fails at 99 before trusting that it passes at
+  90), **`tiktoken` removed** — proved rather than grepped, by putting a
+  module that raises on `import tiktoken` ahead of it on `PYTHONPATH` and
+  watching all 644 tests pass — and **per-sample token usage on
+  `SampleResult`**, which is what finally separates "what did this run cost"
+  from "what does a production query cost". The judges make roughly twice the
+  chat calls a real query does, so the run total divided by sample count was
+  never the production figure; a nested usage scope separates them and a
+  merge back into the run meter keeps the run-wide total identical. The
+  report now prints **Cost per query** and names what the judges added, and
+  omits the line on any report predating the field rather than computing it
+  from a total that means something else.
+  **The defect that fell out of it:** `usage.counted()` folded its inner
+  scope into the caller's meter *only on success*. So a call that spent its
+  prompt and then raised contributed nothing — and in `/query` that is the
+  daily spend cap under-counting exactly the requests that went wrong. The
+  merge is in a `finally` now. Found by a test asserting a failed eval sample
+  still reports what it spent, which is the second time this week a test
+  written for one thing caught a different live defect.
+  **656 tests**; five plants, each reddening its own pins: folding only on
+  success reddens 2, dropping the merge-back reddens 7, recording the run
+  scope instead of the sample's reddens 2, pricing cost/query off the run
+  total reddens 2, printing the line with nothing measured reddens 1.
+  **Still open:** the comparator consuming per-sample usage — meaningless
+  until two reports carry it, so it waits for the next two paid runs.
 - 2026-10-13 (the end-to-end run, and the two defects it found, ₹0.07) —
   **M4's first criterion is met.** A corpus named `field-notes` in the sheet
   picker, a markdown file dropped on the upload zone, a question answered from

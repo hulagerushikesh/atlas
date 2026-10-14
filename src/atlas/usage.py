@@ -176,8 +176,16 @@ async def counted(meter: UsageMeter, awaitable: Awaitable[T]) -> T:
 
     Scoping one await at a time never spans a yield, so it holds however the
     generator is driven.
+
+    The merge is in a `finally` because tokens are spent before a call fails,
+    not instead of failing. Folding only on success dropped them from the
+    caller's meter entirely -- which in `/query` means a request that burned
+    its prompt and then errored added nothing to the daily cap, so the cap
+    under-counted exactly the requests that went wrong. Found 2026-10-14 by a
+    test of a failed eval sample reporting zero spend.
     """
     with usage_scope() as step:
-        result = await awaitable
-    meter.merge(step.by_model)
-    return result
+        try:
+            return await awaitable
+        finally:
+            meter.merge(step.by_model)

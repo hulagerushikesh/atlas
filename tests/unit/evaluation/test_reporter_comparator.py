@@ -509,6 +509,76 @@ class TestTokenReporting:
         assert "generation call only" not in md
 
 
+class TestCostPerQuery:
+    """The run total cannot answer "what does a production query cost?" --
+    it includes the judges. Before per-sample usage existed the figure was
+    hand-checked, and the comparator said so in its own output.
+    """
+
+    @staticmethod
+    def _run(per_sample: dict[str, ModelUsage] | None, samples: int = 2) -> EvalResult:
+        # Run total = 4x the pipeline's chat tokens, i.e. the judges spent as
+        # much again as the pipeline did, per sample.
+        run_usage = {"m": ModelUsage(kind="chat", calls=4 * samples,
+                                     prompt_tokens=400 * samples,
+                                     completion_tokens=40 * samples)}
+        return EvalResult(
+            pipeline_config=PipelineConfig(name="run"),
+            sample_results=[
+                SampleResult(
+                    sample_id=f"s{i}", question="q", generated_answer="a",
+                    retrieved_chunk_ids=["c1"],
+                    metrics=[MetricScore(metric_name="faithfulness", score=1.0)],
+                    token_usage=per_sample or {},
+                )
+                for i in range(samples)
+            ],
+            aggregate_scores={"faithfulness": 1.0},
+            token_usage=run_usage,
+            total_tokens_used=440 * samples,
+            dataset_fingerprint="fp",
+            duration_seconds=1.0,
+        )
+
+    def test_it_prices_the_pipeline_not_the_run(self) -> None:
+        pipeline = {"m": ModelUsage(kind="chat", calls=2,
+                                    prompt_tokens=100, completion_tokens=10)}
+        md = _md_table(self._run(pipeline))
+
+        expected = estimate_usage_cost(pipeline)
+        assert f"${expected:.5f}" in md
+        assert "Cost per query" in md
+        assert "judges excluded" in md
+
+    def test_it_is_not_the_run_total_divided_by_samples(self) -> None:
+        """The failure this exists to prevent: dividing a contaminated total
+        by sample count and calling it a production figure."""
+        pipeline = {"m": ModelUsage(kind="chat", calls=2,
+                                    prompt_tokens=100, completion_tokens=10)}
+        result = self._run(pipeline)
+        md = _md_table(result)
+
+        naive = estimate_usage_cost(result.token_usage) / len(result.sample_results)
+        honest = estimate_usage_cost(pipeline)
+        assert naive > honest, "the fixture must actually have judge contamination"
+        assert f"${naive:.5f}" not in md
+
+    def test_an_old_report_omits_the_line_entirely(self) -> None:
+        """Every report on disk predates per-sample usage. Computing the line
+        from the run total would print exactly the wrong number."""
+        md = _md_table(self._run(None))
+        assert "Cost per query" not in md
+        # The per-model breakdown is still there -- only the derived line goes.
+        assert "| Model | Calls |" in md
+
+    def test_the_judges_share_is_named(self) -> None:
+        pipeline = {"m": ModelUsage(kind="chat", calls=2,
+                                    prompt_tokens=100, completion_tokens=10)}
+        result = self._run(pipeline)
+        judged = estimate_usage_cost(result.token_usage) - 2 * estimate_usage_cost(pipeline)
+        assert f"${judged:.4f}" in _md_table(result)
+
+
 class TestTokenComparability:
     def test_mixed_provenance_is_noted(self) -> None:
         old = _spent(total=120_000)
