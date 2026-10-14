@@ -1,6 +1,6 @@
-# Status — 2026-10-13 (v0.1.0, M2 done, M3 at 3 of 4, M4 at 3 of 3, CI green)
+# Status — 2026-10-14 (v0.1.0, M2 done, M3 at 4 of 4, M4 at 3 of 3, CI green)
 
-**14 of the 17 ROADMAP exit criteria are ticked (≈82%).** That fraction is
+**16 of the 17 ROADMAP exit criteria are ticked (≈94%).** That fraction is
 the project's progress number; count it from `planning/ROADMAP.md` rather
 than quoting it from anywhere else.
 
@@ -15,24 +15,13 @@ Cloud Run rev **00011-xcm** (image `58e4e00`, deployed 2026-10-07) in
 `asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
 Firestore for keys and the spend counter, four Secret Manager secrets,
 ₹200/mo budget alert, and a `*/10` keep-warm job. `main` and production
-agree. **M3 is at three of four exit criteria**; the two that are open fail
-on form rather than substance, and the one that is objectively met is still
-unticked — see *M3 exit criteria* below.
+agree. **M3 is at four of four exit criteria as of 2026-10-14**, after the
+two that were failing on form rather than substance were reworded to ask for
+what this repo actually produces — see *M3 exit criteria* below. The single
+remaining open criterion in the whole roadmap is M1's resume-bullets line,
+which is yours.
 
 ## Blocked on you
-
-- [ ] **Two M3 criteria need a wording call, not work (₹0 either way).**
-      Criterion 1 asks for "≥ 2 changes merged, each with `eval-compare` in
-      the PR" and criterion 4 for a "`learning/` module 09 exercise" per
-      change. Both are met in substance and neither in form: this repo has
-      **zero merge commits — no pull request has ever existed** — and no
-      DECISIONS entry cross-references `learning/09`. The evidence the
-      criteria wanted is there and stronger than a PR body (16 stored
-      before/after eval reports in `eval_data/reports/`, ~20 dated write-ups
-      in DECISIONS.md). Three options: reword both criteria to match how this
-      project actually works, add the module-09 cross-references, or leave
-      M3 at 3 of 4. Criterion 2 is objectively met (recall 0.667 → 0.9378)
-      and is still unticked for the same reason — nobody has said so.
 
 - [ ] **Re-ingest `default` — ≈₹6.45, needs a spend go-ahead.** It lands
       `eccc01d` (the `fq-002` chunk is dated three years stale without it)
@@ -317,19 +306,45 @@ run that happens anyway.
 
 ## M3 exit criteria
 
+**All four are ticked as of 2026-10-14.** Two of them were reworded that day
+rather than newly earned, and that is recorded in ROADMAP.md on the criteria
+themselves, not only here.
+
 | Criterion | State |
 |---|---|
-| ≥ 2 changes merged, each with `eval-compare` **in the PR** | substance yes, **form no** — zero merge commits, no PR has ever existed |
-| Faithfulness or context recall up beyond the noise floor | **met** (0.667 → 0.9378) and still unticked |
+| ≥ 2 research-backed changes shipped, each with a stored report pair and a dated write-up | **ticked 2026-10-14** — reworded from "merged … in the PR" |
+| Faithfulness or context recall up beyond the noise floor | **ticked 2026-10-12** (0.667 → 0.9378, more than ten times the 0.02 floor) |
 | p95 latency and $/query inside an agreed budget | **ticked 2026-10-08**, and enforced in code 2026-10-09 |
-| `learning/` module 09 exercise written up for each | substance yes, **form no** — no DECISIONS entry cites `learning/09` |
+| Each change traced to its `learning/` module 09 item, with before/after | **ticked 2026-10-14** — reworded, and it asks for less than the original |
 
-The two "form no" rows are the *Blocked on you* wording call at the top. The
-substance behind them: 16 stored before/after reports, and of the three
-shipped retrieval changes two carry real measured gains (`top_k` 5→15,
-recall 0.778→0.900; context headers, P 0.387→0.467) while `e095c7b` records
-that the tokeniser was worth nothing end to end — which is a result, and
-still leaves ≥ 2.
+What the two rewordings changed, so a reader can disagree with them:
+
+- **Criterion 1 lost the PR.** It asked for changes *merged* with
+  `eval-compare` *in the PR*. This repo has **zero merge commits and no pull
+  request has ever existed**; it is one person committing to `main`. The PR
+  was a venue, not the evidence, and the evidence is better than a PR body
+  would be: 16 stored before/after reports in `eval_data/reports/` plus
+  ~20 dated write-ups in DECISIONS.md, all still checkable. Qualifying
+  changes: `reranker.top_k` 5 → 15 (recall 0.778 → 0.900) and deterministic
+  context headers (P 0.3762 → 0.4524, R 0.9286 → 0.9643, `fq-012` recalled
+  for the first time). A third, identifier-aware BM25 tokenisation, shipped
+  and `e095c7b` records it as worth nothing end to end — a result, and the
+  reason the bar is two.
+- **Criterion 4 lost the prediction, which is a genuinely lower bar.**
+  `learning/exercises.md` §09 asks for a paper write-up ending in "the
+  `make eval-compare` result you would expect" — made *before* paying. The
+  criterion now asks only that each shipped change name the module 09 item
+  it came from and carry its measured before/after. Both cross-references
+  were added to DECISIONS.md the same day: `top_k` → §1 *Long context vs
+  RAG*, which names the change by hand; context headers → §5 *Ingestion
+  quality*, shipped as the deterministic cousin of the LLM-written version
+  that section lists. The honest reason for dropping the prediction half is
+  that this project's predictions kept being wrong — the cheap harness
+  mispredicted four times running, and the mechanism argued for the context
+  headers was not the one that worked — so writing predictions after the
+  fact for shipped changes would be worth less than the corrections already
+  are. The exercise as written stands for HyDE, which is module 09 §4,
+  built, off, and still the only unmeasured thing in M3.
 
 ## The index gate, and why every deploy currently overrides it
 
@@ -362,6 +377,64 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-14 (M3's last two criteria reworded and closed, ₹0) — both had been
+  met in substance and failing on form since the milestone opened, and the
+  call was yours to make. **Criterion 1 lost the PR.** It asked for changes
+  "merged, each with `eval-compare` in the PR"; this repo has zero merge
+  commits and no pull request has ever existed, so the PR was a venue and
+  never the evidence. It now asks for a stored report pair and a dated
+  DECISIONS write-up, which is what 16 reports in `eval_data/reports/` and
+  ~20 entries already are, and is still readable in a year. Qualifying:
+  `reranker.top_k` 5 → 15 (recall 0.778 → 0.900) and deterministic context
+  headers (P 0.3762 → 0.4524, R 0.9286 → 0.9643, `fq-012` recalled for the
+  first time). **Criterion 4 lost the prediction, and that is a lower bar —
+  said so in the criterion itself rather than only here.**
+  `learning/exercises.md` §09 defines the exercise as a paper write-up ending
+  in "the `make eval-compare` result you would expect", made before paying.
+  It now asks only that each shipped change name its module 09 item and carry
+  its measured before/after, and the two cross-references were added to
+  DECISIONS.md the same day: `top_k` → §1 *Long context vs RAG*, which names
+  the change by hand ("raise `RerankerConfig.top_k` from 5 to ~15 and measure
+  faithfulness vs cost"); context headers → §5 *Ingestion quality*, shipped
+  as the deterministic cousin of the LLM-written version that section lists.
+  The reason for dropping the prediction half is the honest one: this
+  project's predictions kept being wrong — the cheap retrieval harness
+  mispredicted four times running, and the path-token mechanism argued for
+  the context headers was not what recovered `fq-012` — so predictions
+  invented after the fact for shipped changes would be worth less than the
+  recorded corrections are. **M3 is 4 of 4 and the roadmap is 16 of 17.** The
+  one still open is M1's resume-bullets line, which is yours. No code changed
+  and no metric moved; what changed is that two criteria now describe a
+  one-person repo instead of a team's. The exercise as written stands for
+  HyDE — module 09 §4, built, off, ≈₹6.24 to measure, and the only
+  unmeasured thing left in M3.
+- 2026-10-14 (three ₹0 backlog items, and a spend-cap defect one of them
+  found, ₹0) — **a coverage floor the gate defends** (`--cov-fail-under=90`
+  against 93.38%; verified it fails at 99 before trusting that it passes at
+  90), **`tiktoken` removed** — proved rather than grepped, by putting a
+  module that raises on `import tiktoken` ahead of it on `PYTHONPATH` and
+  watching all 644 tests pass — and **per-sample token usage on
+  `SampleResult`**, which is what finally separates "what did this run cost"
+  from "what does a production query cost". The judges make roughly twice the
+  chat calls a real query does, so the run total divided by sample count was
+  never the production figure; a nested usage scope separates them and a
+  merge back into the run meter keeps the run-wide total identical. The
+  report now prints **Cost per query** and names what the judges added, and
+  omits the line on any report predating the field rather than computing it
+  from a total that means something else.
+  **The defect that fell out of it:** `usage.counted()` folded its inner
+  scope into the caller's meter *only on success*. So a call that spent its
+  prompt and then raised contributed nothing — and in `/query` that is the
+  daily spend cap under-counting exactly the requests that went wrong. The
+  merge is in a `finally` now. Found by a test asserting a failed eval sample
+  still reports what it spent, which is the second time this week a test
+  written for one thing caught a different live defect.
+  **656 tests**; five plants, each reddening its own pins: folding only on
+  success reddens 2, dropping the merge-back reddens 7, recording the run
+  scope instead of the sample's reddens 2, pricing cost/query off the run
+  total reddens 2, printing the line with nothing measured reddens 1.
+  **Still open:** the comparator consuming per-sample usage — meaningless
+  until two reports carry it, so it waits for the next two paid runs.
 - 2026-10-13 (console ingest: the corpus can now be built from a browser, and
   the endpoint it used stops being a file-read channel, ₹0 so far) — M4's
   first criterion asks for a corpus *created, ingested and queried entirely
@@ -399,33 +472,6 @@ daily spend cap, console markdown.
   `default` whose Qdrant collection does not exist.
   **Still open on this criterion:** the end-to-end *upload → query* run, which
   costs ≈₹0.2 and needs a go-ahead.
-- 2026-10-14 (three ₹0 backlog items, and a spend-cap defect one of them
-  found, ₹0) — **a coverage floor the gate defends** (`--cov-fail-under=90`
-  against 93.38%; verified it fails at 99 before trusting that it passes at
-  90), **`tiktoken` removed** — proved rather than grepped, by putting a
-  module that raises on `import tiktoken` ahead of it on `PYTHONPATH` and
-  watching all 644 tests pass — and **per-sample token usage on
-  `SampleResult`**, which is what finally separates "what did this run cost"
-  from "what does a production query cost". The judges make roughly twice the
-  chat calls a real query does, so the run total divided by sample count was
-  never the production figure; a nested usage scope separates them and a
-  merge back into the run meter keeps the run-wide total identical. The
-  report now prints **Cost per query** and names what the judges added, and
-  omits the line on any report predating the field rather than computing it
-  from a total that means something else.
-  **The defect that fell out of it:** `usage.counted()` folded its inner
-  scope into the caller's meter *only on success*. So a call that spent its
-  prompt and then raised contributed nothing — and in `/query` that is the
-  daily spend cap under-counting exactly the requests that went wrong. The
-  merge is in a `finally` now. Found by a test asserting a failed eval sample
-  still reports what it spent, which is the second time this week a test
-  written for one thing caught a different live defect.
-  **656 tests**; five plants, each reddening its own pins: folding only on
-  success reddens 2, dropping the merge-back reddens 7, recording the run
-  scope instead of the sample's reddens 2, pricing cost/query off the run
-  total reddens 2, printing the line with nothing measured reddens 1.
-  **Still open:** the comparator consuming per-sample usage — meaningless
-  until two reports carry it, so it waits for the next two paid runs.
 - 2026-10-13 (the end-to-end run, and the two defects it found, ₹0.07) —
   **M4's first criterion is met.** A corpus named `field-notes` in the sheet
   picker, a markdown file dropped on the upload zone, a question answered from
