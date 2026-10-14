@@ -4,6 +4,10 @@
 the project's progress number; count it from `planning/ROADMAP.md` rather
 than quoting it from anywhere else.
 
+How to explain the project to someone else — what gap it addresses, in prose
+rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
+say so; this file is where they are current.
+
 ## One line
 
 **M2 is done and shipped: https://atlas.hulage.in is live and current** —
