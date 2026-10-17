@@ -1,0 +1,1213 @@
+{
+  "pipeline_config": {
+    "name": "hyde-concat",
+    "description": "chat=gemini-3.1-flash-lite embed=gemini-embedding-001@1536 retrieval.top_k=20 reranker=on/top_k=15 chunk=recursive/512/64 namespace=default",
+    "overrides": {
+      "hyde.enabled": true,
+      "hyde.mode": "concat"
+    }
+  },
+  "sample_results": [
+    {
+      "sample_id": "fq-001",
+      "question": "How do you declare a path parameter in FastAPI?",
+      "generated_answer": "To declare a path parameter in FastAPI, you use the same syntax as Python format strings [3].\n\n* **Basic Declaration:** Use standard Python type annotations in your function signature [5].\n* **Numeric Validations and Metadata:** Import `Path` from `fastapi` and use it to declare metadata or numeric validations (such as `gt`, `ge`, `lt`, or `le`) [4][10].\n* **Requirements:** A path parameter is always required because it is part of the path; declaring it with `None` or a default value does not change this [1].",
+      "retrieved_chunk_ids": [
+        "bba708ec-9a98-5799-88a2-b13c8c82448f",
+        "1842cfb0-03cc-5400-a618-8acfaf6d1efa",
+        "8a8bd54b-f11c-5286-bc92-b17c4e248607",
+        "a0d4551c-0ed8-52c5-929f-95d03e076fd5",
+        "5db07b5c-fcfe-5e28-a3ad-4a42e9fa132e",
+        "8a9945c1-15bc-5a9b-991b-6eac83b160e9",
+        "71162282-0473-541f-9e93-e14cdc7b85b8",
+        "f0fff19f-a205-5761-910c-7d2f3f044321",
+        "dbb3ec42-dc64-56c2-abae-7b7be864e66c",
+        "215835ad-4ebb-5962-b8ad-0475a33eec8e",
+        "ec2601af-1c01-5ec6-9846-9fc06eb935c9",
+        "dde86289-14f4-58c0-b95a-e65b28ea1439",
+        "04a8ca19-e5f6-5a89-aa37-963de0e5115a",
+        "d5f5fc4d-b386-5f46-a930-15c132065add",
+        "29830adb-2caa-5f46-9ea0-c6c02ed9d4a2"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.2667,
+          "reasoning": "4/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/path-params']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 4 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.843,
+          "reasoning": "Mean cosine similarity 0.843 over 3 synthetic questions. Synthetic questions: ['What is the syntax used to define a path parameter in FastAPI?', 'How can you add numeric validations or metadata to path parameters in FastAPI?', 'Is it possible to make a path parameter optional by assigning it a default value or None in FastAPI?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.3333,
+          "reasoning": "1/3 reference facts present, 2 missing, 0 contradicted. Missing: ['Path parameters are declared by including them in curly braces in the path string.', 'The same name must appear as a function argument.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1459.8,
+        "hyde": 1700.2,
+        "retrieval": 2424.0,
+        "grading": 1350.1,
+        "generation": 1384.9,
+        "faithfulness": 1980.3
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6705,
+          "completion_tokens": 824
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 180,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-002",
+      "question": "What Python version does FastAPI require?",
+      "generated_answer": "FastAPI requires Python 3.7 or above [4]. Support for Python 3.6 was dropped in version 0.84.0 [4], and support for Python 3.8 was dropped in version 0.125.0 [9].",
+      "retrieved_chunk_ids": [
+        "c3e07ca6-b46f-5310-bd56-f5f5381335a6",
+        "52ded028-bb39-53d8-ab0c-3530fdc840b1",
+        "1adea7ab-00f6-52de-8086-fa292245e773",
+        "d258ac94-a640-5824-8132-0a12d539079d",
+        "d0d80eca-7f64-5c55-9d81-69776ed395a3",
+        "66b15f51-87ee-5ed3-a48f-038260053055",
+        "85d31344-e00b-5f83-9d24-0f983388ecb2",
+        "41044305-a672-51c2-acce-f9de3c6433a1",
+        "dc288577-d110-51d8-b29d-041ab59900f5",
+        "e6c836ec-776b-5d23-b4bb-94c59733e3a8",
+        "923eea4b-d1c1-5a36-b238-e2313482efde",
+        "ff1bd92d-3e68-59a0-bd72-1e691c25801a",
+        "dff203a9-9cad-5bc2-b743-6794c2d81749",
+        "d5065a31-b1d0-5ea7-b9cc-06f49b159781",
+        "566703c3-6991-59fd-8adb-03f667853efa"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.2,
+          "reasoning": "3/15 retrieved chunks came from relevant documents (relevant doc IDs: ['release-notes']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8871,
+          "reasoning": "Mean cosine similarity 0.887 over 3 synthetic questions. Synthetic questions: ['What is the minimum Python version required to run FastAPI?', 'When was support for Python 3.6 discontinued in FastAPI?', 'In which version did FastAPI cease support for Python 3.8?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.25,
+          "reasoning": "2/4 reference facts present, 1 missing, 1 contradicted. Contradicted: ['FastAPI currently requires Python 3.10 or later.'] Missing: ['FastAPI dropped support for Python 3.9.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1025.4,
+        "hyde": 1454.1,
+        "retrieval": 2505.4,
+        "grading": 1152.6,
+        "generation": 1035.8,
+        "faithfulness": 1620.3
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6194,
+          "completion_tokens": 481
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 143,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-003",
+      "question": "How do you make a query parameter optional with a default value in FastAPI?",
+      "generated_answer": "To make a query parameter optional with a default value in FastAPI, you can use the following methods:\n\n*   **Standard Python default:** Set the default value of the function parameter to `None` (or any other value) [2][10][13].\n    *   Example: `q: str | None = None` [1][2][13]\n*   **Using `Annotated`:** Use `Annotated` with `Query` and set the function parameter's default value [6][12].\n    *   Example: `q: Annotated[str | None, Query(max_length=50)] = None` [4][6]\n    *   *Note:* When using `Annotated`, you must set the default value on the function parameter itself, not within the `Query` function [5].\n*   **Alternative (Old) Method:** Use `Query` as the default value of the function parameter [1][11][15].\n    *   Example: `q: str | None = Query(default=None)` [1][7]\n\nAny default value, including `None`, makes a query parameter optional [3][4][10].",
+      "retrieved_chunk_ids": [
+        "3c1a46fb-91c8-543f-b65d-35e8af67c7d1",
+        "ecea0645-1dc5-5183-a185-01d5911359e3",
+        "91818d93-3f94-508f-8312-6b799d033dbd",
+        "e4c56ebc-a629-5f6d-a365-d081ed2a7b52",
+        "45f9c8b3-fee6-5bee-9461-102fcefadb2a",
+        "e48085bd-1578-5194-a0c1-e4962542c2a0",
+        "4280a5b4-8b2a-5eed-8241-6a7fb4b9db0e",
+        "9ec03b37-4a27-5b25-93bb-2754305f28fa",
+        "46514d02-c506-583b-8421-a80588f8e56f",
+        "0883ee48-c1ef-55e7-b098-4c1a6db8d070",
+        "b8de6371-de8a-53f7-98ec-d2bb12590de8",
+        "4b2eeb7e-cfb2-5a72-938a-8aaa70115315",
+        "d0f8a916-646a-5042-8030-edfb7c882362",
+        "855270ca-4b4b-5b35-a209-5b5cbeeeb246",
+        "16d084cf-a741-5df0-8a76-803818f36f19"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.1333,
+          "reasoning": "2/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/query-params']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 9 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8736,
+          "reasoning": "Mean cosine similarity 0.874 over 3 synthetic questions. Synthetic questions: ['How can I define an optional query parameter with a default value in a FastAPI endpoint?', 'What is the recommended syntax for using Annotated with Query to set optional parameters in FastAPI?', 'How do I use standard Python default values to make a query parameter optional in FastAPI?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "3/3 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1104.0,
+        "hyde": 1669.3,
+        "retrieval": 2088.0,
+        "grading": 1087.0,
+        "generation": 1577.1,
+        "faithfulness": 1839.3
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6975,
+          "completion_tokens": 1095
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 191,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-004",
+      "question": "What decorator do you use to define a POST endpoint in FastAPI?",
+      "generated_answer": "To define a POST endpoint in FastAPI, you use the `@app.post()` decorator [1][4].",
+      "retrieved_chunk_ids": [
+        "b5b61d66-c50c-506d-8ac8-2d241b293697",
+        "ece083d9-3f22-5e3c-b167-017f7c666b8e",
+        "5ca490c4-b157-5f61-b764-facce0d1d48f",
+        "c17abfff-13f1-51d6-bb54-65de7ba2ee63",
+        "097c1d58-4c61-5342-b6a3-c65e75dfae76",
+        "65244c37-361f-5ff6-9ddc-b0a33d2ae980",
+        "1a0eb7b9-c95e-51c6-b2b2-1adf2c2ac86d",
+        "19354835-885e-5bc9-a134-ec99e7eed23a",
+        "9cb38eb4-8941-57c5-8b45-dac4db51b816",
+        "3d4c824b-3d74-5bec-9e1a-05b600ab4c22",
+        "c83ccc95-0ee4-56ee-974f-50a6dc8eb284",
+        "728a0726-dcc9-5634-8ad7-3930ae95d38b",
+        "06e38ffd-6a8e-56c8-83d2-821a03feb579",
+        "19758cd5-4a48-5f60-8831-023478e29b58",
+        "a0041579-95dd-54ba-8191-33da24e5895e"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.4,
+          "reasoning": "6/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/first-steps']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 1 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8484,
+          "reasoning": "Mean cosine similarity 0.848 over 3 synthetic questions. Synthetic questions: ['How do you create a POST endpoint using the FastAPI framework?', 'Which decorator is utilized in FastAPI to handle HTTP POST requests?', 'What is the standard way to define a route for sending data to a server in FastAPI?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.5,
+          "reasoning": "1/2 reference facts present, 1 missing, 0 contradicted. Missing: ['The decorator is one of the operation decorators FastAPI lists alongside @app.get(), @app.put() and @app.delete().']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1113.8,
+        "hyde": 2102.4,
+        "retrieval": 2154.9,
+        "grading": 1075.5,
+        "generation": 931.0,
+        "faithfulness": 1391.8
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6887,
+          "completion_tokens": 335
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 168,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-005",
+      "question": "How does FastAPI validate request body data?",
+      "generated_answer": "FastAPI validates request body data using Pydantic models [4][9]. When you declare a parameter in a path operation function as a Pydantic model, FastAPI performs the following actions:\n\n* **Data Conversion:** It reads the request body as JSON and converts the data to the types defined in the model [1].\n* **Validation:** It validates the incoming data against the Pydantic model, automatically generating and returning errors to the client if the data is invalid [12].\n* **Documentation:** It uses the Pydantic model to generate the correct JSON Schema for the API's OpenAPI documentation [3][11].\n* **Flexibility:** It supports nested models and arbitrary dictionaries while providing data parsing, serialization, and validation [14].\n\nAdditionally, for form data, you can declare a Pydantic model with the `Form` parameter, and FastAPI will extract the data for each field from the request's form data [5].",
+      "retrieved_chunk_ids": [
+        "ec2601af-1c01-5ec6-9846-9fc06eb935c9",
+        "8c024f93-3c34-5a35-bcc3-a3a4ac73b73c",
+        "8a9945c1-15bc-5a9b-991b-6eac83b160e9",
+        "675868f8-9be5-535d-a01d-9ca7366a3de7",
+        "18aaef2f-c817-5be1-a33a-9007e24f3962",
+        "1afccd9a-717e-525a-960b-85ffa30339f6",
+        "0e43e47e-805f-5d9c-aad5-9cbd7646769a",
+        "313205eb-f8b0-559c-aa19-3709f016c79a",
+        "f0306753-9854-5eb9-bf85-7ef05b2e4398",
+        "1ae50c8a-6d43-5ad2-8f20-b60cb0c8086e",
+        "3731cb28-56d6-593f-9603-5287e960b7bf",
+        "1d092a18-05be-5270-bff3-3d45b957aae2",
+        "9acab357-50cd-5d10-acd0-5e6ee1f208d5",
+        "0b3bb5ec-030b-590f-a73d-c49432773136",
+        "583a4466-63d5-540c-90c1-2adc354365a3"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.3333,
+          "reasoning": "5/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/body']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.7976,
+          "reasoning": "Mean cosine similarity 0.798 over 3 synthetic questions. Synthetic questions: ['How does FastAPI utilize Pydantic models to process and validate incoming request body data?', 'What specific functions does FastAPI perform when a Pydantic model is declared as a parameter in a path operation?', 'How can Pydantic models be used to handle and validate form data within a FastAPI application?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "6/6 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 818.6,
+        "hyde": 1485.3,
+        "retrieval": 2156.9,
+        "grading": 1285.0,
+        "generation": 1729.2,
+        "faithfulness": 2073.3
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6425,
+          "completion_tokens": 948
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 228,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-006",
+      "question": "What is dependency injection in FastAPI and how do you use it?",
+      "generated_answer": "Dependency injection in FastAPI is a system that allows your path operation functions to declare requirements (\"dependencies\") that the framework then automatically provides [1]. It is designed to be intuitive, powerful, and capable of handling complex hierarchies or \"graphs\" of dependencies [3][4].\n\n### How to use it:\n* **Declare dependencies:** You use `Depends()` to tell FastAPI that a path operation function requires a specific dependency [11].\n* **Define dependencies:** Dependencies can be functions, classes, or any \"callable\" [8][12]. When a request arrives, FastAPI calls the dependency, processes its parameters (including sub-dependencies), and assigns the result to the parameter in your path operation function [8][12].\n* **Integration:** You can use dependencies to share logic, database connections, or enforce security and authentication [7][15].\n* **Automation:** FastAPI automatically handles the execution of dependencies, including those with `yield` statements, and can even manage background tasks [4][5][9].\n* **Flexibility:** You do not need to register dependencies; simply passing them to `Depends()` allows FastAPI to manage them [11]. You can also use `Annotated` to share dependencies and reduce code duplication [11].\n\nOther common terms for this concept include resources, providers, services, injectables, and components [2][3][4].",
+      "retrieved_chunk_ids": [
+        "ca478715-71a1-5bb6-a6ce-b3988ffbe327",
+        "e51f2e01-2d8f-5718-8e73-27f3bbb93ee2",
+        "e3f34a26-1c00-5285-bac0-21487375ffed",
+        "6f160606-2585-59a4-9038-04f7ca6f44ce",
+        "4f6eef7f-88df-509b-98d1-bb2ff1bfb754",
+        "692a7863-be3a-582c-94c3-e10e4b31e808",
+        "e3f17009-2667-5f7a-990b-721ee64503dc",
+        "5d5da930-5125-5ee6-804f-f96ee10153f3",
+        "606dec92-fc2b-5d31-8207-05844113fef0",
+        "30419ffd-117c-5f4d-b02a-025a6e9a38cd",
+        "25d10747-6025-577c-b360-8cd700232f3d",
+        "04a8ca19-e5f6-5a89-aa37-963de0e5115a",
+        "9805b099-c643-5cd6-bd70-f5d5d1380ab5",
+        "09c7f918-704c-5af4-8cef-650b00d36ce1",
+        "34cff826-4aa2-5dc8-9fc1-d95ce4d57f6d"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.5333,
+          "reasoning": "8/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/dependencies/dependencies-with-yield', 'tutorial/dependencies/index']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 10 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8464,
+          "reasoning": "Mean cosine similarity 0.846 over 3 synthetic questions. Synthetic questions: ['What is the purpose and functionality of dependency injection within the FastAPI framework?', 'How do you implement and define dependencies when building an application with FastAPI?', 'What are the primary benefits and use cases for utilizing the dependency injection system in FastAPI?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.8571,
+          "reasoning": "6/7 reference facts present, 1 missing, 0 contradicted. Missing: ['FastAPI supports async dependencies.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 856.8,
+        "hyde": 2813.6,
+        "retrieval": 3977.1000000000004,
+        "grading": 2438.8,
+        "generation": 1898.7,
+        "faithfulness": 2334.4
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 7,
+          "prompt_tokens": 6982,
+          "completion_tokens": 1365
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 2,
+          "prompt_tokens": 370,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-007",
+      "question": "How do you add authentication and then use the current user in a protected endpoint?",
+      "generated_answer": "To add authentication and use the current user in a protected endpoint, follow these steps:\n\n*   **Implement OAuth2:** Use `OAuth2PasswordBearer` to handle the `Authorization` header, which expects a `Bearer` token [3].\n*   **Create a Dependency:** Define a dependency (e.g., `get_current_user`) that uses the `oauth2_scheme` to receive the token as a string [4][11]. This function should validate the token and return the user (e.g., as a Pydantic model) [4].\n*   **Handle Logic:** You can create additional sub-dependencies (e.g., `get_current_active_user`) to enforce further requirements, such as checking if a user is active [1].\n*   **Inject the User:** Use `Depends` in your path operation function to inject the current user [4][7]. By declaring the type of the `current_user` parameter, you gain access to editor completion and type checks [8].\n*   **Flexibility:** You are not restricted to specific data models; you can use Pydantic models, dictionaries, or database class instances for your user data [9].\n*   **Optimization:** To reduce code duplication, you can use `Annotated` to create a reusable dependency [14].",
+      "retrieved_chunk_ids": [
+        "90ba8934-ec5d-5810-a7e5-cf39af58ec92",
+        "1a6fee4c-0c70-5a20-9bf4-3584877c9ba8",
+        "9b1666d2-38e7-5d37-b48b-e29f2619c64a",
+        "f90994db-2a02-5ddd-8f8c-61ce3d4f94e2",
+        "55bdd047-a605-5c98-8367-bf1018e1d5bb",
+        "c3c95da5-85b9-5f88-ab52-12bb7661543d",
+        "98ff7ecb-2f41-5cfe-ae2e-e7b6c9e2649d",
+        "c132e074-3727-55f6-b5dd-837f1263576d",
+        "be45902f-34ef-554a-b1a3-4c40739fa3a5",
+        "e8e0ee23-700f-5351-a6c3-a84c8b518efd",
+        "b1be1489-4f4e-52c3-b283-c80d2938fea5",
+        "d0ccdbf5-aeb9-5b10-a8f4-c416bfd8db10",
+        "f9e563bb-409a-5800-afa7-0bb4b5aa4139",
+        "4a484d4c-6312-5c9d-82fc-e89dd560ba7a",
+        "3dbbe0ed-b504-51d6-8b05-717fd16f4b71"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.7333,
+          "reasoning": "11/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/security/first-steps', 'tutorial/security/get-current-user', 'tutorial/security/oauth2-jwt']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 0.6667,
+          "reasoning": "Retrieved chunks from 2/3 relevant documents. Missing: ['tutorial/security/oauth2-jwt'].",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 8 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.6901,
+          "reasoning": "Mean cosine similarity 0.690 over 3 synthetic questions. Synthetic questions: ['How can I implement OAuth2 authentication in a FastAPI application to protect endpoints?', 'What is the recommended way to inject the currently authenticated user into a path operation function?', 'How do I create and utilize reusable dependencies for user authentication and validation in FastAPI?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "6/6 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 973.8,
+        "decompose": 1334.4,
+        "hyde": 1542.8,
+        "retrieval": 7695.3,
+        "grading": 1694.7,
+        "generation": 1949.1,
+        "faithfulness": 2314.4
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 8,
+          "prompt_tokens": 7147,
+          "completion_tokens": 1380
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 3,
+          "prompt_tokens": 532,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-008",
+      "question": "How do you stream a large file download through FastAPI without loading it all into memory?",
+      "generated_answer": "To stream a large file without loading it all into memory, you can use the following approaches:\n\n*   **`StreamingResponse` with `yield`**: You can use `yield` to send chunks of data in turn [3]. This allows you to stream large binary files by reading and sending each chunk without loading the entire file into memory at once [1].\n*   **`FileResponse`**: This class asynchronously streams a file as the response [10]. It requires the file path and automatically handles headers like `Content-Length`, `Last-Modified`, and `ETag` [14].\n*   **`UploadFile`**: If you are handling file uploads, `UploadFile` uses a \"spooled\" file that stores data in memory up to a maximum size limit before storing it on disk, which prevents consuming all memory when processing large files [2].\n\n**Important considerations:**\n*   **Blocking I/O**: File-like objects are often not compatible with `async`/`await` by default [11]. To avoid blocking the event loop when reading files, you can declare your *path operation function* using regular `def` instead of `async def`, which causes FastAPI to run the function on a threadpool worker [9].\n*   **Resource Management**: When using a generator with `yield` to stream files, use a `with` block to ensure the file-like object is closed after the response has finished sending [11][13].\n*   **Media Types**: You can create a custom subclass of `StreamingResponse` or use the `media_type` attribute to set the `Content-Type` header so the client correctly identifies the data being streamed [6][7].",
+      "retrieved_chunk_ids": [
+        "a2f9ebb3-1613-536d-8406-16bcfdd4c877",
+        "09547e00-7f7d-5e4e-9ac6-7b620bdcd841",
+        "4e0f0674-caa2-5f4e-b1ab-e5a88ff9c257",
+        "c535a720-6358-5f93-9203-10ba53c4f9f0",
+        "94eae18c-1b1a-5ed0-8697-c29ec1c53358",
+        "116bf67e-8f03-5675-899d-9c51167de999",
+        "d1e1c54d-1be6-5e05-8cbd-c8e15c59196a",
+        "fe8b92e3-6dfb-5d35-95ca-f9a1b0fbcbd2",
+        "2122079b-2dc1-5f8a-aa13-c230be242bd5",
+        "f8a1312b-7090-5852-8d3c-a02be87473e3",
+        "0ef7f771-f7c7-5e00-ba28-4be84ffa8bb1",
+        "ddfba3f9-9751-5f3d-840c-e65ab3be3a2f",
+        "9bbc8fb7-b880-5953-8143-376448307f08",
+        "949c6c67-0d9e-575d-9fc4-26035a40b8ad",
+        "fe73efea-a574-572c-8722-05bae70f7f9f"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.8667,
+          "reasoning": "13/15 retrieved chunks came from relevant documents (relevant doc IDs: ['advanced/custom-response', 'advanced/stream-data']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 12 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.822,
+          "reasoning": "Mean cosine similarity 0.822 over 3 synthetic questions. Synthetic questions: ['What are the primary methods in FastAPI for streaming large files while maintaining memory efficiency?', 'How can you prevent a file operation from blocking the FastAPI event loop?', 'What mechanisms are available in FastAPI to handle large file uploads without exhausting system memory?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "4/4 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1104.5,
+        "hyde": 1552.1,
+        "retrieval": 2297.1,
+        "grading": 1186.3,
+        "generation": 1812.6,
+        "faithfulness": 2516.1
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6631,
+          "completion_tokens": 1267
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 177,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-009",
+      "question": "How do you run startup and shutdown logic in a FastAPI application?",
+      "generated_answer": "You can handle startup and shutdown logic in a FastAPI application using the following methods:\n\n*   **Lifespan (Recommended):** Use the `lifespan` parameter of the `FastAPI` app [1][13]. This involves creating an async function decorated with `@asynccontextmanager` that uses `yield` [11][15]:\n    *   Code placed before the `yield` executes during startup, before the application starts taking requests [14][15].\n    *   Code placed after the `yield` executes during shutdown, after the application finishes handling requests [6][14].\n    *   The `lifespan` function is passed to the `FastAPI` app as an async context manager [8][13].\n\n*   **Alternative Events (Deprecated):** You can define separate event handlers for `\"startup\"` and `\"shutdown\"` [5][10].\n    *   Functions are declared using `async def` or `def` [5][10].\n    *   The application will not receive requests until all `\"startup\"` event handlers have completed [4][10].\n    *   **Warning:** If you provide a `lifespan` parameter, these event handlers will no longer be called; you must use either `lifespan` or alternative events, but not both [1].",
+      "retrieved_chunk_ids": [
+        "ef5739e5-22a2-5dce-8276-75775d7222fa",
+        "cc6fe1ce-3c8e-5ae9-83b8-9e0db27790a2",
+        "b33a62d0-e202-50a9-82e8-01e693ba6333",
+        "35b3eb55-c3bb-5a11-baba-80a1101f6353",
+        "06918a51-842e-51b1-8be7-a64560d21160",
+        "138b09fa-a3aa-5cdd-a371-61240fb7ed2b",
+        "ee911780-df73-5c59-8574-6bbe95f66ff1",
+        "a52fe418-b71c-5d69-8e2c-6a500371d9eb",
+        "51ec3adc-125d-5218-ac5e-8edcbc32a781",
+        "c9f7e19e-c3b2-52d4-860e-a43e0b2aebbf",
+        "4f7da884-b81c-5490-85c3-da1fa2aea545",
+        "ce6f2402-b65c-511f-bcbb-74b8b62570c5",
+        "9477cdb3-c4d1-502a-8e76-0bd4cadaf0b9",
+        "db1ab6e4-812d-5d45-b171-6c909b8b4351",
+        "a6770c8e-1e00-56c6-a3bb-455df455f3c7"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.9333,
+          "reasoning": "14/15 retrieved chunks came from relevant documents (relevant doc IDs: ['advanced/events']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 10 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8506,
+          "reasoning": "Mean cosine similarity 0.851 over 3 synthetic questions. Synthetic questions: ['What is the recommended approach for managing application startup and shutdown logic in a FastAPI project?', 'How does the lifespan function work in FastAPI to handle code execution before and after the application lifecycle?', 'What are the deprecated methods for handling startup and shutdown events in FastAPI, and why should they not be used alongside the lifespan parameter?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "8/8 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1051.4,
+        "hyde": 1404.8,
+        "retrieval": 2279.1,
+        "grading": 1704.5,
+        "generation": 1796.2,
+        "faithfulness": 2210.2
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6245,
+          "completion_tokens": 1122
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 195,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-010",
+      "question": "Can you use synchronous blocking database calls directly in a FastAPI async endpoint without any workaround?",
+      "generated_answer": "No. If you declare a *path operation function* with `async def`, it is called directly, and performing blocking I/O (such as synchronous database calls) will block the server [2][13].\n\nTo handle blocking operations, you should:\n* Declare the *path operation function* with regular `def` instead of `async def` [8].\n* When using `def`, FastAPI will run the function in an external threadpool to avoid blocking the main event loop [8][13].",
+      "retrieved_chunk_ids": [
+        "75c9c491-b952-5aae-b121-6630d0b8f110",
+        "c4941d21-11bb-5999-9bc2-63f8cb690253",
+        "6976060c-4563-5584-ba06-504d14a8a298",
+        "a481f9e2-0ee0-5403-bfff-cd0d5e297882",
+        "6ac3b492-7e86-5c09-9d96-7578d90e1095",
+        "f11adb0d-30e2-5538-9002-947ca0590651",
+        "61cd5cb4-c9af-546e-9df0-780b369731f5",
+        "2122079b-2dc1-5f8a-aa13-c230be242bd5",
+        "441cc068-b576-5655-a052-b9e01ff9f3ad",
+        "0f8f3ffa-6b5d-56df-bd2a-cbc4558326a2",
+        "91336aa1-03d3-51fe-8ecc-fe3d7c212711",
+        "b8e3a333-43a1-5b99-ae01-a74edbe74a31",
+        "7b294221-2568-5f1e-bc5d-f12a16910e3c",
+        "83833f38-8358-5514-8075-4f884a2f74ed",
+        "91548007-3f05-5ff9-b3ff-e53c3e433ce8"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6667,
+          "reasoning": "10/15 retrieved chunks came from relevant documents (relevant doc IDs: ['async']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 4 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8022,
+          "reasoning": "Mean cosine similarity 0.802 over 3 synthetic questions. Synthetic questions: [\"Is it safe to perform blocking I/O operations within an 'async def' path operation function in FastAPI?\", 'How does FastAPI handle blocking synchronous functions compared to asynchronous ones?', 'What is the recommended way to execute blocking operations in a FastAPI application without stalling the server?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.5,
+          "reasoning": "5/10 reference facts present, 5 missing, 0 contradicted. Missing: ['FastAPI awaits the result of the threadpool execution for plain def functions.', 'The docs recommend using plain def for database libraries that lack await support.', 'Reserve async def for libraries called with await.', 'Dependencies and sub-dependencies follow the same rule (def runs in a threadpool).', 'For mixing blocking code into async code, FastAPI points at AnyIO.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1208.6,
+        "hyde": 4965.0,
+        "retrieval": 6024.4,
+        "grading": 4579.3,
+        "generation": 1547.0,
+        "faithfulness": 2213.4
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 9,
+          "prompt_tokens": 8086,
+          "completion_tokens": 1186
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 3,
+          "prompt_tokens": 635,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-011",
+      "question": "Is it possible to return a plain dict from a FastAPI endpoint without declaring a response model?",
+      "generated_answer": "Yes, it is possible to return a plain dictionary from a FastAPI endpoint without declaring a response model [5]. When you do not declare a response model or a specific return type, FastAPI will use the default `JSONResponse` class to serialize the data to JSON [1].",
+      "retrieved_chunk_ids": [
+        "c535a720-6358-5f93-9203-10ba53c4f9f0",
+        "313205eb-f8b0-559c-aa19-3709f016c79a",
+        "0ee0cd45-feeb-53e0-b041-d3c2b803a4d3",
+        "a6d028a0-7664-580f-a6ba-0bfa36783f20",
+        "d9f88127-0348-51f0-8052-80d4891fe2c1",
+        "d3267a6e-fc5b-5ff9-a86a-f1fd167121c9",
+        "2e70f1f3-f59b-5e4b-b95e-f0930ea08054",
+        "47fbd62d-9619-56b5-9ced-469f331bd076",
+        "e44a7f3a-38cd-5161-9976-ffb3486431ce",
+        "77d4b613-39bc-538a-a15b-29f21df52795",
+        "e7e651f6-0d52-530a-a086-ccabdd99c66d",
+        "1ae50c8a-6d43-5ad2-8f20-b60cb0c8086e",
+        "e9276df7-a1f2-58ee-bd76-c2a685ade239",
+        "1561b472-e979-541d-a83e-e9f28648fb6f",
+        "7192388c-2426-55c1-b7b1-5c924d39e7eb"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "9/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/response-model']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 2 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8397,
+          "reasoning": "Mean cosine similarity 0.840 over 3 synthetic questions. Synthetic questions: ['Is it possible to return a standard Python dictionary from a FastAPI endpoint without defining a response model?', 'What happens when you return a dictionary from a FastAPI route without specifying a return type?', 'Which class does FastAPI use to serialize data to JSON when no response model is declared?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.4,
+          "reasoning": "2/5 reference facts present, 3 missing, 0 contradicted. Missing: ['Without a response_model, you lose automatic validation.', 'Without a response_model, you lose filtering of extra fields.', \"Without a response_model, you lose OpenAPI schema generation for that endpoint's response.\"]",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1005.8,
+        "hyde": 1649.2,
+        "retrieval": 2614.7,
+        "grading": 1310.4,
+        "generation": 1266.5,
+        "faithfulness": 1715.9
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6161,
+          "completion_tokens": 479
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 191,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-012",
+      "question": "Does FastAPI require you to use Pydantic for input validation, or can you skip it entirely?",
+      "generated_answer": "FastAPI does not strictly require you to use Pydantic for all input handling, though it is the standard way to perform validation, conversion, and documentation [1][6][14]. You can skip Pydantic validation by accessing the `Request` object directly [1][8][14]:\n\n* **Direct Request Access:** By declaring a parameter of type `Request` in a path operation function, you can access the raw request object [8][9].\n* **Lack of Validation:** When you access data directly from the `Request` object (such as reading the body), FastAPI will not validate, convert, or document that data [1][8].\n* **Manual Handling:** You can use the `Request` object to manually extract data, such as reading the body as `bytes`, which prevents FastAPI from attempting to parse the payload (e.g., as JSON) [10].\n* **Mixed Usage:** You can use the `Request` object alongside other parameters declared normally; those other parameters will still be validated, converted, and documented by FastAPI as usual [1][12].",
+      "retrieved_chunk_ids": [
+        "9f90dc62-4ff8-5a5d-8b80-c92d0102617b",
+        "18aaef2f-c817-5be1-a33a-9007e24f3962",
+        "c80a5447-407e-5df5-b107-c8289e470401",
+        "0e43e47e-805f-5d9c-aad5-9cbd7646769a",
+        "92d63d62-249c-5972-a216-4c026cf40f9d",
+        "675868f8-9be5-535d-a01d-9ca7366a3de7",
+        "e18bc76f-bd5d-5038-b4dd-cb1c2a7bc9a2",
+        "0e9c54d8-2e90-5b28-95cd-6aa56d73a55b",
+        "5b0f26ec-df4e-54bc-830d-5561dfcffc9d",
+        "8c024f93-3c34-5a35-bcc3-a3a4ac73b73c",
+        "6aa439cf-d829-5980-8e0e-e0486c244bd1",
+        "71162282-0473-541f-9e93-e14cdc7b85b8",
+        "45934135-77f7-514b-a5ea-d91154bfc971",
+        "db559c0c-1d64-5cfd-a2de-4390c8507bde",
+        "abce104c-e336-56b4-ab21-c1cd8eaf2dfb"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.1333,
+          "reasoning": "2/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/body', 'tutorial/body-multiple-params', 'tutorial/path-params-numeric-validations', 'tutorial/query-params', 'tutorial/query-params-str-validations']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 0.2,
+          "reasoning": "Retrieved chunks from 1/5 relevant documents. Missing: ['tutorial/body-multiple-params', 'tutorial/path-params-numeric-validations', 'tutorial/query-params', 'tutorial/query-params-str-validations'].",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.738,
+          "reasoning": "Mean cosine similarity 0.738 over 3 synthetic questions. Synthetic questions: ['Is it possible to bypass Pydantic validation when using FastAPI?', 'How can I access the raw request body in a FastAPI path operation without using Pydantic models?', 'What are the consequences of accessing the Request object directly instead of using standard FastAPI parameter type hints?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.75,
+          "reasoning": "3/4 reference facts present, 1 missing, 0 contradicted. Missing: ['Pydantic models are required only for complex nested request bodies.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1208.6,
+        "hyde": 1322.6,
+        "retrieval": 2486.7,
+        "grading": 1431.9,
+        "generation": 1841.6,
+        "faithfulness": 1969.8
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6370,
+          "completion_tokens": 1080
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 216,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-013",
+      "question": "How do you handle file uploads and form data in the same FastAPI endpoint?",
+      "generated_answer": "To handle file uploads and form data in the same FastAPI endpoint, follow these steps:\n\n*   **Install dependency:** You must install `python-multipart` in your project [5].\n*   **Import:** Import `File` and `Form` from `fastapi` [5].\n*   **Define parameters:** Define your file and form parameters in the path operation function using `File` and `Form` [5][9]. You can declare files as either `bytes` or `UploadFile` [1][9].\n*   **Encoding:** The request body will be encoded as `multipart/form-data` [1][10].\n*   **Constraint:** You cannot declare `Body` fields expected as JSON in the same path operation, as the request must use `multipart/form-data` rather than `application/json` [1][10].",
+      "retrieved_chunk_ids": [
+        "7034355a-1622-5c79-b9c2-c38e3e57046f",
+        "eb5ff3f0-4775-519e-bfd2-bdbf6438f5c9",
+        "bb118b10-a329-5067-8f0a-117b5ffed312",
+        "d56b5b6d-deb0-5024-80a4-7ac8ca84c87a",
+        "772e0b7e-3fed-5aeb-98e4-f56634ece7ca",
+        "365725b3-0e59-504d-8200-53e66244190e",
+        "56c6be2f-7c7f-5ddf-ad8a-0d549723383c",
+        "0be60e09-f52c-5232-b947-aacd5181032a",
+        "52f9e315-7a0e-5d49-9f45-a138a7855980",
+        "c8c9a371-ba80-526f-9838-bcb0b1ca83c6",
+        "cef8dadf-1e65-5182-a099-865c69303267",
+        "1ec38415-e617-543f-8477-2a1422187602",
+        "331e1c3a-1a83-51ec-96f8-ddab88367a40",
+        "7c9ecd4a-9193-5f8d-9226-6e79b16e85c2",
+        "28f7fd02-b32b-5534-91f1-21d1b34ede66"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.7333,
+          "reasoning": "11/15 retrieved chunks came from relevant documents (relevant doc IDs: ['tutorial/request-files', 'tutorial/request-forms-and-files']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8492,
+          "reasoning": "Mean cosine similarity 0.849 over 3 synthetic questions. Synthetic questions: ['What are the necessary steps to process both file uploads and form fields simultaneously within a single FastAPI endpoint?', 'Which library must be installed to enable the handling of multipart/form-data in FastAPI?', 'Why is it impossible to combine JSON-encoded body fields with file uploads in the same FastAPI path operation?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "3/3 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1463.2,
+        "decompose": 1554.0,
+        "hyde": 1844.6,
+        "retrieval": 4936.5,
+        "grading": 1107.2,
+        "generation": 1880.6,
+        "faithfulness": 2000.2
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 7,
+          "prompt_tokens": 6861,
+          "completion_tokens": 1091
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 2,
+          "prompt_tokens": 385,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-014",
+      "question": "How do you mount a sub-application or another ASGI app inside FastAPI?",
+      "generated_answer": "To mount a sub-application or another ASGI application (such as a WSGI app) in FastAPI, you use the \"mounting\" process, which adds an independent application to a specific path [4][10][12].\n\n### Mounting a FastAPI Sub-Application\n*   **Create the applications:** Define your main, top-level FastAPI application and your independent sub-application [5][8].\n*   **Mount the sub-app:** In your top-level application, use the `.mount()` method to attach the sub-application to a specific path prefix [6].\n*   **Automatic Handling:** FastAPI automatically manages the `root_path` (an ASGI specification mechanism) for the sub-application, ensuring that its API docs and path operations function correctly under the mounted prefix [1][2][11].\n\n### Mounting a WSGI Application\n*   **Install Middleware:** Add the `a2wsgi` package to your project [12][14].\n*   **Wrap the App:** Import `WSGIMiddleware` from `a2wsgi` and wrap your WSGI application (e.g., Flask or Django) with it [14].\n*   **Mount:** Use the `.mount()` method to mount the wrapped application under a specific path [14].\n\n### Key Concepts\n*   **Mounting:** This means adding an independent application to a specific path, where the sub-application handles everything under that path [4].\n*   **Independent Docs:** When mounting FastAPI sub-applications, each application maintains its own independent OpenAPI schema and documentation UI [7][9][10].\n*   **Static Files:** You can also use \"mounting\" to serve static files by using the `StaticFiles` utility, where the first parameter defines the sub-path on which the files will be served [15].",
+      "retrieved_chunk_ids": [
+        "4b272611-60ee-5f42-94c9-8c480ddc15c6",
+        "94c725d1-c5b2-5a7f-8972-537e377cf8b1",
+        "6ec6c4c0-81a5-53db-b0ff-55dd4362821a",
+        "7d73d4b4-23d3-5a8a-b6dd-6a7df937a51a",
+        "f5e587c6-2866-578a-8ef5-6257b0780104",
+        "7ab1cdbe-7b03-5b4e-8c19-944241655e87",
+        "e973c9af-5346-5729-93fe-9d4d3b91c649",
+        "0288b6c2-5e60-561b-9009-2a21591b956c",
+        "f69dce7b-a273-51e1-ba84-983d41fae762",
+        "cca185c7-cf12-5fb4-abbb-640fcab71677",
+        "8e28a3c2-9292-546c-bee8-97f5969c96d9",
+        "91bff495-a6da-50c6-9318-a68200e435c4",
+        "743f3838-5289-53a0-ac90-cf5441595862",
+        "c1f6a5e7-ef46-51d7-963c-211309519921",
+        "b7934ba5-a793-53b7-a8f0-4e91a041952a"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6667,
+          "reasoning": "10/15 retrieved chunks came from relevant documents (relevant doc IDs: ['advanced/sub-applications', 'tutorial/static-files']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 10 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8341,
+          "reasoning": "Mean cosine similarity 0.834 over 3 synthetic questions. Synthetic questions: ['How can you integrate a WSGI-based application like Flask or Django into a FastAPI project?', 'What is the process for mounting an independent FastAPI sub-application under a specific path prefix?', 'How does FastAPI handle OpenAPI documentation and path operations when sub-applications are mounted?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "4/4 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1287.8,
+        "hyde": 3343.6,
+        "retrieval": 9339.0,
+        "grading": 2780.8,
+        "generation": 2160.0,
+        "faithfulness": 2489.0
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 7,
+          "prompt_tokens": 7692,
+          "completion_tokens": 1582
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 2,
+          "prompt_tokens": 404,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-015",
+      "question": "How does FastAPI handle real-time WebSocket connections with a React frontend?",
+      "generated_answer": "[ERROR: MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 7.10 GiB, max allowed: 9.07 GiB). Tried to allocate 13.80 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).]",
+      "retrieved_chunk_ids": [],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 7.10 GiB, max allowed: 9.07 GiB). Tried to allocate 13.80 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 7.10 GiB, max allowed: 9.07 GiB). Tried to allocate 13.80 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 7.10 GiB, max allowed: 9.07 GiB). Tried to allocate 13.80 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 7.10 GiB, max allowed: 9.07 GiB). Tried to allocate 13.80 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 7.10 GiB, max allowed: 9.07 GiB). Tried to allocate 13.80 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {},
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 9,
+          "prompt_tokens": 3292,
+          "completion_tokens": 963
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 5,
+          "prompt_tokens": 997,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "fq-016",
+      "question": "How do I verify a Stripe webhook signature in FastAPI before processing a subscription event?",
+      "generated_answer": "[ERROR: MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 6.97 GiB, max allowed: 9.07 GiB). Tried to allocate 154.65 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).]",
+      "retrieved_chunk_ids": [],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 6.97 GiB, max allowed: 9.07 GiB). Tried to allocate 154.65 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 6.97 GiB, max allowed: 9.07 GiB). Tried to allocate 154.65 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 6.97 GiB, max allowed: 9.07 GiB). Tried to allocate 154.65 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 6.97 GiB, max allowed: 9.07 GiB). Tried to allocate 154.65 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": -1.0,
+          "reasoning": "MPS backend out of memory (MPS allocated: 2.02 GiB, other allocations: 6.97 GiB, max allowed: 9.07 GiB). Tried to allocate 154.65 MiB on shared pool. Use PYTORCH_MPS_HIGH_WATERMARK_RATIO=0.0 to disable upper limit for memory allocations (may cause system failure).",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {},
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 2,
+          "prompt_tokens": 494,
+          "completion_tokens": 207
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 216,
+          "completion_tokens": 0
+        }
+      }
+    }
+  ],
+  "aggregate_scores": {
+    "context_precision": 0.5143,
+    "context_recall": 0.9191,
+    "faithfulness": 1.0,
+    "answer_relevance": 0.823,
+    "answer_correctness": 0.7565
+  },
+  "dataset_name": "fastapi_docs_v1",
+  "dataset_fingerprint": "80c1a625bc7b7533",
+  "answers_fingerprint": "c9c564cc06b1eb3d",
+  "token_usage": {
+    "gemini-3.1-flash-lite": {
+      "kind": "chat",
+      "calls": 136,
+      "prompt_tokens": 143517,
+      "completion_tokens": 23042
+    },
+    "gemini-embedding-001": {
+      "kind": "embedding",
+      "calls": 41,
+      "prompt_tokens": 6455,
+      "completion_tokens": 0
+    }
+  },
+  "total_tokens_used": 173014,
+  "duration_seconds": 273.36,
+  "model_calls": {
+    "gemini-3.1-flash-lite": 136
+  }
+}

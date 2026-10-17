@@ -28,6 +28,11 @@ from pathlib import Path
 from atlas.cost import USD_TO_INR, estimate_usage_cost
 from atlas.interfaces.evaluator import EvalResult
 
+# `runner` records this score for a sample that errored and leaves it out of
+# the mean. Defined here as well rather than imported, because importing the
+# runner into the reporter would point the dependency the wrong way round.
+_FAILED_SENTINEL = -1.0
+
 _METRIC_ORDER = [
     "context_precision",
     "context_recall",
@@ -50,6 +55,7 @@ def _md_table(result: EvalResult) -> str:
     separator = " | ".join(["---"] * 2)
 
     skipped = _inapplicable_counts(result)
+    failed = _failed_counts(result)
 
     rows = [f"| {col_header} |", f"| {separator} |"]
     for metric in all_metrics:
@@ -58,9 +64,15 @@ def _md_table(result: EvalResult) -> str:
         # A mean over 14 of 15 samples is a different number from a mean over
         # 15, and the table must not let the two look alike.
         n = skipped.get(metric, 0)
-        if n:
-            cell += f" *(over {len(result.sample_results) - n} of " \
-                    f"{len(result.sample_results)}; {n} n/a)*"
+        f = failed.get(metric, 0)
+        if n or f:
+            parts = []
+            if n:
+                parts.append(f"{n} n/a")
+            if f:
+                parts.append(f"**{f} failed**")
+            cell += f" *(over {len(result.sample_results) - n - f} of " \
+                    f"{len(result.sample_results)}; {', '.join(parts)})*"
         rows.append(f"| {metric} | {cell} |")
 
     rows.append("")  # trailing newline
@@ -204,6 +216,27 @@ def _inapplicable_counts(result: EvalResult) -> dict[str, int]:
     for sr in result.sample_results:
         for ms in sr.metrics:
             if not ms.applicable:
+                counts[ms.metric_name] = counts.get(ms.metric_name, 0) + 1
+    return counts
+
+
+def _failed_counts(result: EvalResult) -> dict[str, int]:
+    """Per metric, how many samples errored instead of scoring.
+
+    Separate from `_inapplicable_counts`, and added 2026-10-17 because the
+    two were not separate and only one was printed. A sample that errors is
+    recorded applicable with `score=-1.0` and dropped from the mean by the
+    runner, so it moved the number while the table went on reporting the full
+    sample count with no note of any kind. A HyDE run lost two samples to an
+    out-of-memory reranker and read as a clean 16; the means were over 14.
+
+    A refusal is a result and a crash is not, so they are counted apart and
+    the crash is the one set in bold.
+    """
+    counts: dict[str, int] = {}
+    for sr in result.sample_results:
+        for ms in sr.metrics:
+            if ms.applicable and ms.score == _FAILED_SENTINEL:
                 counts[ms.metric_name] = counts.get(ms.metric_name, 0) + 1
     return counts
 

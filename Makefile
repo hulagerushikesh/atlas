@@ -96,6 +96,9 @@ eval-compare: ## Compare latest eval against a baseline (set BASELINE=path/to/re
 	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name fastapi-v1 \
 	  --compare $(BASELINE)
 
+compare-reports: ## Re-judge two stored reports, free (set A=... B=...)
+	$(PYTHON) scripts/compare_reports.py $(A) $(B)
+
 # ── Infrastructure ─────────────────────────────────────────────────────────────
 
 # Named services, because a bare `docker compose up -d` also starts `api`,
