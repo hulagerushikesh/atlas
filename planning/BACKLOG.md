@@ -58,6 +58,15 @@ Newest at the bottom of each section.
   prompt and then raised contributed nothing. In `/query` that is the daily
   spend cap under-counting exactly the requests that went wrong. The merge is
   in a `finally` now.
+
+  **Closed 2026-10-17.** Two reports now carry the field, so the comparator
+  reads it: **cost per query** is a budget line checked against the $0.005
+  ceiling and the +20% regression allowance, beside the run-cost line it does
+  not replace. The part worth keeping is which samples count — a sample that
+  dies partway has already paid for the calls it made, so averaging it in
+  reports a query as cheaper than one costs. `stage_ms` is the test, because
+  the pipeline records a stage when it finishes one. On the pair that
+  prompted this, that is the difference between +4.7% and **+15.2%**.
 - ~~**A streamed answer claims a faithfulness check it never ran.**~~
   **Fixed 2026-10-13.** Option (1) as filed: the `done` event now sends
   `is_faithful: null`. **Two sites, not the one filed** — the success branch
