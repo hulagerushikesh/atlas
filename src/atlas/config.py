@@ -162,6 +162,23 @@ class RerankerConfig(BaseSettings):
     # relevant document per question over a 15-slot window caps it low.
     top_k: int = 15
     model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    # How many (query, document) pairs go through the model at once. Peak
+    # memory scales with this times the sequence length, and the sequence
+    # length is not ours to control: HyDE concatenates a hypothesis of up to
+    # 220 tokens onto every query, which lengthens every pair in the batch.
+    # On 2026-10-17 a HyDE eval on an 18 GB laptop died on two samples with
+    # "MPS backend out of memory" while the same corpus and the same reranker
+    # had just completed the baseline, and the run still rendered as 16 clean
+    # samples. 16 rather than sentence-transformers' default 32, because the
+    # measured cost of halving it is latency this pipeline already spends
+    # seconds of elsewhere, and the cost of guessing high is a dead sample.
+    batch_size: int = 16
+    # None lets sentence-transformers choose (MPS on Apple silicon, CUDA on a
+    # GPU box, CPU otherwise). Set it to "cpu" to take the reranker out of a
+    # contended GPU: unified memory means a browser can evict a model.
+    # Changing it changes which arithmetic runs, so an A/B must not change it
+    # between arms.
+    device: str | None = None
 
 
 class HyDEConfig(BaseSettings):

@@ -887,3 +887,204 @@ class TestBudgetRendering:
                        for line in md.splitlines() if "rose " in line}
         assert len(percentages) == 1
         assert percentages.pop() in md.split("### Budget")[1].split("**Overall")[0]
+
+
+# ── Failed samples: a mean over fewer rows, 2026-10-17 ────────────────────────
+#
+# A sample that errors is recorded applicable with score=-1.0 and dropped from
+# the run's mean. Neither the report nor the comparator said so, so a run that
+# lost two of sixteen rows rendered as a clean sixteen and was compared,
+# mean-for-mean, against a run that had scored all of them. That flipped
+# answer_correctness from a reported +0.0113 tie to a real -0.0238 regression
+# and halved a measured latency breach. These tests are that run, shrunk.
+
+_FAILED = -1.0
+
+
+def _scored(
+    name: str,
+    per_sample: dict[str, dict[str, float]],
+    *,
+    stage_ms: dict[str, dict[str, float]] | None = None,
+    usage: dict | None = None,
+) -> EvalResult:
+    """A run whose per-sample scores are given explicitly, aggregated the way
+    `runner` aggregates: the sentinel is left out of the mean."""
+    samples = [
+        SampleResult(
+            sample_id=sid, question="q", generated_answer="a",
+            retrieved_chunk_ids=["c1"],
+            metrics=[MetricScore(metric_name=k, score=v) for k, v in scores.items()],
+            stage_ms=(stage_ms or {}).get(sid, {}),
+        )
+        for sid, scores in per_sample.items()
+    ]
+    metric_names = {k for s in per_sample.values() for k in s}
+    aggregate = {}
+    for metric in metric_names:
+        valid = [
+            s[metric] for s in per_sample.values()
+            if metric in s and s[metric] != _FAILED
+        ]
+        aggregate[metric] = round(sum(valid) / len(valid), 4) if valid else 0.0
+    return EvalResult(
+        pipeline_config=PipelineConfig(name=name),
+        sample_results=samples,
+        aggregate_scores=aggregate,
+        total_tokens_used=0,
+        duration_seconds=1.0,
+        token_usage=usage or {},
+    )
+
+
+class TestFailedSamplesInReport:
+    def test_failed_sample_is_named_in_the_table(self) -> None:
+        # The bug: this rendered "1.0000" with no qualifier at all, because
+        # _inapplicable_counts only ever saw applicable=False.
+        result = _scored("run", {
+            "s1": {"faithfulness": 1.0},
+            "s2": {"faithfulness": _FAILED},
+        })
+        md = _md_table(result)
+        assert "1 failed" in md
+        assert "over 1 of 2" in md
+
+    def test_refusal_and_crash_are_counted_apart(self) -> None:
+        result = EvalResult(
+            pipeline_config=PipelineConfig(name="run"),
+            sample_results=[
+                SampleResult(
+                    sample_id="s1", question="q", generated_answer="a",
+                    retrieved_chunk_ids=[],
+                    metrics=[MetricScore(metric_name="faithfulness", score=1.0)],
+                ),
+                SampleResult(
+                    sample_id="s2", question="q", generated_answer="a",
+                    retrieved_chunk_ids=[],
+                    metrics=[MetricScore(
+                        metric_name="faithfulness", score=0.0, applicable=False)],
+                ),
+                SampleResult(
+                    sample_id="s3", question="q", generated_answer="a",
+                    retrieved_chunk_ids=[],
+                    metrics=[MetricScore(metric_name="faithfulness", score=_FAILED)],
+                ),
+            ],
+            aggregate_scores={"faithfulness": 1.0},
+            total_tokens_used=0, duration_seconds=1.0,
+        )
+        md = _md_table(result)
+        assert "1 n/a" in md
+        assert "1 failed" in md
+        assert "over 1 of 3" in md
+
+    def test_clean_run_gets_no_qualifier(self) -> None:
+        md = _md_table(_scored("run", {"s1": {"faithfulness": 1.0}}))
+        assert "failed" not in md
+        assert "n/a" not in md
+
+
+class TestPairedMetricComparison:
+    def _runs(self) -> tuple[EvalResult, EvalResult]:
+        # A scores every row; B loses s3, which is A's best row. A's stored
+        # mean is over three rows, B's over two.
+        a = _scored("A", {
+            "s1": {"answer_correctness": 0.60},
+            "s2": {"answer_correctness": 0.60},
+            "s3": {"answer_correctness": 1.00},
+        })
+        b = _scored("B", {
+            "s1": {"answer_correctness": 0.66},
+            "s2": {"answer_correctness": 0.66},
+            "s3": {"answer_correctness": _FAILED},
+        })
+        return a, b
+
+    def test_unpaired_means_would_have_called_it_a_regression(self) -> None:
+        a, b = self._runs()
+        # The stored aggregates: A 0.7333 over 3, B 0.6600 over 2. Comparing
+        # those says B lost by 0.0733. On the rows they share, B won by 0.06.
+        assert a.aggregate_scores["answer_correctness"] == pytest.approx(0.7333)
+        assert b.aggregate_scores["answer_correctness"] == pytest.approx(0.66)
+
+    def test_means_are_recomputed_over_the_shared_rows(self) -> None:
+        a, b = self._runs()
+        c = compare(a, b)
+        delta = next(d for d in c.deltas if d.metric == "answer_correctness")
+        assert delta.score_a == pytest.approx(0.60)
+        assert delta.score_b == pytest.approx(0.66)
+        assert delta.delta == pytest.approx(0.06)
+        assert delta.winner == "B"
+        assert delta.paired_n == 2
+
+    def test_the_pairing_is_stated_not_silent(self) -> None:
+        a, b = self._runs()
+        c = compare(a, b)
+        note = " ".join(c.notes)
+        assert "B did not score s3" in note
+        assert "recomputed over the 2 they share" in note
+        assert "paired n=2" in c.as_markdown()
+
+    def test_matching_denominators_use_the_stored_aggregates(self) -> None:
+        a = _scored("A", {"s1": {"faithfulness": 0.80}, "s2": {"faithfulness": 0.80}})
+        b = _scored("B", {"s1": {"faithfulness": 0.90}, "s2": {"faithfulness": 0.90}})
+        c = compare(a, b)
+        delta = next(d for d in c.deltas if d.metric == "faithfulness")
+        assert delta.paired_n is None
+        assert "recomputed" not in " ".join(c.notes)
+
+    def test_no_shared_scored_row_yields_no_winner(self) -> None:
+        a = _scored("A", {
+            "s1": {"faithfulness": 1.0}, "s2": {"faithfulness": _FAILED}})
+        b = _scored("B", {
+            "s1": {"faithfulness": _FAILED}, "s2": {"faithfulness": 1.0}})
+        c = compare(a, b)
+        delta = next(d for d in c.deltas if d.metric == "faithfulness")
+        assert delta.winner == "n/a"
+        assert "on no sample in common" in " ".join(c.notes)
+
+
+class TestPairedBudget:
+    def _runs(self) -> tuple[EvalResult, EvalResult]:
+        # s3 is by far A's slowest row and B never timed it. Unpaired, A's p95
+        # is s3 and B looks barely worse; paired, B is half again as slow.
+        a = _scored(
+            "A",
+            {"s1": {"faithfulness": 1.0}, "s2": {"faithfulness": 1.0},
+             "s3": {"faithfulness": 1.0}},
+            stage_ms={
+                "s1": {"total_stage": 1000.0},
+                "s2": {"total_stage": 1000.0},
+                "s3": {"total_stage": 9000.0},
+            },
+        )
+        b = _scored(
+            "B",
+            {"s1": {"faithfulness": 1.0}, "s2": {"faithfulness": 1.0},
+             "s3": {"faithfulness": _FAILED}},
+            stage_ms={
+                "s1": {"total_stage": 3000.0},
+                "s2": {"total_stage": 3000.0},
+            },
+        )
+        return a, b
+
+    def test_latency_is_measured_on_the_rows_both_runs_timed(self) -> None:
+        a, b = self._runs()
+        c = compare(a, b)
+        p95 = next(d for d in c.budget if d.name == "warm p95 latency")
+        # Not 9000: that row is A's alone.
+        assert p95.value_a == pytest.approx(1000.0)
+        assert p95.value_b == pytest.approx(3000.0)
+        assert p95.ratio == pytest.approx(2.0)
+
+    def test_the_dropped_rows_are_named(self) -> None:
+        a, b = self._runs()
+        c = compare(a, b)
+        assert "B is missing s3" in " ".join(c.budget_notes)
+
+    def test_equal_timing_sets_are_left_alone(self) -> None:
+        a, b = self._runs()
+        a.sample_results[2].stage_ms = {}
+        c = compare(a, b)
+        assert "timed different samples" not in " ".join(c.budget_notes)

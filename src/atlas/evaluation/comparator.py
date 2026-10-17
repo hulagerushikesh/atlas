@@ -81,12 +81,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from statistics import mean
 
 from atlas.cost import estimate_usage_cost
 from atlas.evaluation.reporter import percentile
 from atlas.interfaces.evaluator import EvalResult
 
 _SIGNIFICANCE_THRESHOLD = 0.02   # deltas below this are considered noise
+
+# `runner` records this score for a sample that errored, and leaves it out of
+# the mean. Repeated here rather than imported because this module reads
+# stored reports, where the sentinel is a number in a file and not a symbol.
+_FAILED_SENTINEL = -1.0
 
 # ── The agreed budget: planning/BUDGET.md, accepted 2026-10-08 ───────────────
 # The numbers live here as well as in the document because a budget nothing
@@ -123,6 +129,11 @@ class MetricDelta:
     # row has no delta: the absent side is not a zero, it is a run that never
     # asked the question.
     missing_in: str = ""
+    # Set when the two runs did not score the same samples for this metric
+    # and both means were recomputed over the ones they share. `None` means
+    # the stored aggregates were used because the denominators already
+    # matched.
+    paired_n: int | None = None
 
 
 @dataclass
@@ -191,9 +202,10 @@ class ComparisonResult:
                 continue
             delta_str = f"{d.delta:+.4f}"
             sig = "" if d.is_significant else " *(ns)*"
+            paired = "" if d.paired_n is None else f" *(paired n={d.paired_n})*"
             lines.append(
                 f"| {d.metric} | {d.score_a:.4f} | {d.score_b:.4f} | "
-                f"{delta_str}{sig} | {d.winner} |"
+                f"{delta_str}{sig}{paired} | {d.winner} |"
             )
         lines.append("")
 
@@ -260,14 +272,68 @@ def _fmt(value: float, unit: str) -> str:
     return f"{value:,.0f} {unit}"
 
 
-def _sample_totals(result: EvalResult) -> list[float]:
+def _sample_totals(result: EvalResult, ids: set[str] | None = None) -> list[float]:
     """Per-sample end-to-end latency, in ms.
 
     A sample with no `stage_ms` is left out rather than counted as zero: the
     field was added after several of the stored reports were written, and a
     run that did not record latency has not got a fast one.
+
+    `ids` restricts the list to named samples, which is how the budget is
+    paired. Without it two runs can be compared on different rows: on
+    2026-10-17 a HyDE arm lost its two slowest samples to an out-of-memory
+    reranker, and those two were the baseline's p95. Comparing 14 rows
+    against 16 reported +25.2% where the paired figure was +56.3%.
     """
-    return [sum(s.stage_ms.values()) for s in result.sample_results if s.stage_ms]
+    return [
+        sum(s.stage_ms.values())
+        for s in result.sample_results
+        if s.stage_ms and (ids is None or s.sample_id in ids)
+    ]
+
+
+def _name_list(ids: list[str]) -> str:
+    """Name a few sample ids, then stop counting out loud."""
+    shown = ", ".join(ids[:_MAX_NAMED])
+    rest = len(ids) - _MAX_NAMED
+    return f"{shown} and {rest} more" if rest > 0 else shown
+
+
+def _timed_ids(result: EvalResult) -> set[str]:
+    """Samples that contributed a latency figure to this run."""
+    return {s.sample_id for s in result.sample_results if s.stage_ms}
+
+
+def _scored_ids(result: EvalResult, metric: str) -> set[str]:
+    """Samples whose score for *metric* went into this run's mean.
+
+    Reproduces `runner`'s own denominator from the stored rows: applicable,
+    and not the failure sentinel. The two are different states and both are
+    excluded, but only the first is reported by the reporter's n/a count, so
+    a failed sample is the one that moves a mean invisibly.
+    """
+    return {
+        s.sample_id
+        for s in result.sample_results
+        for ms in s.metrics
+        if ms.metric_name == metric
+        and ms.applicable
+        and ms.score != _FAILED_SENTINEL
+    }
+
+
+def _mean_over(result: EvalResult, metric: str, ids: set[str]) -> float | None:
+    """Mean score for *metric* over *ids*, or None when none of them scored."""
+    scores = [
+        ms.score
+        for s in result.sample_results
+        if s.sample_id in ids
+        for ms in s.metrics
+        if ms.metric_name == metric
+        and ms.applicable
+        and ms.score != _FAILED_SENTINEL
+    ]
+    return round(mean(scores), 4) if scores else None
 
 
 def _budgeted(
@@ -323,7 +389,25 @@ def _check_budget(
     deltas: list[BudgetDelta] = []
     notes: list[str] = []
 
-    totals_a, totals_b = _sample_totals(result_a), _sample_totals(result_b)
+    timed_a, timed_b = _timed_ids(result_a), _timed_ids(result_b)
+    shared_timed = timed_a & timed_b
+    if timed_a != timed_b and shared_timed:
+        only_a = sorted(timed_a - timed_b)
+        only_b = sorted(timed_b - timed_a)
+        missing_rows = []
+        if only_a:
+            missing_rows.append(f"B is missing {_name_list(only_a)}")
+        if only_b:
+            missing_rows.append(f"A is missing {_name_list(only_b)}")
+        notes.append(
+            f"The two runs timed different samples, so both latency figures "
+            f"are over the {len(shared_timed)} they share rather than over "
+            f"their own rows ({'; '.join(missing_rows)}). A run that loses a "
+            f"sample loses that sample's latency, and a lost slow one "
+            f"flatters whichever run lost it."
+        )
+    totals_a = _sample_totals(result_a, shared_timed or None)
+    totals_b = _sample_totals(result_b, shared_timed or None)
     if totals_a and totals_b:
         deltas.append(_budgeted(
             name="warm p50 latency", unit="ms",
@@ -371,12 +455,21 @@ def _check_budget(
             value_a=cost_a, value_b=cost_b,
             ceiling=_RUN_COST_CEILING_USD, limit=_COST_REGRESSION_LIMIT,
         ))
+        per_sample = all(
+            any(s.token_usage for s in r.sample_results)
+            for r in (result_a, result_b)
+        )
+        tail = (
+            "Both runs carry per-sample `token_usage`, so each report's own "
+            "cost-per-query line is the production figure; this line is not."
+            if per_sample else
+            "It is not the production cost per query, which needs per-sample "
+            "token accounting that at least one of these reports predates."
+        )
         notes.append(
             "The cost line is a whole eval run, judges included — about 7.8 "
             "chat calls a sample against production's ~4. It checks the run "
-            "ceiling and the run-to-run regression; it is not the production "
-            "cost per query, which would need per-sample token accounting no "
-            "stored report has."
+            f"ceiling and the run-to-run regression. {tail}"
         )
 
     return deltas, notes
@@ -510,6 +603,54 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
             ))
             continue
 
+        # The id check above proves both runs *covered* the same samples. It
+        # does not prove both *scored* them: a sample that errors is recorded
+        # with the failure sentinel and left out of that run's mean, so two
+        # runs over one dataset can still have different denominators. Where
+        # they do, recompute both means over the rows they share. On
+        # 2026-10-17 this flipped answer_correctness from a reported +0.0113
+        # tie to a real -0.0238 regression, because the arm being judged had
+        # dropped two rows the baseline scored well on.
+        scored_a = _scored_ids(result_a, metric)
+        scored_b = _scored_ids(result_b, metric)
+        paired_n: int | None = None
+        if scored_a != scored_b:
+            shared = scored_a & scored_b
+            pa = _mean_over(result_a, metric, shared)
+            pb = _mean_over(result_b, metric, shared)
+            lost_b = sorted(scored_a - scored_b)
+            lost_a = sorted(scored_b - scored_a)
+            if pa is None or pb is None:
+                notes.append(
+                    f"'{metric}' was scored by both runs, but on no sample in "
+                    f"common, so there is no delta to take. The row is shown "
+                    f"with each run's own mean and no winner."
+                )
+                deltas.append(MetricDelta(
+                    metric=metric,
+                    score_a=round(sa, 4),
+                    score_b=round(sb, 4),
+                    delta=0.0,
+                    winner="n/a",
+                    is_significant=False,
+                ))
+                continue
+            dropped = []
+            if lost_b:
+                dropped.append(f"B did not score {_name_list(lost_b)}")
+            if lost_a:
+                dropped.append(f"A did not score {_name_list(lost_a)}")
+            notes.append(
+                f"'{metric}': the runs scored different samples "
+                f"({'; '.join(dropped)}), so both means are recomputed over "
+                f"the {len(shared)} they share — A {sa:.4f} → {pa:.4f}, "
+                f"B {sb:.4f} → {pb:.4f}. The stored aggregates are means over "
+                f"different denominators and the delta between them is not a "
+                f"result."
+            )
+            sa, sb = pa, pb
+            paired_n = len(shared)
+
         delta = sb - sa
         significant = abs(delta) >= _SIGNIFICANCE_THRESHOLD
 
@@ -529,6 +670,7 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
             delta=round(delta, 4),
             winner=winner,
             is_significant=significant,
+            paired_n=paired_n,
         ))
 
     overall = "B" if b_wins > a_wins else ("A" if a_wins > b_wins else "tie")

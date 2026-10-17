@@ -104,3 +104,82 @@ class TestCrossEncoderReranker:
         await reranker.rerank("q", candidates, top_k=1)
         # The original candidate object should be unchanged
         assert candidates[0].score == original_score
+
+
+# ── Memory: batching and the CPU fallback, 2026-10-17 ─────────────────────────
+#
+# A HyDE eval died on two of sixteen samples with "MPS backend out of memory"
+# while the baseline run that preceded it on the same machine and the same
+# corpus finished clean. HyDE's `concat` mode puts a hypothesis of up to 220
+# tokens in front of every query, which lengthens every pair in the batch at
+# once, and sentence-transformers batches 32 at a time by default. Both dead
+# samples were then scored at the failure sentinel and dropped from the mean,
+# and the report printed sixteen.
+
+class TestRerankerMemory:
+    def _rr(self, **kw: object) -> tuple[CrossEncoderReranker, MagicMock]:
+        config = RerankerConfig(model="m", top_k=3, **kw)  # type: ignore[arg-type]
+        with patch("atlas.retrieval.reranker.CrossEncoder") as MockCE:
+            model = MagicMock()
+            MockCE.return_value = model
+            return CrossEncoderReranker(config), MockCE
+
+    @pytest.mark.asyncio
+    async def test_batch_size_is_passed_and_is_not_the_library_default(self) -> None:
+        rr, MockCE = self._rr()
+        MockCE.return_value.predict.return_value = [0.9, 0.1]
+        await rr.rerank("q", [_chunk("c1", "a"), _chunk("c2", "b")], top_k=2)
+        _, kwargs = MockCE.return_value.predict.call_args
+        assert kwargs["batch_size"] == 16
+
+    def test_device_defaults_to_the_library_choice(self) -> None:
+        _, MockCE = self._rr()
+        assert MockCE.call_args.kwargs["device"] is None
+
+    def test_device_can_be_pinned(self) -> None:
+        _, MockCE = self._rr(device="cpu")
+        assert MockCE.call_args.kwargs["device"] == "cpu"
+
+    @pytest.mark.asyncio
+    async def test_out_of_memory_falls_back_to_cpu_rather_than_killing_the_sample(
+        self,
+    ) -> None:
+        config = RerankerConfig(model="m", top_k=2)
+        with patch("atlas.retrieval.reranker.CrossEncoder") as MockCE:
+            gpu, cpu = MagicMock(), MagicMock()
+            gpu.predict.side_effect = RuntimeError(
+                "MPS backend out of memory (MPS allocated: 2.02 GiB...)"
+            )
+            cpu.predict.return_value = [0.2, 0.8]
+            MockCE.side_effect = [gpu, cpu]
+            rr = CrossEncoderReranker(config)
+            out = await rr.rerank("q", [_chunk("c1", "a"), _chunk("c2", "b")], top_k=2)
+        assert [c.chunk_id for c in out] == ["c2", "c1"]
+        assert MockCE.call_args_list[-1].kwargs["device"] == "cpu"
+
+    @pytest.mark.asyncio
+    async def test_the_cpu_model_is_built_once_across_repeated_failures(self) -> None:
+        config = RerankerConfig(model="m", top_k=1)
+        with patch("atlas.retrieval.reranker.CrossEncoder") as MockCE:
+            gpu, cpu = MagicMock(), MagicMock()
+            gpu.predict.side_effect = RuntimeError("CUDA out of memory")
+            cpu.predict.return_value = [0.5]
+            MockCE.side_effect = [gpu, cpu]
+            rr = CrossEncoderReranker(config)
+            await rr.rerank("q", [_chunk("c1", "a")], top_k=1)
+            await rr.rerank("q", [_chunk("c1", "a")], top_k=1)
+        # One construction for the accelerator, one for the fallback. A third
+        # would mean reloading the model on every slow sample.
+        assert MockCE.call_count == 2
+        assert cpu.predict.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_any_other_runtime_error_is_re_raised(self) -> None:
+        # The fallback matches on a message because torch gives no typed
+        # exception for this. Anything it does not recognise has to surface:
+        # a reranker that swallows errors returns an unranked candidate set
+        # that looks exactly like a ranked one.
+        rr, MockCE = self._rr()
+        MockCE.return_value.predict.side_effect = RuntimeError("shape mismatch")
+        with pytest.raises(RuntimeError, match="shape mismatch"):
+            await rr.rerank("q", [_chunk("c1", "a")], top_k=1)
