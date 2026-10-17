@@ -1929,3 +1929,95 @@ Format: date — decision — alternatives — reason.
   that burned its prompt and then errored added nothing to the daily spend
   cap — the cap under-counted exactly the requests that went wrong. Found by a
   test asserting a failed eval sample still reports what it spent.
+- **2026-10-17** — The `fq-002` date-header fix ships by re-ingesting
+  `release-notes.md` alone, not the corpus. *Alt:* `make ingest` over all 155
+  documents; keep deploying with `SKIP_VERIFY=1`. *Why:* `verify_index.py`,
+  run today, names the damage exactly — **4 of 4020 chunks**, all in
+  `release-notes.md`, dense and sparse both, every other check green (counts
+  agree, same chunk ids, 4020/4020 content hashes agree). `eccc01d` predicted
+  that blast radius in its own message and it held. The indexer asks
+  `unchanged_ids()` before embedding, so the cost is four embeddings whichever
+  path is taken; the single-file path is narrower, because `prune_document()`
+  then runs against one document rather than 155. It needs
+  `--source-root data/corpus/fastapi` passed by hand — without it the header
+  becomes "data corpus fastapi release-notes" for that file and no other, which
+  changes the hash of chunks that were correct and re-embeds a document into a
+  corpus it now disagrees with. `scripts/ingest.py` documents that trap and the
+  dry run confirms the root before anything is written.
+  **`planning/STATUS.md` priced this at ≈₹6.45 and that was wrong** — it is the
+  price of re-embedding 4020 chunks, which is the one thing a content-hash skip
+  guarantees will not happen. Corrected to ≈₹0.02.
+- **2026-10-17** — HyDE's verdict is predicted here, in writing, before the
+  run is paid for. *Why:* `learning/exercises.md` §09 asks for a paper
+  write-up that ends in the `eval-compare` result you expect, and when M3's
+  criterion 4 was reworded on 2026-10-14 the lower bar was accepted on the
+  explicit condition that the exercise as written stands for the next change.
+  HyDE is that change. A prediction registered after the measurement is not a
+  prediction, so this entry is committed before `run_eval.py` is invoked.
+
+  Baseline to beat, `baseline-16_20261003-182853`: context_precision 0.4667,
+  context_recall 0.9378 (both over 15 of 16), faithfulness 1.0000,
+  answer_relevance 0.8377, answer_correctness 0.7105, run cost $0.0709,
+  warm p50 10,053 ms, warm p95 17,072 ms. Significance floor 0.02.
+
+  **Prediction: HyDE does not earn its place, and `replace` does worse than
+  `concat`.** Per metric, against the floor:
+
+  | Metric | Baseline | Predicted | Call |
+  | --- | --- | --- | --- |
+  | context_precision | 0.4667 | 0.42–0.47 | down or flat |
+  | context_recall | 0.9378 | 0.91–0.96 | flat, under the floor |
+  | faithfulness | 1.0000 | 1.0000 | unchanged |
+  | answer_relevance | 0.8377 | 0.81–0.87 | flat |
+  | answer_correctness | 0.7105 | 0.67–0.75 | flat |
+  | run cost | $0.0709 | $0.074–0.079 | +5–11%, inside +20% |
+  | warm p50 | 10,053 ms | 11,000–11,600 ms | inside the 12,000 ceiling |
+  | warm p95 | 17,072 ms | 18,500–20,500 ms | **the coin flip** |
+
+  The reasoning, so a wrong prediction says which step was wrong:
+
+  1. **HyDE's designed target is already fixed.** It was built for `fq-012`, a
+     vocabulary gap where the question shares no words with the pages that
+     answer it. Deterministic context headers closed that row on 2026-09-27 —
+     `fq-012` went 0.000 → 1.000 and has stayed there. HyDE arrives third to a
+     problem two earlier changes already took turns at, and the row it was
+     aimed at has nothing left to give.
+  2. **Recall is nearly saturated.** 0.9378 over 15 scored samples is about
+     one sample's worth of miss in total. A change cannot win recall by 0.02
+     when there is barely 0.06 on the table, and some of what remains is
+     `fq-002`, whose answer is a subtraction over three entries 3,100 lines
+     apart and is absent from the corpus — no retrieval change reaches it.
+  3. **`replace` fights the retriever's sparse half.** The paper assumes a
+     dense index, where swapping the query for a hypothesis costs nothing.
+     Here BM25 sees the same string, so a bare hypothesis deletes the
+     question's own rare terms from the sparse query. `concat` keeps them.
+     This is in `HyDEConfig`'s comments as the reason `concat` is the default;
+     the prediction is that the measurement agrees with the comment.
+  4. **Precision falls before recall rises.** A hypothesis is generic
+     reference prose. It retrieves topical neighbours, and with one relevant
+     document per question in a 15-slot window, extra neighbours are pure
+     denominator.
+  5. **Faithfulness cannot move.** The generator is untouched and answers from
+     retrieved text; a wrong hypothesis is never shown to it. That asymmetry
+     is why HyDE was safe to try at all, and it also caps the upside.
+  6. **p95 is where this gets decided.** One extra flash-lite call per query,
+     capped at 220 completion tokens, lands in the retrieval stage. p50 has
+     ~1,950 ms of headroom and should survive. p95 has 2,928 ms to the
+     ceiling and a +15% regression allowance of 2,561 ms, and the slowest
+     sample pays the slowest HyDE call. At n=16 nearest-rank, p95 *is* the
+     slowest sample, so this turns on one row.
+
+  **Expected `eval-compare` output:** no metric clears the floor in HyDE's
+  favour; at least one of precision or recall falls; cost rises inside its
+  allowance; and the overall winner is either `baseline` or **withheld** on a
+  warm-p95 breach. Rough weights: 60% HyDE simply loses on quality, 25%
+  winner withheld on p95, 15% HyDE wins recall and I am wrong.
+
+  **What would falsify step 1, which is the load-bearing one:** if the recall
+  that is still missing sits in rows with the same shape `fq-012` had — a
+  question whose words are absent from the page that answers it — HyDE closes
+  them and recall goes to ~1.000. The honest caveat is that this project's
+  cheap predictions have a bad record: the retrieval harness mispredicted four
+  times running, and the path-token mechanism argued for the context headers
+  turned out not to be what recovered `fq-012`. This one is written down so it
+  can be scored, not because it is trusted.
