@@ -2021,3 +2021,93 @@ Format: date — decision — alternatives — reason.
   times running, and the path-token mechanism argued for the context headers
   turned out not to be what recovered `fq-012`. This one is written down so it
   can be scored, not because it is trusted.
+- **2026-10-17** — The comparator checks cost per query against its own
+  $0.005 ceiling, and prices only samples that finished. *Alt:* leave it
+  hand-checked against production. *Why:* `planning/BUDGET.md` has set a
+  per-query ceiling since it was accepted and the comparator could not read
+  it — a run total pays for the metric judges too, and `SampleResult.
+  token_usage` landed on 2026-10-14, leaving exactly one report that carried
+  it. A comparison needs two. There are two now, so the line is checked. The
+  subtlety is which samples count: a sample that dies partway has already
+  paid for the calls it made, so counting it as a query drags the mean below
+  what a query costs. `stage_ms` is the test, because the pipeline records a
+  stage when it completes one. On today's pair that is the difference
+  between a reported +4.7% and the real **+15.2%**.
+- **2026-10-17** — HyDE stays off. *Alt:* ship `concat`; ship it behind a
+  per-namespace flag; keep measuring. *Why:* measured, and it does not clear
+  the budget. `hyde-concat` against `baseline-17`, both on the corrected
+  index, paired over the 14 samples both runs scored:
+
+  | Metric | baseline-17 | hyde-concat | Delta | |
+  | --- | --- | --- | --- | --- |
+  | context_precision | 0.4524 | 0.5143 | **+0.0619** | B |
+  | context_recall | 0.9333 | 0.9191 | −0.0142 | ns |
+  | faithfulness | 1.0000 | 1.0000 | ±0 | ns |
+  | answer_relevance | 0.8390 | 0.8230 | −0.0160 | ns |
+  | answer_correctness | 0.7803 | 0.7565 | **−0.0238** | A |
+  | warm p50 | 8,776 ms | 10,299 ms | +17.4% | ok |
+  | warm p95 | 13,692 ms | 21,400 ms | **+56.3%** | **BREACH** |
+  | cost / query | $0.0028 | $0.0033 | +15.2% | ok |
+
+  One metric each way, so nobody wins on quality, and warm p95 is 21,400 ms
+  against a 20,000 ms ceiling and a +15% allowance. The comparator withholds
+  the winner. A breach is shippable with an entry naming the quality gain
+  that bought it; the gain here is +0.0619 precision against −0.0238
+  correctness, which is not a gain, so there is nothing to name and the knob
+  stays off. `HYDE_ENABLED` remains `false` in `.env.example` and in
+  `HyDEConfig`.
+
+  **`replace` is unmeasured.** Two attempts stalled on this laptop — the
+  second sat at 1.3 MB resident and falling while swap was at 10 GB of 11 —
+  and both were killed rather than left running. Neither reached sample one,
+  so neither spent anything. The arm is cheap (≈₹6.3) and still worth running
+  on a machine with memory free, but the config comment's argument for why
+  `concat` is the default is now the only evidence either way.
+
+- **2026-10-17** — Scoring the prediction registered earlier today, before
+  the run. The headline was right and three of the eight numbers were wrong,
+  one of them badly and in the opposite direction.
+
+  **Right.** The verdict — HyDE does not earn its place — and the reason it
+  would be decided on warm p95 rather than on quality. Recall flat
+  (predicted 0.91–0.96, measured 0.9191). Faithfulness unmoved. Answer
+  relevance flat. The p95 breach, given 25% and the one that happened.
+
+  **Wrong, and this is the useful part.**
+
+  *Context precision.* Predicted 0.42–0.47 and a fall; measured 0.5143, a
+  **+0.0619 rise**, the largest move in the table. The reasoning was that a
+  hypothesis retrieves topical neighbours and extra neighbours are pure
+  denominator. The mechanism is the other way round: the hypothesis is
+  written in the register of reference documentation, so it matches
+  documentation prose, and what comes back is *more* concentrated on the
+  right page rather than less. Precision here is the fraction of retrieved
+  chunks from relevant documents, and writing the query in the corpus's own
+  voice raises exactly that.
+
+  *Cost.* Predicted +5–11% on the run. The run moved +0.4%, which looked
+  like a hit on the wrong quantity until the per-query line was built — the
+  honest figure is **+15.2%**, above the predicted band. The run total hid it
+  because the two dead samples stopped paying partway and the judges dominate
+  a run anyway. Predicting the wrong quantity is not a near miss.
+
+  *Warm p50.* Predicted 11,000–11,600 ms absolute; measured 10,299 ms, and
+  the regression is +17.4% because the baseline's paired p50 is 8,776 ms, not
+  the 10,338 ms its own report prints. Both ends of that prediction were
+  wrong and they cancelled.
+
+  *Answer correctness.* Predicted flat at 0.67–0.75. Measured 0.7565, inside
+  the band, but the delta is −0.0238 and significant — a regression where
+  "flat" was claimed. A prediction stated as a range and scored as a delta is
+  a prediction that cannot lose, which is a flaw in how it was written, not a
+  result.
+
+  Step 4 of the six was the one that failed. Steps 1, 2, 3 and 5 held, and
+  step 6 picked the deciding number. The named falsifier — that the remaining
+  recall misses might have `fq-012`'s shape, in which case recall goes to
+  ~1.000 — did not fire: recall fell slightly.
+
+  That makes five wrong cheap predictions in this project's history against
+  one broadly right. The pattern across all six is the same: the direction of
+  a headline is guessable from the architecture, and the magnitude and the
+  mechanism are not.

@@ -101,6 +101,10 @@ _FAILED_SENTINEL = -1.0
 _P50_CEILING_MS = 12_000.0
 _P95_CEILING_MS = 20_000.0
 _RUN_COST_CEILING_USD = 0.100
+# The per-query ceiling from planning/BUDGET.md, which was hand-checked until
+# 2026-10-17 because no stored report carried per-sample usage and two had to
+# before a comparison could use it. Two now do.
+_QUERY_COST_CEILING_USD = 0.005
 # Regression allowances, against whichever run this one is compared with.
 _P95_REGRESSION_LIMIT = 0.15
 _COST_REGRESSION_LIMIT = 0.20
@@ -299,6 +303,39 @@ def _name_list(ids: list[str]) -> str:
     return f"{shown} and {rest} more" if rest > 0 else shown
 
 
+def _cost_per_query(result: EvalResult, ids: set[str] | None = None) -> float | None:
+    """Mean cost of one production query, or None when this run cannot say.
+
+    The pipeline's own calls only. A run's total pays for the metric judges
+    as well — roughly twice the chat calls a real query makes — so the run
+    figure answers a different question and is checked separately.
+    """
+    costs = [
+        estimate_usage_cost(s.token_usage)
+        for s in result.sample_results
+        if s.token_usage and (ids is None or s.sample_id in ids)
+    ]
+    return sum(costs) / len(costs) if costs else None
+
+
+def _priced_ids(result: EvalResult) -> set[str]:
+    """Samples that reported what they spent *and* finished spending it.
+
+    A sample that dies partway has still paid for the calls it made, and
+    counting it as a query drags the mean below what a query costs. `stage_ms`
+    is the test: the pipeline records a stage when it completes one, so a
+    sample with no stages never finished a query. On 2026-10-17 two samples
+    died in the reranker with usage already recorded, and including them put
+    HyDE's cost per query 4.7% above the baseline where the figure over the
+    samples both runs completed is +15.2%.
+    """
+    return {
+        s.sample_id
+        for s in result.sample_results
+        if s.token_usage and s.stage_ms
+    }
+
+
 def _timed_ids(result: EvalResult) -> set[str]:
     """Samples that contributed a latency figure to this run."""
     return {s.sample_id for s in result.sample_results if s.stage_ms}
@@ -470,6 +507,35 @@ def _check_budget(
             "The cost line is a whole eval run, judges included — about 7.8 "
             "chat calls a sample against production's ~4. It checks the run "
             f"ceiling and the run-to-run regression. {tail}"
+        )
+
+    # Cost per query, which the budget sets at $0.005 and which was checked
+    # by hand until 2026-10-17: `SampleResult.token_usage` landed on
+    # 2026-10-14 and a comparison needs two reports carrying it, not one.
+    priced = _priced_ids(result_a) & _priced_ids(result_b)
+    if priced:
+        qa = _cost_per_query(result_a, priced)
+        qb = _cost_per_query(result_b, priced)
+        if qa is not None and qb is not None:
+            deltas.append(_budgeted(
+                name="cost per query", unit="USD",
+                value_a=qa, value_b=qb,
+                ceiling=_QUERY_COST_CEILING_USD, limit=_COST_REGRESSION_LIMIT,
+            ))
+            if _priced_ids(result_a) != _priced_ids(result_b):
+                notes.append(
+                    f"Cost per query is over the {len(priced)} samples both "
+                    f"runs completed and priced. A sample that died partway "
+                    f"is excluded although it spent: it paid for part of a "
+                    f"query, and averaging it in makes a query look cheaper "
+                    f"than one costs."
+                )
+    else:
+        notes.append(
+            "Cost per query is unchecked against its $0.005 ceiling: it needs "
+            "per-sample `token_usage` in both runs, and reports written "
+            "before 2026-10-14 carry only a run-wide total. This is the "
+            "production figure the run-cost line above is not."
         )
 
     return deltas, notes

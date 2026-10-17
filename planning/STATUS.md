@@ -1,4 +1,4 @@
-# Status — 2026-10-14 (v0.1.0, all four milestones done, 16 of 17, CI green)
+# Status — 2026-10-17 (v0.1.0, all four milestones done, 16 of 17, CI green)
 
 **16 of the 17 ROADMAP exit criteria are ticked (≈94%), and all four
 milestones are marked done as of 2026-10-14.** That fraction is the project's
@@ -11,11 +11,18 @@ item. The pool to pick from is *Parked* at the bottom of ROADMAP.md, the
 unbuilt M4 scope items listed there (key management UI, usage page per key,
 dataset upload for per-corpus eval, layout-aware PDF, evidence export), and
 [BACKLOG.md](BACKLOG.md). Until one is opened, what's next is *Blocked on
-you* below — which is two paid runs needing a spend go-ahead.
+you* below.
 
 How to explain the project to someone else — what gap it addresses, in prose
 rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
 say so; this file is where they are current.
+
+**HyDE was measured on 2026-10-17 and stays off.** It was the last
+unmeasured idea in M3 and the one M3's reworded criterion 4 was reserved
+for, so the prediction was written down and committed before the run was
+paid for (`9eed3f2`), then scored against the result. The verdict held and
+three of eight numbers did not — see DECISIONS 2026-10-17. Cost for the day:
+**₹12.55**.
 
 ## One line
 
@@ -34,23 +41,33 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 
 ## Blocked on you
 
-- [ ] **Re-ingest `default` — ≈₹6.45, needs a spend go-ahead.** It lands
-      `eccc01d` (the `fq-002` chunk is dated three years stale without it)
-      and turns the deploy's index gate green. Until then every deploy needs
-      `SKIP_VERIFY=1`, which is correct but is a standing exception — see
-      *the index gate* below.
+- [x] ~~**Re-ingest `default`**~~ **done 2026-10-17, ≈₹0.005.** Not ≈₹6.45:
+      the indexer skips on `content_hash`, so the job was 4 chunks and 433
+      tokens, not 4020. `eccc01d` is landed, the gate is green 4020/4020, and
+      `SKIP_VERIFY=1` is no longer a standing exception. **A redeploy is now
+      owed** — the image bakes the BM25 index, so production's sparse half is
+      4 chunks behind its dense half until then. See *the index gate*.
 
-- [ ] **HyDE arm — ≈₹6.24, needs a spend go-ahead.** Built, off, and still
-      the only unmeasured thing in M3. Run at `--concurrency 1` (4 hangs the
-      laptop) and pass the mode explicitly, because both the code and
-      `.env.example` default to `concat`:
+- [x] ~~**HyDE arm**~~ **`concat` measured 2026-10-17, ₹12.54; verdict: stays
+      off.** +0.0619 context precision against −0.0238 answer correctness, so
+      nobody wins on quality, and warm p95 21,400 ms against a 20,000 ms
+      ceiling (+56.3% on a +15% allowance). The comparator withholds the
+      winner. Full numbers and the scored prediction are in DECISIONS
+      2026-10-17.
+
+- [ ] **HyDE `replace` — ≈₹6.3, unmeasured, needs a machine with memory.**
+      Two attempts today stalled before sample one (1.3 MB resident and
+      falling, swap at 10 GB of 11) and were killed; neither spent anything.
+      Not blocking anything — `concat` settled the question for now — but it
+      is the paper's variant and the only evidence against it is a comment in
+      `HyDEConfig`. Close Chrome first, then:
 
       ```
       .venv/bin/python scripts/run_eval.py \
         --dataset eval_data/fastapi_dataset.json --namespace default \
-        --run-name hyde-on --set hyde.enabled=true --set hyde.mode=replace \
-        --concurrency 1 \
-        --compare eval_data/reports/baseline-16_20261003-182853.json
+        --run-name hyde-replace --set hyde.enabled=true \
+        --set hyde.mode=replace --concurrency 1 \
+        --compare eval_data/reports/baseline-17_20261017-175634.json
       ```
 
 - [x] ~~**Keep-warm ping for the cold start**~~ **done 2026-10-07.** Job
@@ -357,28 +374,38 @@ What the two rewordings changed, so a reader can disagree with them:
   are. The exercise as written stands for HyDE, which is module 09 §4,
   built, off, and still the only unmeasured thing in M3.
 
-## The index gate, and why every deploy currently overrides it
+## The index gate — green since 2026-10-17
 
 `scripts/deploy_gcp.sh` runs `scripts/verify_index.py` before building and
 refuses on a mismatch. It exists because of two real incidents: a
 wrong-namespace ingest on 2026-09-27, and 37 of 155 files lost to Qdrant
 timeouts on 2026-09-28 (dense 2090/4020 against sparse 3950/4020).
 
-It fails on `main` today, and the override is the right call:
+It passed clean on 2026-10-17: counts agree, no id drift, **4020 of 4020
+content hashes agree**, and **4020 of 4020 headers** match what current code
+writes, on both halves. `SKIP_VERIFY=1` is no longer a standing exception and
+the next deploy should not pass it.
 
-- dense and sparse agree perfectly in both namespaces — 4020 = 4020, 0 id
-  drift, **0 of 4020 content hashes differ**;
-- the only failing check is the third, header text against what current code
-  would write: **4 chunks** of `release-notes.md` lack the
-  `0.104.0 (2023-10-18) > Upgrades > Internal` heading that unshipped commit
-  `eccc01d` adds to the heading trail;
-- `apply_context_headers` is imported by **`ingestion/indexer.py` only** and
-  is never on the query path, so this cannot affect serving.
+What cleared it was re-ingesting `data/corpus/fastapi/release-notes.md`
+alone, with `--source-root data/corpus/fastapi`. **433 tokens, ≈₹0.005.**
+This file priced that job at ≈₹6.45 for months and the figure was wrong: it
+is the price of re-embedding all 4020 chunks, and `DocumentIndexer` asks
+`unchanged_ids()` before it embeds anything, so only the 4 chunks `eccc01d`
+changed were ever going to be paid for. `eccc01d` said so in its own commit
+message — "a re-ingest re-embeds those four and skips the rest on
+content_hash, so shipping is free" — and the estimate here was written
+without reading it.
 
-That is drift between code and an already-baked index, which is exactly what
-the gate's own "if you know why the two differ" clause is for. Only the
-≈₹6.45 re-ingest clears it, and until then `eccc01d`'s `fq-002` date fix stays
-dormant in the tree.
+**One consequence, and it points at you.** `Dockerfile:34` bakes
+`data/index/` into the image, so production's sparse half comes from image
+`58e4e00`, built 2026-10-07, while its dense half is Qdrant Cloud, which the
+re-ingest updated today. For those 4 chunks of `release-notes.md` the two
+halves now disagree in production: BM25 matches the undated text, dense
+matches the dated one. The chunk ids are unchanged so fusion still works and
+nothing errors, which is precisely why it needs writing down rather than
+noticing later. A redeploy resolves it and you run deploys. `verify_index`
+will not catch this state, and correctly so — it checks the index a build is
+about to bake, not the one already serving.
 
 ## Known defects
 
@@ -387,6 +414,49 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-17 (HyDE measured and rejected; three defects found doing it;
+  **₹12.55**) — the index gate went green for ≈₹0.005, not the ≈₹6.45 this
+  file had been quoting: the job was 4 chunks and 433 tokens because the
+  indexer skips on `content_hash`, which `eccc01d` had said in its own commit
+  message. **A redeploy is now owed**, since the image bakes the BM25 index
+  and production's two halves disagree on those 4 chunks until one happens.
+
+  HyDE's prediction was committed before the run was paid for (`9eed3f2`),
+  which is what M3's reworded criterion 4 reserved the paper exercise for.
+  `concat` then measured +0.0619 context precision against −0.0238 answer
+  correctness — one metric each way, nobody wins — and warm p95 21,400 ms
+  against a 20,000 ms ceiling, so the comparator withheld the winner and the
+  knob stays off. `replace` is still unmeasured: two attempts stalled on a
+  laptop with 10 GB of 11 in swap and were killed before either reached
+  sample one, so neither spent anything.
+
+  The run that was supposed to answer one question found three defects
+  instead, all of the same family — **a measurement whose own gaps are
+  silenced reports whatever you expected**:
+
+  - Two samples died in the reranker with "MPS backend out of memory". They
+    were scored at the failure sentinel, dropped from every mean, and the
+    report printed "16 samples" with no qualifier, because the reporter only
+    counted *refusals* as excluded and a crash is not a refusal.
+  - The comparator's sample-id guard passed, because both runs **covered**
+    the same 16 rows. They did not **score** the same rows. Comparing means
+    over different denominators turned a real −0.0238 regression in answer
+    correctness into a reported +0.0113 tie.
+  - The budget had the same hole and it mattered more: the dropped rows were
+    the baseline's two slowest, so its p95 was measured on samples the
+    candidate never ran. Reported +25.2%; real **+56.3%**.
+
+  Fixed, with tests that are those runs shrunk: paired means, paired latency,
+  failed samples named in bold, `RerankerConfig.batch_size`/`device`, and a
+  CPU fallback on an out-of-memory that logs rather than killing the sample.
+  `scripts/compare_reports.py` re-judges two stored reports for free — until
+  today, seeing a corrected verdict meant buying the measurement again, which
+  is a bad incentive to leave in front of a comparator fix. And the
+  comparator now checks **cost per query** against its own $0.005 ceiling,
+  closing the BACKLOG item that was waiting for two reports to carry
+  per-sample usage; pricing only the samples that finished moved HyDE's cost
+  from a reported +4.7% to +15.2%.
 
 - 2026-10-14 (M3's last two criteria reworded and closed, ₹0) — both had been
   met in substance and failing on form since the milestone opened, and the

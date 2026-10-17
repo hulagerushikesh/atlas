@@ -1088,3 +1088,99 @@ class TestPairedBudget:
         a.sample_results[2].stage_ms = {}
         c = compare(a, b)
         assert "timed different samples" not in " ".join(c.budget_notes)
+
+
+# ── Cost per query against its own ceiling, 2026-10-17 ───────────────────────
+#
+# BUDGET.md sets $0.005 a query and the comparator could not check it: a run
+# total pays for the metric judges as well, and per-sample usage landed on
+# 2026-10-14, so there was one report carrying it and a comparison needs two.
+# There are two now.
+
+def _priced(name: str, per_sample_usd: list[float], run_usd: float) -> EvalResult:
+    """A run whose samples each report what they spent.
+
+    `ModelUsage` is priced by `atlas.cost`, so the test works backwards from
+    the dollar figure it wants rather than asserting a hard-coded token count.
+    """
+    def usage(usd: float) -> dict:
+        one = ModelUsage(
+            model="gemini-3.1-flash-lite", call_type="chat",
+            calls=1, prompt_tokens=1_000_000, completion_tokens=0,
+        )
+        unit = estimate_usage_cost({"m": one})
+        scale = usd / unit
+        return {"m": ModelUsage(
+            model="gemini-3.1-flash-lite", call_type="chat", calls=1,
+            prompt_tokens=int(1_000_000 * scale), completion_tokens=0,
+        )}
+
+    samples = [
+        SampleResult(
+            sample_id=f"s{i}", question="q", generated_answer="a",
+            retrieved_chunk_ids=[],
+            metrics=[MetricScore(metric_name="faithfulness", score=1.0)],
+            stage_ms={"total_stage": 1000.0},
+            token_usage=usage(usd),
+        )
+        for i, usd in enumerate(per_sample_usd)
+    ]
+    return EvalResult(
+        pipeline_config=PipelineConfig(name=name),
+        sample_results=samples,
+        aggregate_scores={"faithfulness": 1.0},
+        total_tokens_used=0, duration_seconds=1.0,
+        token_usage=usage(run_usd),
+    )
+
+
+class TestCostPerQueryBudget:
+    """The budget line, as distinct from `TestCostPerQuery` above, which
+    covers the figure the reporter prints for a single run."""
+
+    def test_checked_when_both_runs_price_their_samples(self) -> None:
+        a = _priced("A", [0.0030, 0.0030], run_usd=0.07)
+        b = _priced("B", [0.0031, 0.0031], run_usd=0.07)
+        line = next(
+            d for d in compare(a, b).budget if d.name == "cost per query"
+        )
+        assert line.value_a == pytest.approx(0.0030, rel=1e-3)
+        assert line.value_b == pytest.approx(0.0031, rel=1e-3)
+        assert line.ceiling == pytest.approx(0.005)
+        assert line.breach == ""
+
+    def test_breaches_its_own_ceiling_independently_of_the_run_total(self) -> None:
+        # The run total is well inside $0.100; the per-query figure is not
+        # inside $0.005. Before this line existed, that shipped unremarked.
+        a = _priced("A", [0.0030, 0.0030], run_usd=0.07)
+        b = _priced("B", [0.0060, 0.0060], run_usd=0.08)
+        comparison = compare(a, b)
+        run = next(d for d in comparison.budget if d.name == "eval run cost")
+        query = next(d for d in comparison.budget if d.name == "cost per query")
+        assert run.breach == ""
+        assert query.breach != ""
+        assert "withheld" in comparison.as_markdown()
+
+    def test_named_as_unchecked_when_a_report_predates_the_field(self) -> None:
+        a = _priced("A", [0.0030, 0.0030], run_usd=0.07)
+        b = _priced("B", [0.0030, 0.0030], run_usd=0.07)
+        for sample in b.sample_results:
+            sample.token_usage = {}
+        comparison = compare(a, b)
+        assert not any(d.name == "cost per query" for d in comparison.budget)
+        assert "unchecked against its $0.005 ceiling" in " ".join(
+            comparison.budget_notes
+        )
+
+    def test_a_sample_that_died_partway_is_not_priced_as_a_query(self) -> None:
+        # It spent, so it has usage; it never finished, so it is not a query.
+        # Averaging it in reports a query as cheaper than one costs.
+        a = _priced("A", [0.0030, 0.0030], run_usd=0.07)
+        b = _priced("B", [0.0040, 0.0040], run_usd=0.07)
+        b.sample_results[1].stage_ms = {}     # died mid-pipeline
+        b.sample_results[1].token_usage = _priced(
+            "x", [0.0005], run_usd=0.01
+        ).sample_results[0].token_usage
+        line = next(d for d in compare(a, b).budget if d.name == "cost per query")
+        assert line.value_b == pytest.approx(0.0040, rel=1e-3)
+        assert "died partway is excluded" in " ".join(compare(a, b).budget_notes)

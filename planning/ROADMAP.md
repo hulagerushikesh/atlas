@@ -73,7 +73,8 @@ research-backed changes, each with a stored before/after report.
 
 Candidates, in expected value-per-effort order:
 1. Tokeniser fix for BM25 (identifiers, camelCase) — free
-2. HyDE for dense retrieval — one file, one LLM call
+2. HyDE for dense retrieval — one file, one LLM call *(built, measured
+   2026-10-17, rejected on budget — see DECISIONS)*
 3. Contextual retrieval at ingest — one LLM call per chunk, re-ingest
 4. Rerank top_k 5 → 10–15, generation context reordered (lost-in-the-middle)
 5. Local embedding model option (bge / e5) — cost to zero, quality measured
@@ -139,6 +140,17 @@ Exit criteria:
       less than the corrections are. The exercise as written stands for the
       *next* change: HyDE is module 09 §4, built, off by default, and still
       the only unmeasured thing in M3 at ≈₹6.24.
+      **Discharged 2026-10-17.** The prediction was written, committed
+      (`9eed3f2`) and only then paid for, which is the exercise as
+      `learning/exercises.md` §09 describes it. HyDE `concat` measured
+      +0.0619 context precision against −0.0238 answer correctness and warm
+      p95 21,400 ms against a 20,000 ms ceiling; the comparator withheld the
+      winner and the knob stays off. The prediction's verdict was right and
+      three of its eight numbers were wrong, context precision worst — it
+      was predicted to fall and it rose the most of anything in the table.
+      Both the result and the scoring are in DECISIONS 2026-10-17. `replace`
+      is still unmeasured, which is a laptop problem rather than a money
+      one: two attempts stalled before sample one and were killed.
 
 ## M4 — Product hardening  ✅ done 2026-10-13 (marked 2026-10-14)
 
