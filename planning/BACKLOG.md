@@ -244,21 +244,34 @@ Newest at the bottom of each section.
   will score it 0.000 and correctness will read **0.6975**, predicted. See
   DECISIONS 2026-09-29. Successors below.
 
-- **The baseline is broken and the next run resets it.** Every report in
-  `eval_data/reports/` was measured on the fifteen-row set. The comparator
-  will refuse to diff any of them against a run made from today, which is
-  correct. Worth doing at the next paid pass: re-measure once, label the
-  report clearly as the new baseline, and say in STATUS which column is
-  which. Until then the 2026-09-28 numbers stand as the last comparable set
-  among themselves.
+- ~~**The baseline is broken and the next run resets it.**~~ **done
+  2026-10-17, ₹6.26** — `baseline-17_20261017-175634`, measured on the
+  16-row set and named so the label says which column is which. The 24
+  earlier reports in `eval_data/reports/` are the fifteen-row set and stay
+  incomparable with anything after `fq-016`; the comparator refuses them by
+  fingerprint rather than quietly diffing them, which is the behaviour this
+  entry was relying on.
+
+  Original entry: every report in `eval_data/reports/` was measured on the
+  fifteen-row set, so a fresh baseline had to be paid for regardless.
 
 - **The router does not treat a Stripe question as out of scope**, though
   its own `domain` string names the boundary. It returned `complex`. The
   same "When in doubt, prefer 'simple'" sentence that misrouted `fq-012` is
   the likely cause, now visible in a second, different way. **Deliberately
   not fixed yet:** the last router-prompt fix looked just as obvious and
-  measured at exactly zero, so this waits on the next full run confirming
-  the prediction above before anything is touched.
+  measured at exactly zero, so this waited on the next full run confirming
+  the prediction above before anything was touched.
+
+  **That run happened on 2026-10-17, so this is unblocked — and the
+  prediction it was waiting on did not hold.** `fq-016` does score
+  correctness **0.000** on `baseline-17` with recall 1.000, which confirms
+  the router answering rather than refusing; but the aggregate correctness
+  the prediction put at **0.6975** measured **0.7452**. The entry was right
+  about the mechanism and wrong about the number, which is the same shape as
+  the HyDE predictions scored below. Nothing here is paid work: the fix is a
+  router-prompt change, and the honest way to judge it is against
+  `baseline-17`, which now exists.
 
 - ~~Guard against the fault the audit found, in the dataset loader.~~
   **done 2026-09-27**, `atlas.evaluation.dataset`. Every label must resolve to
@@ -367,7 +380,41 @@ Newest at the bottom of each section.
   can go behind a config flag so `--set` re-runs the experiment. Price a
   measured pass at ~Rs.6 plus the extra call per row.
 
-- **Measure HyDE, and re-establish the baseline, in one pass.** Both are
+- ~~**Measure HyDE, and re-establish the baseline, in one pass.**~~ **done
+  2026-10-17/18, ₹18.80 across three runs. HyDE is closed: both arms
+  measured, both rejected on the latency budget.** `concat` warm p95 +56.3%,
+  `replace` +138.6% (40,778 ms), and head to head the two tie on all five
+  quality metrics — so `replace` buys nothing `concat` does not. The
+  comparator withheld the winner in both comparisons and the knob stays off.
+  Full numbers in DECISIONS 2026-10-17 and 2026-10-18.
+
+  **The three predictions this entry registered on 2026-09-29, scored.**
+  They are scored here because they were written down, not because they
+  were flattering — two are wrong and the third cannot be settled.
+
+  1. *"`fq-012` doc-recall rises from 0.400; this is the whole thesis and
+     the only row HyDE was built for."* **Wrong, and wrong in the direction
+     that matters.** `fq-012` recall **fell to 0.200 in both arms**. The one
+     row HyDE existed to fix is the row it broke, which is a cleaner verdict
+     on the intervention than the aggregate was.
+  2. *"Precision falls somewhere, because a probe retrieves pages about the
+     topic rather than pages answering the question."* **Wrong.** Context
+     precision **rose** in both arms — +0.0619 `concat`, +0.0845 `replace`,
+     the largest single movement either run produced — and `fq-012`'s own
+     precision rose under `replace` (0.1333 → 0.2000). The mechanism was
+     backwards: a hypothesis written in documentation register *concentrates*
+     the retrieved set rather than diffusing it. DECISIONS 2026-10-17 records
+     the same error being made twice independently.
+  3. *"`fq-016` gets worse, not better."* **Unsettled, and it cannot be
+     settled from these runs.** `fq-016` scored the failure sentinel in both
+     HyDE arms — an MPS out-of-memory in `concat`, "Request timed out" in
+     `replace` — so it has no score to compare. Its baseline reading is
+     correctness **0.000** with recall 1.000, which does confirm the earlier
+     half of the prediction above it: the router answers `fq-016` rather
+     than refusing it. The aggregate correctness that prediction put at
+     **0.6975** measured **0.7452**.
+
+  Original entry: Both are
   now unavoidable and they are the same run: adding `fq-016` moved both
   dataset fingerprints on 2026-09-29, so every stored report is already
   incomparable with anything run after it and a fresh baseline has to be
@@ -422,8 +469,22 @@ Newest at the bottom of each section.
   path (3 attempts, 0.5-4s). The retry sits on the private single-call methods
   so a resend never repeats an upsert batch that already landed.
 
-- **Ship the context headers to the `default` namespace — PARTIALLY DONE and
-  currently inconsistent.** Cost approved 2026-09-27; the auto-mode classifier
+- ~~**Ship the context headers to the `default` namespace.**~~ **done
+  2026-10-17, ≈₹0.005** — `verify_index.py` reports `default` at **4020/4020
+  on both halves**, 0 dense-only, 0 sparse-only, 0 differing content hashes,
+  and header coverage 4020/4020 dense and sparse. The last gap was 4 chunks
+  of `release-notes.md`, not the ~1930 this entry priced at ₹3.10: the
+  indexer skips on `content_hash`, so the job cost 433 tokens. The matching
+  deploy landed 2026-10-18 as `atlas-api-00014-5vp`, which is what put the
+  baked BM25 half back in agreement with Qdrant. `headers` was brought level
+  the same day and the three namespaces that had a sparse half and no dense
+  one at all — `quickstart`, `field-notes`, `console-demo` — were deleted
+  rather than shipped. See DECISIONS 2026-10-18.
+
+  Original entry, kept for the ordering rule, which still holds — **re-ingest
+  first, deploy second**, because `Dockerfile:34` bakes the BM25 index:
+  PARTIALLY DONE and currently inconsistent. Cost approved 2026-09-27; the
+  auto-mode classifier
   refused the write to the live collection, correctly, so the user runs it.
   The 2026-09-28 run landed 3950/4020 sparse chunks but only 2090/4020 dense,
   leaving 1860 content hashes differing between the two halves — a mismatched
@@ -479,12 +540,18 @@ Newest at the bottom of each section.
   (`25058e6`, `e095c7b`, `6443bb6` from 09-23 and `d21a922` from 09-27),
   sharing layers. Nothing to do.
 
-- **Production is 17 commits behind `main`.** The live revision
-  `atlas-api-00008-v9g` runs image `d21a922` ("give every chunk its source
-  path and heading trail", 2026-09-27). Everything since is unshipped,
-  including the spend-cap fix — so **the deployed cap is still being charged
-  the generation call alone and admitting roughly twice its budget**. The
-  user runs deploys.
+- ~~**Production is 17 commits behind `main`.**~~ **done** — twice. The
+  spend-cap fix this entry was actually about shipped on 2026-10-07 as
+  `atlas-api-00011-xcm` / image `58e4e00`, and the drift that reopened
+  afterwards closed on 2026-10-18 as **`atlas-api-00014-5vp` / image
+  `ac132a9`**, which carried 23 further commits plus the corrected BM25
+  index. Production and `main` agree.
+
+  Original entry: the live revision `atlas-api-00008-v9g` ran image
+  `d21a922` ("give every chunk its source path and heading trail",
+  2026-09-27). Everything since was unshipped, including the spend-cap fix —
+  so **the deployed cap was still being charged the generation call alone
+  and admitting roughly twice its budget**. The user runs deploys.
 
 - ~~**Both error paths hand the client `str(exc)`.**~~ **Fixed 2026-09-29,
   Rs.0.** `_public_error()` returns one fixed sentence naming the request
@@ -531,14 +598,12 @@ Newest at the bottom of each section.
   **Removed 2026-10-14.** Proved rather than grepped: with a module that
   raises on `import tiktoken` ahead of it on `PYTHONPATH`, all 644 tests
   passed, so nothing reaches it by any name. Original entry follows.
-- **`tiktoken` is a declared dependency that nothing imports.** `grep -rn
-  tiktoken src tests` returns nothing; it is in `[project.dependencies]`, so
-  every install and every image build carries it. Either something was meant
-  to count tokens with it and uses the provider's reported usage instead, or
-  it is residue. Found while auditing what CI would download (2026-10-10).
-  Removing it is a one-line change plus a lockfile-free reinstall; the only
-  care needed is checking `scripts/` too, which `make lint` covers but
-  nothing imports from.
+- ~~**`tiktoken` is a declared dependency that nothing imports.**~~ **done
+  `eae63f0`** — dropped from `[project.dependencies]`; `grep -c tiktoken
+  pyproject.toml` returns 0. It was residue: token counts come from the
+  provider's reported usage, which is also what `usage.py` prices against.
+
+  Original entry: found while auditing what CI would download (2026-10-10).
 
 - ~~**The `gcp` extra is never type-checked.**~~ **This entry was wrong**,
   filed 2026-10-10 and withdrawn 2026-10-12. It rested on `.venv/bin/pip
