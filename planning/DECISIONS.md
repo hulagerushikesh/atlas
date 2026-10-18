@@ -2169,3 +2169,33 @@ Format: date — decision — alternatives — reason.
   recall — is the one that showed up. That is one clause right against the
   three numbers it got wrong, which is about the right ratio for this
   project's forecasting record and worth stating in both directions.
+- **2026-10-18** — the three namespaces with a BM25 file and no Qdrant
+  collection (`quickstart`, `field-notes`, `console-demo`) were deleted
+  rather than shipped or given a dense half. *Alt:* ingest the missing
+  halves; keep them and pass `SKIP_VERIFY=1`; exclude them in
+  `.dockerignore`. *Why:* `field-notes` and `console-demo` were built from
+  temp upload directories that no longer exist, so their dense halves cannot
+  be rebuilt from anything; `quickstart` is 35 chunks of
+  `tutorial/first-steps.md`, a strict subset of what `default` already
+  holds. `SKIP_VERIFY=1` is the flag this gate exists to refuse, and it has
+  caught two real incidents. `.dockerignore` was the closest call: it would
+  have kept the files while stopping them shipping, but the gate enumerates
+  `data/index/*/` precisely because that is what `COPY` takes, so the two
+  lists would then have disagreed and the gate's comment would have become
+  false — a gate that checks a different set than the image carries is the
+  same defect it was written to prevent, one level up. `headers` was kept
+  and re-ingested instead (4 chunks, 433 tokens): it has a real 4,020-point
+  collection, both its halves agreed with each other, and it was only
+  behind on the context header those 4 chunks gained on the 17th.
+- **2026-10-18** — the build monitor polled with `gcloud ... || true` and so
+  reported nothing at all for 15 minutes, through two builds that had in
+  fact succeeded. *Alt:* let a failed poll kill the monitor; emit a line on
+  every poll. *Why:* neither alternative is what went wrong. The defect is
+  that the failure branch emitted **nothing**, which is byte-identical to
+  "still running" — so the monitor could not distinguish a build in flight
+  from a check that never ran. A watcher must emit on every terminal state
+  *and* on its own failure; silence has to mean one thing. This is the
+  third instance of the same family in two days, after the reporter that
+  counted refusals but not crashes and the stall detector that read the
+  wrong process.
+
