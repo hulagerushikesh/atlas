@@ -30,7 +30,7 @@ worse than `concat` — held, and for the mechanism it named. See DECISIONS
 ## One line
 
 **M2 is done and shipped: https://atlas.hulage.in is live and current** —
-Cloud Run rev **00013-xph** (image `ac132a9`, deployed 2026-10-18) in
+Cloud Run rev **00014-5vp** (image `ac132a9`, deployed 2026-10-18) in
 `asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
 Firestore for keys and the spend counter, four Secret Manager secrets,
 ₹200/mo budget alert, and a `*/10` keep-warm job. `main` and production
@@ -48,7 +48,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
       the indexer skips on `content_hash`, so the job was 4 chunks and 433
       tokens, not 4020. `eccc01d` is landed, the gate is green 4020/4020, and
       `SKIP_VERIFY=1` is no longer a standing exception. ~~A redeploy is now
-      owed~~ — **discharged 2026-10-18**: revision `atlas-api-00013-xph`
+      owed~~ — **discharged 2026-10-18**: revision `atlas-api-00014-5vp`
       carries image `ac132a9`, so the two halves agree in production again.
       See *the index gate*.
 
@@ -131,7 +131,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **656 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00013-xph**, image `ac132a9`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00014-5vp**, image `ac132a9`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -404,7 +404,7 @@ Qdrant Cloud, which the re-ingest updated on the 17th. For those 4 chunks of
 matched the undated text, dense matched the dated one. The chunk ids are
 unchanged so fusion still worked and nothing errored, which is precisely why
 it needed writing down rather than noticing later. Revision
-`atlas-api-00013-xph` closed it. `verify_index` will not catch this state,
+`atlas-api-00014-5vp` closed it. `verify_index` will not catch this state,
 and correctly so — it checks the index a build is about to bake, not the one
 already serving, and the window between those two is exactly this.
 
@@ -416,7 +416,7 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
-- 2026-10-18 (redeploy; **≈₹0**) — rev **`atlas-api-00013-xph`**, image
+- 2026-10-18 (redeploy; **≈₹0**) — rev **`atlas-api-00014-5vp`**, image
   `ac132a9`, so the owed redeploy is discharged and the two halves of the
   hybrid agree in production again. It carried 23 commits and 11 days as
   well as the index: browser-corpus upload, the reranker's `batch_size=16`
@@ -483,7 +483,7 @@ daily spend cap, console markdown.
   indexer skips on `content_hash`, which `eccc01d` had said in its own commit
   message. **A redeploy was owed** from here, since the image bakes the BM25
   index and production's two halves disagreed on those 4 chunks until one
-  happened; it happened on the 18th as `atlas-api-00013-xph`.
+  happened; it happened on the 18th as `atlas-api-00014-5vp`.
 
   HyDE's prediction was committed before the run was paid for (`9eed3f2`),
   which is what M3's reworded criterion 4 reserved the paper exercise for.
