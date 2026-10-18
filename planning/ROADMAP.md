@@ -73,8 +73,8 @@ research-backed changes, each with a stored before/after report.
 
 Candidates, in expected value-per-effort order:
 1. Tokeniser fix for BM25 (identifiers, camelCase) — free
-2. HyDE for dense retrieval — one file, one LLM call *(built, measured
-   2026-10-17, rejected on budget — see DECISIONS)*
+2. HyDE for dense retrieval — one file, one LLM call *(built; both arms
+   measured 2026-10-17/18, both rejected on budget — see DECISIONS)*
 3. Contextual retrieval at ingest — one LLM call per chunk, re-ingest
 4. Rerank top_k 5 → 10–15, generation context reordered (lost-in-the-middle)
 5. Local embedding model option (bge / e5) — cost to zero, quality measured
@@ -149,8 +149,9 @@ Exit criteria:
       three of its eight numbers were wrong, context precision worst — it
       was predicted to fall and it rose the most of anything in the table.
       Both the result and the scoring are in DECISIONS 2026-10-17. `replace`
-      is still unmeasured, which is a laptop problem rather than a money
-      one: two attempts stalled before sample one and were killed.
+      was measured 2026-10-18 and is worse: +0.0845 precision but −0.0245
+      recall, warm p95 +138.6%, and a tie with `concat` on every metric
+      head to head. **Both arms measured, both rejected, HyDE closed.**
 
 ## M4 — Product hardening  ✅ done 2026-10-13 (marked 2026-10-14)
 

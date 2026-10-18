@@ -1,4 +1,4 @@
-# Status — 2026-10-17 (v0.1.0, all four milestones done, 16 of 17, CI green)
+# Status — 2026-10-18 (v0.1.0, all four milestones done, 16 of 17, CI green)
 
 **16 of the 17 ROADMAP exit criteria are ticked (≈94%), and all four
 milestones are marked done as of 2026-10-14.** That fraction is the project's
@@ -17,12 +17,15 @@ How to explain the project to someone else — what gap it addresses, in prose
 rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
 say so; this file is where they are current.
 
-**HyDE was measured on 2026-10-17 and stays off.** It was the last
+**HyDE is measured and closed — both arms, both rejected.** `concat`
+2026-10-17, `replace` 2026-10-18. It was the last
 unmeasured idea in M3 and the one M3's reworded criterion 4 was reserved
 for, so the prediction was written down and committed before the run was
 paid for (`9eed3f2`), then scored against the result. The verdict held and
-three of eight numbers did not — see DECISIONS 2026-10-17. Cost for the day:
-**₹12.55**.
+three of eight numbers did not. Its other clause — that `replace` would do
+worse than `concat` — held, and for the mechanism it named. See DECISIONS
+2026-10-17 and 2026-10-18. Cost: **₹12.55** on the 17th, **₹6.94** on the
+18th, **₹19.49** total.
 
 ## One line
 
@@ -55,20 +58,16 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
       winner. Full numbers and the scored prediction are in DECISIONS
       2026-10-17.
 
-- [ ] **HyDE `replace` — ≈₹6.3, unmeasured, needs a machine with memory.**
-      Two attempts today stalled before sample one (1.3 MB resident and
-      falling, swap at 10 GB of 11) and were killed; neither spent anything.
-      Not blocking anything — `concat` settled the question for now — but it
-      is the paper's variant and the only evidence against it is a comment in
-      `HyDEConfig`. Close Chrome first, then:
-
-      ```
-      .venv/bin/python scripts/run_eval.py \
-        --dataset eval_data/fastapi_dataset.json --namespace default \
-        --run-name hyde-replace --set hyde.enabled=true \
-        --set hyde.mode=replace --concurrency 1 \
-        --compare eval_data/reports/baseline-17_20261017-175634.json
-      ```
+- [x] ~~**HyDE `replace`**~~ **measured 2026-10-18, ₹6.94; worse than
+      `concat`, and HyDE is now closed.** Ran clean in 5 min once Chrome was
+      actually quit. +0.0845 context precision but **−0.0245 recall** (over
+      the floor, where `concat` stayed under it), warm p50 **+41.2%** and
+      p95 **+138.6%** — both ceilings breached. Head to head against
+      `concat` it is a **tie on all five metrics** and +40.4% p95, so it
+      buys nothing and costs 8.6 s of p95 not buying it. The recall loss is
+      `HyDEConfig`'s own argument confirmed: a bare hypothesis strips the
+      question's rare terms out of the BM25 half. **Both arms measured, both
+      rejected.**
 
 - [x] ~~**Keep-warm ping for the cold start**~~ **done 2026-10-07.** Job
       `atlas-keepwarm`, `*/10 * * * *` against `/health`, created and
@@ -414,6 +413,31 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-18 (HyDE `replace` measured; HyDE closed; **₹6.94**) — ran clean
+  in 5 minutes once Chrome was genuinely quit, with **zero** CPU fallbacks,
+  so the 17th's `batch_size` fix held and the latency below is HyDE's own
+  rather than the fallback's wearing its name. +0.0845 context precision,
+  **−0.0245 recall**, warm p50 +41.2% and p95 **+138.6%** (40,778 ms), both
+  ceilings breached. Head to head with `concat`: tie on all five metrics,
+  +40.4% p95. So `replace` buys nothing `concat` does not and costs 8.6 s of
+  p95 to not buy it, and **HyDE is closed with both arms measured.** The
+  recall loss is `HyDEConfig`'s own argument confirmed by measurement — a
+  bare hypothesis deletes the question's rare terms from the BM25 query.
+  `fq-016` scored nothing, on **"Request timed out"** — a third distinct
+  failure mode, and one that is visible instead of silent only because of
+  the 17th's reporter and comparator work.
+
+  Also corrected, because it changes how to read the 17th: **the stall
+  detector used on the two killed attempts was reading the wrong process.**
+  It took the first `ps` match, which is the zsh wrapper at ~1 MB, not the
+  Python process. The second kill was therefore probably premature. The
+  first still stands — there the Python process itself was identified, at
+  7.6 MB and 0% CPU after 23 minutes against a ~4 minute run. The real
+  lesson is that **CPU is a bad liveness signal for this workload**: at
+  `--concurrency 1` the process is blocked on Gemini for most of its wall
+  time, so 0% CPU is its normal state. Resident memory growth is the signal
+  that worked — 59 → 86 → 140 MB on the run that finished.
 
 - 2026-10-17 (HyDE measured and rejected; three defects found doing it;
   **₹12.55**) — the index gate went green for ≈₹0.005, not the ≈₹6.45 this

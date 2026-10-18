@@ -2111,3 +2111,61 @@ Format: date — decision — alternatives — reason.
   one broadly right. The pattern across all six is the same: the direction of
   a headline is guessable from the architecture, and the magnitude and the
   mechanism are not.
+- **2026-10-18** — HyDE `replace` measured; both arms are now done and HyDE
+  stays off for good. *Alt:* ship `replace` (the paper's variant); ship
+  `concat`; keep the question open. *Why:* it is worse than `concat` on the
+  only axis either of them moves, and far worse on latency.
+
+  Against `baseline-17`, paired over the 15 samples both runs scored:
+
+  | Metric | baseline-17 | hyde-replace | Delta | |
+  | --- | --- | --- | --- | --- |
+  | context_precision | 0.4533 | 0.5378 | **+0.0845** | B |
+  | context_recall | 0.9378 | 0.9133 | **−0.0245** | A |
+  | answer_correctness | 0.7949 | 0.7798 | −0.0151 | ns |
+  | answer_relevance | 0.8382 | 0.8258 | −0.0124 | ns |
+  | faithfulness | 1.0000 | 1.0000 | ±0 | ns |
+  | warm p50 | 10,338 ms | 14,596 ms | **+41.2%** | **BREACH** |
+  | warm p95 | 17,087 ms | 40,778 ms | **+138.6%** | **BREACH** |
+  | cost / query | $0.0029 | $0.0035 | +19.7% | ok |
+
+  And head to head against `concat`, which is the comparison that decides
+  the mode: **tie on every metric**, all five deltas inside the 0.02 floor,
+  with warm p95 +40.4% and both latency ceilings breached. `replace` buys
+  nothing `concat` does not and costs 8.6 seconds of p95 to not buy it.
+
+  **This is the config comment's argument, confirmed.** `HyDEConfig` has said
+  since it was written that `concat` is the default because this retriever is
+  hybrid: the paper assumes a dense index where swapping the query for a
+  hypothesis is free, but here BM25 sees the same string, so a bare
+  hypothesis deletes the question's own rare terms from the sparse query.
+  Recall is the number that should show it, and it does — `replace` loses
+  **−0.0245**, over the floor, where `concat` lost −0.0142 and stayed under
+  it. The argument was right and is now measured rather than reasoned.
+
+  Precision moves the other way and further, +0.0845 against `concat`'s
+  +0.0619, for the same reason yesterday's prediction got backwards: a
+  hypothesis is reference-documentation prose, and the purer the hypothesis
+  the more the retrieved set concentrates on documentation. `replace` is the
+  purest form of it. That is a real effect and it is not worth what it costs.
+
+  **The latency is HyDE's, not an artefact.** Zero `reranker_oom_cpu_fallback`
+  events in the run — yesterday's `batch_size` fix held and no sample fell
+  back to CPU, so nothing here is the fallback's slowness wearing HyDE's
+  name. The HyDE stage alone measured 1,522 ms to **11,054 ms** across 15
+  samples; the p95 row, `fq-015`, took 40,778 ms end to end. One extra
+  generation call in front of every query is not cheap when the model is
+  allowed 220 tokens and sometimes takes all of them.
+
+  `fq-016` scored nothing: **"Request timed out."** A different failure from
+  yesterday's two, which were out-of-memory — and visible rather than
+  silent only because of yesterday's reporter and comparator work. It is
+  excluded from every mean and every latency figure here, and both are
+  stated over 15.
+
+  Closing the prediction of 2026-10-17: it said "HyDE does not earn its
+  place, **and `replace` does worse than `concat`**". Both halves held. The
+  mechanism named for the second half — sparse query dilution, visible as
+  recall — is the one that showed up. That is one clause right against the
+  three numbers it got wrong, which is about the right ratio for this
+  project's forecasting record and worth stating in both directions.
