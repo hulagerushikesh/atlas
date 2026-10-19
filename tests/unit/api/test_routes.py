@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from atlas.api.cache import QueryCache
 from atlas.api.schemas import QueryResponse
+from atlas.orchestration.faithfulness import FaithfulnessResult
 from atlas.orchestration.pipeline import RetrievalPass
 from tests.unit.api.conftest import _evidence_chunk, _make_pipeline_result
 
@@ -48,6 +49,27 @@ class TestQueryRoute:
     def test_empty_query_rejected(self, client: TestClient) -> None:
         resp = client.post("/query", json={"query": ""})
         assert resp.status_code == 422
+
+    def test_unverdicted_answer_serialises_both_fields_null(
+        self, client: TestClient
+    ) -> None:
+        """
+        No verdict reaches the client as null, never true. The console's
+        strengthFrom() renders a null score as "Unchecked"; a true/1.0 pair
+        would render its strongest badge, "Supported 1.00", for an answer
+        nobody audited.
+        """
+        result = _make_pipeline_result()
+        result.faithfulness = FaithfulnessResult(
+            score=None, is_faithful=None, summary="check disabled"
+        )
+        result.is_faithful = None
+        client.app.state.atlas.registry.get.return_value.pipeline.run = AsyncMock(
+            return_value=result
+        )
+        body = client.post("/query", json={"query": "q"}).json()
+        assert body["is_faithful"] is None
+        assert body["faithfulness_score"] is None
 
     def test_cache_hit_returns_cached_true(self, client: TestClient) -> None:
         import json

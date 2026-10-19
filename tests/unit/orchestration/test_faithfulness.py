@@ -69,13 +69,55 @@ class TestFaithfulnessChecker:
         assert "Y is true" in result.unsupported_claims
 
     @pytest.mark.asyncio
-    async def test_disabled_skips_llm_call(self) -> None:
+    async def test_disabled_reports_no_verdict_not_a_perfect_one(self) -> None:
+        """
+        A check that did not run has no result. Returning 1.0/True made the
+        console render "Supported 1.00" — its strongest badge — for an answer
+        nobody audited, which is worse than rendering nothing.
+        """
         llm = AsyncMock()
         checker = FaithfulnessChecker(llm, enabled=False)
         result = await checker.check("any answer", [_chunk("c1")])
-        assert result.is_faithful is True
-        assert result.score == 1.0
+        assert result.score is None
+        assert result.is_faithful is None
         llm.generate.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unparseable_judge_is_zero_not_none(self) -> None:
+        """
+        The one branch that deliberately keeps a number. None means "nobody
+        looked"; here somebody looked and the audit itself failed, which a
+        human should triage rather than see rendered as a quiet "unchecked".
+        """
+        llm = AsyncMock()
+        llm.generate = AsyncMock(
+            return_value=GenerationResponse(
+                content="not json {", model_used="gpt-4o-mini",
+                prompt_tokens=10, completion_tokens=2, total_tokens=12,
+            )
+        )
+        result = await FaithfulnessChecker(llm).check("answer", [_chunk("c1")])
+        assert result.score == 0.0
+        assert result.is_faithful is False
+
+    @pytest.mark.asyncio
+    async def test_judge_that_omits_the_score_does_not_score_perfect(self) -> None:
+        """
+        `parsed.get("faithfulness_score", 1.0)` gave a judge that skipped the
+        question a perfect verdict — the same silencing as the disabled
+        branch, one level in.
+        """
+        llm = AsyncMock()
+        llm.generate = AsyncMock(
+            return_value=GenerationResponse(
+                content=json.dumps({"claims": [], "summary": "s"}),
+                model_used="gpt-4o-mini",
+                prompt_tokens=10, completion_tokens=2, total_tokens=12,
+            )
+        )
+        result = await FaithfulnessChecker(llm).check("answer", [_chunk("c1")])
+        assert result.score == 0.0
+        assert result.is_faithful is False
 
     @pytest.mark.asyncio
     async def test_claims_parsed(self) -> None:
@@ -95,14 +137,18 @@ class TestRefusals:
     """A refusal asserts nothing, so there is nothing to audit."""
 
     @pytest.mark.asyncio
-    async def test_refusal_is_not_flagged_as_unfaithful(self) -> None:
+    async def test_refusal_is_neither_unfaithful_nor_perfectly_supported(self) -> None:
         # Before this, the auditor read the refusal sentence as a claim, found
         # no passage supporting it, scored 0.0, and the API warned the caller
-        # that the one answer that cannot be fabricated might be.
+        # that the one answer that cannot be fabricated might be. The first
+        # fix overshot to 1.0/True, which had the console award "Supported
+        # 1.00" to an answer that said it did not know. Neither is the fact:
+        # there was nothing to ground.
         checker = FaithfulnessChecker(llm=_llm(0.0, [{"claim": REFUSAL, "verdict": "unsupported"}]))
         result = await checker.check(REFUSAL, [_chunk("c1")])
-        assert result.is_faithful is True
-        assert result.score == 1.0
+        assert result.score is None
+        assert result.is_faithful is None
+        assert result.is_faithful is not False
 
     @pytest.mark.asyncio
     async def test_refusal_skips_the_llm_call(self) -> None:

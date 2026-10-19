@@ -130,11 +130,14 @@ class PipelineResult:
     stage_ms: dict[str, float] = field(default_factory=dict)
     # Convenience accessors
     answer: str = field(init=False)
-    is_faithful: bool = field(init=False)
+    # None = no verdict: the check did not run, or there was nothing to
+    # ground. Was True when no check ran, which reported an unaudited answer
+    # as an audited one.
+    is_faithful: bool | None = field(init=False)
 
     def __post_init__(self) -> None:
         self.answer = self.generation.answer if self.generation else _OUT_OF_SCOPE_MSG
-        self.is_faithful = self.faithfulness.is_faithful if self.faithfulness else True
+        self.is_faithful = self.faithfulness.is_faithful if self.faithfulness else None
 
 
 class RetrievalLike(Protocol):
@@ -237,7 +240,9 @@ class RAGPipeline:
         faithfulness = await self._faithfulness.check(generation.answer, chunks)
         stage_ms["faithfulness"] = _elapsed_ms(t0)
 
-        if not faithfulness.is_faithful:
+        # `is False`, not `not`: None means no verdict, and warning about an
+        # answer no one audited would make the flag meaningless.
+        if faithfulness.is_faithful is False:
             log.warning(
                 "pipeline_faithfulness_flag",
                 score=faithfulness.score,

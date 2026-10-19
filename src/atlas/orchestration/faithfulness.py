@@ -72,8 +72,13 @@ class ClaimVerdict:
 
 @dataclass
 class FaithfulnessResult:
-    score: float
-    is_faithful: bool
+    # None means no verdict was reached — the check was off, or the answer
+    # asserted nothing to ground. It is not 1.0: a score of 1.0 is a claim
+    # that every claim was checked and supported, and reporting it for a
+    # check that never ran is the strongest possible statement about the
+    # weakest possible evidence. Callers render None as "unchecked".
+    score: float | None
+    is_faithful: bool | None
     claims: list[ClaimVerdict] = field(default_factory=list)
     summary: str = ""
     # Populated with claims whose verdict == "unsupported"
@@ -105,7 +110,7 @@ class FaithfulnessChecker:
         chunks: list[RetrievedChunk],
     ) -> FaithfulnessResult:
         if not self.enabled:
-            return FaithfulnessResult(score=1.0, is_faithful=True, summary="check disabled")
+            return FaithfulnessResult(score=None, is_faithful=None, summary="check disabled")
 
         if is_refusal(answer):
             # A refusal asserts nothing, so there is nothing to ground. Before
@@ -114,7 +119,14 @@ class FaithfulnessChecker:
             # warned the caller that the one answer guaranteed not to be
             # fabricated might be. Skipping also saves an LLM call on the path
             # where the pipeline already knows it has nothing.
-            return FaithfulnessResult(score=1.0, is_faithful=True, summary="answer is a refusal")
+            #
+            # None, not 1.0: "nothing to check" and "checked, all supported"
+            # are different facts, and the console renders 1.0 as
+            # "Supported 1.00" — the strongest badge it has, awarded to an
+            # answer that said it did not know.
+            return FaithfulnessResult(
+                score=None, is_faithful=None, summary="answer is a refusal — nothing to ground"
+            )
 
         context = _format_context(chunks)
         request = GenerationRequest(
@@ -137,11 +149,28 @@ class FaithfulnessChecker:
         except ValueError as exc:
             # Flag, don't suppress — and don't fail the query because the
             # judge stuttered. Score 0 makes it visible in the response.
+            # Deliberately 0.0 and not None, unlike the two branches above:
+            # there an answer was never audited, here one was audited and the
+            # audit failed, which is a result a human should triage rather
+            # than a blank. None would render as the same quiet "unchecked"
+            # as a disabled check.
             logger.warning("faithfulness_judge_unparseable", error=str(exc))
             return FaithfulnessResult(
                 score=0.0,
                 is_faithful=False,
                 summary="faithfulness judge output was not valid JSON; answer unverified",
+            )
+
+        if "faithfulness_score" not in parsed:
+            # The judge answered with JSON that does not contain the one
+            # number it was asked for. This defaulted to 1.0 — a judge that
+            # skipped the question scored the answer perfect. Same branch as
+            # unparseable output: the audit did not produce a verdict.
+            logger.warning("faithfulness_judge_scoreless", keys=sorted(parsed))
+            return FaithfulnessResult(
+                score=0.0,
+                is_faithful=False,
+                summary="faithfulness judge returned no score; answer unverified",
             )
 
         raw_claims = parsed.get("claims", [])
@@ -153,7 +182,7 @@ class FaithfulnessChecker:
             )
             for c in raw_claims
         ]
-        score = float(parsed.get("faithfulness_score", 1.0))
+        score = float(parsed["faithfulness_score"])
         unsupported = [c.claim for c in claims if c.verdict == "unsupported"]
 
         result = FaithfulnessResult(

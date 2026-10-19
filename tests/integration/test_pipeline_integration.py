@@ -153,8 +153,9 @@ async def test_out_of_scope_query_is_refused_cleanly():
     assert result.classification == "out_of_scope"
     assert result.generation is None
     assert result.faithfulness is None
-    # Default is_faithful is True for refusals (no claims to check)
-    assert result.is_faithful is True
+    # None, not True: no check ran, so there is no verdict. True would claim
+    # the answer was audited and passed.
+    assert result.is_faithful is None
     # The pipeline should not have called retrieve or generate
     pipeline._retriever.retrieve.assert_not_called()
     pipeline._generator.generate.assert_not_called()

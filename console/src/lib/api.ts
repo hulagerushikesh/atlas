@@ -48,7 +48,10 @@ export interface QueryResponse {
   answer: string
   classification: "simple" | "complex" | "out_of_scope"
   citations: Citation[]
-  is_faithful: boolean
+  // null when no verdict was reached — the check was off, or the answer was
+  // a refusal, which asserts nothing to ground. Not false: nothing was found
+  // wrong, nothing was checked. strengthFrom() renders it "Unchecked".
+  is_faithful: boolean | null
   faithfulness_score: number | null
   retrieved_chunk_ids: string[]
   timings: StageTimings

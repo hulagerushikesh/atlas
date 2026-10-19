@@ -109,8 +109,26 @@ Newest at the bottom of each section.
   at startup, or state plainly in the response that the number is the sparse
   side's.
 
-- **Turning the faithfulness check off would report a perfect score, not an
-  absent one.** `FaithfulnessChecker.check` opens with
+- ~~**Turning the faithfulness check off would report a perfect score, not an
+  absent one.**~~ **done 2026-10-19.** `FaithfulnessResult.score` /
+  `.is_faithful` are now `float | None` / `bool | None`, and the disabled
+  branch returns `None` for both. Two more instances of the same silencing
+  turned up in the same file while widening the type and were fixed with it:
+  the **refusal** branch returned `1.0`/`True`, which had the console award
+  "Supported 1.00" — its strongest badge — to an answer that said it did not
+  know, and that one was *live*, not a loaded gun; and
+  `parsed.get("faithfulness_score", 1.0)` gave a perfect score to a judge
+  whose JSON omitted the number it was asked for. The unparseable-judge
+  branch deliberately keeps `0.0`/`False`: there an audit ran and failed,
+  which a human should triage, rather than nobody having looked. Ripple:
+  `PipelineResult.is_faithful` (was `True` when no check ran), the flag log
+  now reads `is False` rather than `not` (so `None` is not warned about),
+  `QueryResponse.is_faithful: bool | None`, the console's `is_faithful` type
+  and `scripts/seed_demo.py`. `strengthFrom()` needed no change — it already
+  rendered a null score as "Unchecked", which is now reachable. No config
+  flag was added; the gun stays unloaded. 6 new tests, 692 passing.
+
+  Original entry: `FaithfulnessChecker.check` opens with
   `if not self.enabled: return FaithfulnessResult(score=1.0, is_faithful=True,
   summary="check disabled")` (`orchestration/faithfulness.py:107`). Nothing
   reaches it today — `namespaces.py:156` constructs
@@ -130,6 +148,19 @@ Newest at the bottom of each section.
   separate question: a refusal asserting nothing is defensible, but 1.00
   still means "Supported" to the console for any refusal not classified
   `out_of_scope`.
+
+- **The offline faithfulness metric defaults a missing judge score to 1.0.**
+  `evaluation/metrics/faithfulness.py:117` reads
+  `float(parsed.get("faithfulness_score", 1.0))`, so a judge that returns
+  valid JSON without the number it was asked for scores that sample
+  **perfect**. The inference-time checker had the identical line and it was
+  fixed on 2026-10-19; this copy was left because it feeds a **published**
+  number — the measured faithfulness **1.000** quoted in the README and in
+  resume bullets — and changing how that number is computed should be a
+  re-run with the before and after stated, not a silent edit buried in an
+  unrelated commit. Cheap to settle: count how many samples in the stored
+  report JSONs took the default. If none did, the 1.000 stands as measured
+  and the fix is free; if any did, the number is wrong and needs saying so.
 
 - `rank-bm25` scores every chunk in Python per query (O(N)). Fine to ~50k
   chunks; replace with Qdrant sparse vectors or Tantivy after that.

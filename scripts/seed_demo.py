@@ -235,10 +235,14 @@ async def run_queries(pipeline, queries: list[str]) -> None:
             )
             print(f"Sources    : {', '.join(sources)}")
 
-        faithful_str = "✓" if result.is_faithful else "✗ (unfaithful)"
-        faith_score = (
-            f"{result.faithfulness.score:.2f}" if result.faithfulness else "n/a"
-        )
+        # Three states, not two: None means no verdict was reached (check
+        # off, or a refusal with nothing to ground), which is not "unfaithful".
+        if result.is_faithful is None:
+            faithful_str = "— (unchecked)"
+        else:
+            faithful_str = "✓" if result.is_faithful else "✗ (unfaithful)"
+        score = result.faithfulness.score if result.faithfulness else None
+        faith_score = f"{score:.2f}" if score is not None else "n/a"
         print(f"Faithful   : {faithful_str}  score={faith_score}")
         print(f"Route      : {result.classification}")
         print(f"Chunks     : {len(result.retrieved_chunks)}")

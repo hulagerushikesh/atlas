@@ -416,6 +416,27 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-19 (faithfulness "no verdict"; **₹0**) — `FaithfulnessResult`
+  carries `float | None` / `bool | None`, and the two branches where nothing
+  was audited — check disabled, and a refusal — return `None` instead of
+  `1.0`/`True`. The disabled branch was a loaded gun (no flag is wired to
+  it); **the refusal branch was live**: every refusal not classified
+  `out_of_scope` had been rendering as **"Supported 1.00"**, the console's
+  strongest badge, for an answer that said it did not know. A third instance
+  surfaced in the same file while widening the type —
+  `parsed.get("faithfulness_score", 1.0)` scored a judge perfect for omitting
+  the number it was asked for — and was fixed with it. The unparseable-judge
+  branch keeps `0.0`/`False` on purpose: an audit that ran and failed is a
+  triage item, not a blank. Ripple through `PipelineResult.is_faithful` (was
+  `True` when no check ran), the flag log (`is False`, not `not`),
+  `QueryResponse.is_faithful: bool | None`, the console type and
+  `seed_demo.py`. `strengthFrom()` needed no change — it already rendered a
+  null score as "Unchecked"; that branch is now reachable. **692 tests at
+  93.63%**, gate green, `static/` byte-identical (type-only console change).
+  BACKLOG: one closed, one filed (the same default in the *offline* metric,
+  left deliberately because it feeds the published faithfulness 1.000), so
+  open stays at **5**.
+
 - 2026-10-19 (`/namespaces/{ns}/sources` cross-check; **₹0**) — the endpoint
   no longer lets the sparse half speak for both. It reads the BM25 corpus as
   before (the only half carrying per-source rows) and now also reads the
