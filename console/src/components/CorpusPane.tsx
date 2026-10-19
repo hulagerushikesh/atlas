@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, FolderInput, PanelLeftClose, PanelLeftOpen, Plus, Upload } from "lucide-react"
+import { FileText, FolderInput, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 const EASE = [0.23, 1, 0.32, 1] as const
 
 export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { sheet, sheets, sources, sourcesLoading, setSheet, addSheet, loadSources } = useAtlas()
+  const { sheet, sheets, sources, sourcesLoading, indexWarning, setSheet, addSheet, loadSources } = useAtlas()
   const [path, setPath] = useState("")
   const [busy, setBusy] = useState(false)
   const [newSheet, setNewSheet] = useState("")
@@ -151,6 +151,15 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
             </div>
 
             <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4">
+              {/* The list is the keyword index's. When it disagrees with the
+                  vector store, say so here rather than letting these rows
+                  read as documents a query can reach. */}
+              {!sourcesLoading && indexWarning && (
+                <div className="mt-3 flex gap-2 rounded-sm border border-warn bg-warn-soft px-2.5 py-2 text-[11px] leading-relaxed text-ink-2">
+                  <TriangleAlert className="mt-px size-3 shrink-0 text-warn" />
+                  <span>{indexWarning}</span>
+                </div>
+              )}
               <ul className="mt-3 flex flex-col">
                 {sourcesLoading ? (
                   Array.from({ length: 6 }).map((_, i) => (

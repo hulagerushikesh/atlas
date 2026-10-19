@@ -1,4 +1,4 @@
-# Status — 2026-10-18 (v0.1.0, all four milestones done, 16 of 17, CI green)
+# Status — 2026-10-19 (v0.1.0, all four milestones done, 16 of 17, CI green)
 
 **16 of the 17 ROADMAP exit criteria are ticked (≈94%), and all four
 milestones are marked done as of 2026-10-14.** That fraction is the project's
@@ -415,6 +415,24 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-19 (`/namespaces/{ns}/sources` cross-check; **₹0**) — the endpoint
+  no longer lets the sparse half speak for both. It reads the BM25 corpus as
+  before (the only half carrying per-source rows) and now also reads the
+  collection's point count, returning `dense_chunks`, `consistent` and a
+  plain-language `warning` beside `total_chunks`. An unreachable Qdrant
+  returns `None`, never `0` — the shape that would have reinstated the bug,
+  and now a test. The console threads the warning through the store and
+  shows it in the two places the wrong number was displayed: a triangle
+  beside the totals in the top bar and a banner above the source list.
+  9 new tests, **686 passing at 93.55%**, gate green on all three targets.
+  BACKLOG open items **6 → 5**.
+
+  **This is in `main`, not in production.** The live service still runs
+  image `ac132a9`, so `/namespaces/{ns}/sources` there still answers with
+  the old four-field body and the live console has no warning. A redeploy is
+  owed before the fix is real for users; it is free (Cloud Build free tier)
+  and needs no re-ingest, since neither index changed.
 
 - 2026-10-18 (redeploy; **≈₹0**) — rev **`atlas-api-00014-5vp`**, image
   `ac132a9`, so the owed redeploy is discharged and the two halves of the

@@ -113,6 +113,9 @@ def client() -> TestClient:
     from atlas.api.namespaces import NamespaceRegistry
     mock_registry = MagicMock(spec=NamespaceRegistry)
     mock_registry.get.return_value = mock_ns
+    # Agrees with the sparse rows above (12 + 7) so the default fixture is a
+    # consistent namespace; mismatch tests override it.
+    mock_registry.dense_chunk_count = AsyncMock(return_value=19)
 
     app.state.atlas = AppState(
         registry=mock_registry,

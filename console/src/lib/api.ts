@@ -64,7 +64,14 @@ export interface QueryResponse {
 }
 
 export interface SourceInfo { source: string; doc_type: string; chunks: number }
-export interface SourceList { namespace: string; sources: SourceInfo[]; total_sources: number; total_chunks: number }
+export interface SourceList {
+  namespace: string; sources: SourceInfo[]; total_sources: number
+  // total_chunks is the keyword index's count; dense_chunks is the vector
+  // store's. They are persisted separately and can disagree — null means the
+  // vector store could not be read, which is not the same as zero.
+  total_chunks: number; dense_chunks: number | null
+  consistent: boolean | null; warning: string | null
+}
 export interface Health { status: "ok" | "degraded" | "down"; version: string }
 export interface IngestResult {
   documents_processed: number; documents_skipped: number; chunks_indexed: number

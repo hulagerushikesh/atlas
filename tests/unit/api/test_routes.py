@@ -244,5 +244,40 @@ class TestSourcesRoute:
 
     def test_namespace_without_sparse_index_is_empty(self, client: TestClient) -> None:
         client.app.state.atlas.registry.get.return_value.sparse_index = None
+        client.app.state.atlas.registry.dense_chunk_count = AsyncMock(return_value=0)
         body = client.get("/namespaces/bare/sources").json()
         assert body["sources"] == [] and body["total_chunks"] == 0
+
+    def test_agreeing_halves_report_consistent_and_no_warning(
+        self, client: TestClient
+    ) -> None:
+        body = client.get("/namespaces/fastapi/sources").json()
+        assert body["dense_chunks"] == 19
+        assert body["consistent"] is True
+        assert body["warning"] is None
+
+    def test_sparse_only_namespace_is_flagged_not_advertised(
+        self, client: TestClient
+    ) -> None:
+        """
+        The shipped bug: the image bakes a sparse index whose collection never
+        reached Qdrant, and the console reported its sources as searchable.
+        """
+        client.app.state.atlas.registry.dense_chunk_count = AsyncMock(return_value=0)
+        body = client.get("/namespaces/orphan/sources").json()
+        assert body["total_chunks"] == 19 and body["dense_chunks"] == 0
+        assert body["consistent"] is False
+        assert "19" in body["warning"] and "0" in body["warning"]
+
+    def test_partial_drift_is_flagged(self, client: TestClient) -> None:
+        client.app.state.atlas.registry.dense_chunk_count = AsyncMock(return_value=15)
+        body = client.get("/namespaces/fastapi/sources").json()
+        assert body["consistent"] is False and body["dense_chunks"] == 15
+
+    def test_unreachable_qdrant_is_unknown_not_zero(self, client: TestClient) -> None:
+        """None, never 0 — an unreadable count must not read as "empty"."""
+        client.app.state.atlas.registry.dense_chunk_count = AsyncMock(return_value=None)
+        body = client.get("/namespaces/fastapi/sources").json()
+        assert body["dense_chunks"] is None
+        assert body["consistent"] is None
+        assert "unreachable" in body["warning"]

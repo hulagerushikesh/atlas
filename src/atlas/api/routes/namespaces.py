@@ -38,15 +38,41 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     """
     Inventory of one namespace: every indexed source and its chunk count.
 
-    Read from the in-memory BM25 corpus, which mirrors the dense index and
-    already carries per-chunk metadata — so this costs no external call.
+    The rows come from the in-memory BM25 corpus, the only half that carries
+    per-chunk metadata. It is persisted separately from Qdrant — the image
+    bakes the sparse index while the dense half lives in Qdrant Cloud — so the
+    two can disagree, and this endpoint used to advertise whatever the sparse
+    side held. The dense point count is now read alongside it (one cheap
+    collection-info call) and any disagreement is reported rather than hidden.
     """
-    components = get_registry(request).get(namespace)
+    registry = get_registry(request)
+    components = registry.get(namespace)
     rows = components.sparse_index.sources() if components.sparse_index else []
     sources = [SourceInfo(**row) for row in rows]
+    total_chunks = sum(s.chunks for s in sources)
+
+    dense_chunks = await registry.dense_chunk_count(namespace)
+    consistent = None if dense_chunks is None else dense_chunks == total_chunks
+
+    warning: str | None = None
+    if dense_chunks is None:
+        warning = (
+            "Vector store unreachable — these counts come from the keyword "
+            "index alone and may not match what a query can retrieve."
+        )
+    elif not consistent:
+        warning = (
+            f"Index mismatch: {total_chunks} chunks listed here, "
+            f"{dense_chunks} in the vector store. Queries search the vector "
+            f"store, so some sources listed may return nothing."
+        )
+
     return SourceListResponse(
         namespace=namespace,
         sources=sources,
         total_sources=len(sources),
-        total_chunks=sum(s.chunks for s in sources),
+        total_chunks=total_chunks,
+        dense_chunks=dense_chunks,
+        consistent=consistent,
+        warning=warning,
     )
