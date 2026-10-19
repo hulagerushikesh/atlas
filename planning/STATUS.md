@@ -416,6 +416,34 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-19 (offline faithfulness default; **₹0**) — the twin filed earlier
+  the same day is closed, and the published number was checked **before** the
+  code changed rather than after. The filed entry prescribed the check, so it
+  ran first: all **289 faithfulness rows across the 19 stored report JSONs**
+  were scanned for the two shapes `parsed.get("faithfulness_score", 1.0)` can
+  produce — a score over zero claims, and a 1.0 printed beside claims the
+  judge marked unsupported. **0 matched.** The third shape, a missing key
+  where every claim *was* supported, needs no scan: the default and the real
+  computation both give 1.0 there. So **the published faithfulness 1.000
+  stands as measured**, README and resume bullets need no footnote, and no
+  re-run is owed. The fix: a missing `faithfulness_score` now **raises**, and
+  the runner's existing `except` records `score=-1.0, applicable=True`, which
+  the mean drops and `_failed_counts` prints in bold — the harness already
+  had a word for "this sample produced no verdict" and it was never `1.0`. A
+  score over an **empty claims list** returns `applicable=False` instead, the
+  same shape as `AnswerCorrectnessMetric`'s no-facts branch, because
+  supported/total with total 0 is not a number the judge could have computed.
+  The refusal branch keeps `1.0`/`applicable=False`: `MetricScore.score` is a
+  required `float`, so a null would ripple through reporter and comparator,
+  and unlike the console no report reader sees that 1.0 without the skipped
+  count beside it. Siblings swept in the same pass — `answer_relevance` and
+  `answer_correctness` already fail a missing key to **0.0**, and
+  `grader.py:136` defaults to `0.5`, a midpoint rather than a flattering
+  value, so neither was touched. **694 tests at 93.64%**, gate green,
+  `static/` untouched (no console change). BACKLOG open drops **5 → 4**.
+  Not deployed: the offline eval harness is not in the serving path, so
+  production stays on rev `atlas-api-00016-ckx`.
+
 - 2026-10-19 (faithfulness "no verdict"; **₹0**) — `FaithfulnessResult`
   carries `float | None` / `bool | None`, and the two branches where nothing
   was audited — check disabled, and a refusal — return `None` instead of

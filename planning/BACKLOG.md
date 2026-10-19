@@ -149,8 +149,32 @@ Newest at the bottom of each section.
   still means "Supported" to the console for any refusal not classified
   `out_of_scope`.
 
-- **The offline faithfulness metric defaults a missing judge score to 1.0.**
-  `evaluation/metrics/faithfulness.py:117` reads
+- ~~**The offline faithfulness metric defaults a missing judge score to
+  1.0.**~~ **done 2026-10-19.** The entry below prescribed the check, so it
+  was run first: all 289 faithfulness rows in the 19 stored report JSONs were
+  scanned for the two shapes the default can produce — a score over zero
+  claims, and a 1.0 alongside claims the judge marked unsupported. **0 rows
+  matched.** No stored report ever took the default, so **the published
+  1.000 stands as measured** and no re-run is owed. (The third shape — a
+  missing key where every claim *was* supported — needs no scan: there the
+  default and the real computation both give 1.0.) The fix then: a missing
+  `faithfulness_score` now **raises**, which the runner already records as
+  `score=-1.0, applicable=True`, dropped from the mean and printed in bold
+  by `_failed_counts`. A score over an **empty claims list** returns
+  `applicable=False` — supported/total with total 0 is not a number the
+  judge could have computed — matching `AnswerCorrectnessMetric`'s no-facts
+  branch and counted by `_inapplicable_counts`. Both reuse conventions the
+  harness already had; nothing new was invented. The refusal branch keeps
+  `score=1.0, applicable=False`: `MetricScore.score` is a required `float`,
+  so null would mean widening the pydantic model through reporter and
+  comparator, and that branch is already excluded from the mean *and*
+  published in the skipped counts, so it cannot flatter the headline. 2 new
+  tests, 694 passing. Siblings checked in the same pass:
+  `answer_relevance` and `answer_correctness` both fail a missing key to
+  0.0, not 1.0. `grader.py:136` defaults to `0.5`, a midpoint rather than a
+  flattering value, and is left alone.
+
+  Original entry: `evaluation/metrics/faithfulness.py:117` reads
   `float(parsed.get("faithfulness_score", 1.0))`, so a judge that returns
   valid JSON without the number it was asked for scores that sample
   **perfect**. The inference-time checker had the identical line and it was
