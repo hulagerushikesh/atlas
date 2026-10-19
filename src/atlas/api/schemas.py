@@ -211,7 +211,14 @@ class SourceListResponse(BaseModel):
     namespace: str
     sources: list[SourceInfo]
     total_sources: int
+    # The sparse side's count. The BM25 corpus is persisted separately from
+    # Qdrant, so it can list documents the vector store cannot answer from;
+    # dense_chunks reports the other half rather than letting this one speak
+    # for both.
     total_chunks: int
+    dense_chunks: int | None = None     # None = Qdrant unreachable, not zero
+    consistent: bool | None = None      # None = unknown, not "fine"
+    warning: str | None = None
 
 
 # ── /keys + /usage ────────────────────────────────────────────────────────────

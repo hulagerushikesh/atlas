@@ -176,6 +176,26 @@ class NamespaceRegistry:
 
         return NamespaceComponents(pipeline=pipeline, indexer=indexer, sparse_index=sparse)
 
+    async def dense_chunk_count(self, namespace: str) -> int | None:
+        """
+        Points in this namespace's Qdrant collection.
+
+        0 means the collection is absent — a real disagreement when the sparse
+        side has rows. None means Qdrant could not be reached, which is not the
+        same thing and must not be reported as zero: a count whose own failure
+        is silenced reports whatever the caller expected.
+        """
+        collection = namespace_to_collection(namespace)
+        client = self._shared.qdrant_client
+        try:
+            if not await client.collection_exists(collection):
+                return 0
+            info = await client.get_collection(collection)
+            return info.points_count or 0
+        except Exception as exc:  # noqa: BLE001 — any failure means "unknown"
+            logger.warning("dense_chunk_count_failed", namespace=namespace, error=str(exc))
+            return None
+
     async def list_namespaces(self) -> list[str]:
         """Return namespaces that have an Atlas-managed Qdrant collection."""
         try:

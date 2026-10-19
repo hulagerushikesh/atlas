@@ -86,6 +86,9 @@ interface AtlasState {
   sources: SourceInfo[]
   sourcesLoading: boolean
   totals: { sources: number; chunks: number } | null
+  // Set when the keyword index and the vector store disagree on this sheet,
+  // so the counts above are not quietly presented as searchable.
+  indexWarning: string | null
   health: Health["status"] | "unreachable" | "checking"
   // run
   run: RunState
@@ -125,6 +128,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   sources: [],
   sourcesLoading: true,
   totals: null,
+  indexWarning: null,
   health: "checking",
   run: idleRun(),
   surveyOpen: false,
@@ -173,9 +177,14 @@ export const useAtlas = create<AtlasState>((set, get) => ({
     set({ sourcesLoading: true })
     try {
       const j = await getSources(get().sheet)
-      set({ sources: j.sources, totals: { sources: j.total_sources, chunks: j.total_chunks }, sourcesLoading: false })
+      set({
+        sources: j.sources,
+        totals: { sources: j.total_sources, chunks: j.total_chunks },
+        indexWarning: j.warning ?? null,
+        sourcesLoading: false,
+      })
     } catch {
-      set({ sources: [], totals: null, sourcesLoading: false })
+      set({ sources: [], totals: null, indexWarning: null, sourcesLoading: false })
     }
   },
 

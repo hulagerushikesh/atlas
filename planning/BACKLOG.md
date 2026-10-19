@@ -82,8 +82,20 @@ Newest at the bottom of each section.
 
 ## Debts
 
-- **`/namespaces/{ns}/sources` can advertise documents the vector store does
-  not have.** It reads the in-memory BM25 corpus, which is persisted
+- ~~**`/namespaces/{ns}/sources` can advertise documents the vector store does
+  not have.**~~ **done 2026-10-19.** Took the first of the three options —
+  cross-check the collection's point count on the read — because the other
+  two either hide the disagreement or make the sparse side authoritative.
+  `NamespaceRegistry.dense_chunk_count()` reads the collection's point count
+  (absent collection → 0, unreachable Qdrant → `None`, never 0 for "could not
+  read"), and the response carries `dense_chunks`, `consistent` and a plain
+  `warning` beside the sparse `total_chunks`. The console threads the warning
+  into the store and shows it twice: a triangle beside the totals in the top
+  bar, where the phantom "155 sources / 4,020 refs" was read, and a banner
+  above the source list. 9 new tests. The rejected shape was returning 0 for
+  an unreadable count, which is the same silencing that produced the bug.
+
+  Original entry: It reads the in-memory BM25 corpus, which is persisted
   separately from Qdrant, so the two can disagree — and when they do the
   console shows a populated corpus for a namespace that answers nothing.
   Found on 2026-10-13 with a local Qdrant holding only `atlas_quickstart`

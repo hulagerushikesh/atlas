@@ -1,4 +1,4 @@
-import { Command, Map, Settings2, SunMoon } from "lucide-react"
+import { Command, Map, Settings2, SunMoon, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -14,7 +14,7 @@ const HEALTH: Record<string, { dot: string; label: string }> = {
 }
 
 export function TopBar() {
-  const { sheet, totals, health, keyOpen, theme, set, setTheme } = useAtlas()
+  const { sheet, totals, indexWarning, health, keyOpen, theme, set, setTheme } = useAtlas()
   const h = HEALTH[health] ?? HEALTH.checking
   const cycleTheme = () => setTheme(theme === "" ? "dark" : theme === "dark" ? "light" : "")
 
@@ -25,6 +25,16 @@ export function TopBar() {
       <div className="label hidden min-w-0 truncate tabular sm:block">
         Sheet <b className="font-medium text-foreground">{sheet}</b>
         {totals && <> · <b className="font-medium text-foreground">{fmt(totals.sources)}</b> sources · <b className="font-medium text-foreground">{fmt(totals.chunks)}</b> refs</>}
+        {indexWarning && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="ml-1.5 inline-flex align-[-2px] text-warn" aria-label="Index mismatch">
+                <TriangleAlert className="size-3" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{indexWarning}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <div className="ml-auto flex items-center gap-1.5">

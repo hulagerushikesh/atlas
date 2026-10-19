@@ -2199,3 +2199,20 @@ Format: date — decision — alternatives — reason.
   counted refusals but not crashes and the stall detector that read the
   wrong process.
 
+- **2026-10-19** — `/namespaces/{ns}/sources` now cross-checks the Qdrant
+  point count on every read, and reports `dense_chunks` / `consistent` /
+  `warning` beside the sparse `total_chunks`. *Alt:* rebuild the sparse index
+  from Qdrant at startup; state in the docstring that the number is the
+  sparse side's and leave the response alone. *Why:* the startup rebuild
+  makes Qdrant authoritative for data the vector store does not carry — the
+  per-chunk `doc_type` and source rows live only in the BM25 corpus, so the
+  rebuild would have to scroll every point and reconstruct them, paying a
+  full scan on each cold start to fix a listing. Documenting it fixes
+  nothing: the console is the caller, and a reader of the docstring is not
+  the person looking at "155 sources / 4,020 refs". The cross-check costs one
+  collection-info call per read and makes the disagreement visible where the
+  wrong number is displayed. The one shape deliberately rejected was
+  returning `0` when the count cannot be read: that converts "unknown" into
+  "definitely empty" and is the same silencing that produced the bug — fourth
+  instance of the family in three days, so it is now a test
+  (`test_unreachable_qdrant_is_none_not_zero`) rather than a note.
