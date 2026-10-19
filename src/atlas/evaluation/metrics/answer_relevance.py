@@ -48,7 +48,7 @@ from atlas.interfaces.embedder import BaseEmbedder
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.orchestration.generator import is_refusal
+from atlas.orchestration.generator import is_non_answer
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -87,7 +87,7 @@ class AnswerRelevanceMetric(BaseMetric):
         retrieved_chunks: list[RetrievedChunk],
         relevant_doc_ids: list[str],
     ) -> MetricScore:
-        if is_refusal(generated_answer):
+        if is_non_answer(generated_answer):
             # Before any call: whether refusing was right is
             # `answer_correctness`'s question, and it answers it without a
             # model too.

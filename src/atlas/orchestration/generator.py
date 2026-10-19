@@ -65,6 +65,30 @@ Rules:
 _REFUSAL_NORMALISED = REFUSAL.lower().strip(" .")
 
 
+def _normalise(answer: str) -> str:
+    return " ".join(answer.replace("\u2019", "'").lower().split()).strip(" .!\"'")
+
+
+# The pipeline's own non-answer, emitted when the router classifies a query
+# out of scope and no generation ever runs. It lived in pipeline.py as a
+# private string for months, and the comment above REFUSAL — "two downstream
+# readers have to recognise it" — was never true of this one. On 2026-10-19,
+# the first run in which the router correctly refused an out-of-scope
+# question, all three eval metrics read this message as a real answer:
+# answer_correctness scored 0.000 with the reasoning "the pipeline answered
+# instead of refusing", answer_relevance averaged 0.41 into the headline, and
+# faithfulness audited "This question appears to be outside the scope..." as
+# two supported claims and returned 1.0. Making the router more correct made
+# three published numbers worse. One concept needs one test, so it lives here
+# beside REFUSAL and both are checked by `is_non_answer`.
+OUT_OF_SCOPE_MSG = (
+    "This question appears to be outside the scope of the knowledge base. "
+    "Please ask a question related to the available documentation."
+)
+
+_OUT_OF_SCOPE_NORMALISED = OUT_OF_SCOPE_MSG.lower().strip(" .")
+
+
 def is_refusal(answer: str) -> bool:
     """True when the answer is the refusal sentence and nothing else.
 
@@ -73,8 +97,28 @@ def is_refusal(answer: str) -> bool:
     is a real answer that happens to open with a caveat, and treating it as a
     refusal would exempt its claims from every check that matters.
     """
-    cleaned = " ".join(answer.replace("\u2019", "'").lower().split()).strip(" .!\"'")
-    return cleaned == _REFUSAL_NORMALISED
+    return _normalise(answer) == _REFUSAL_NORMALISED
+
+
+def is_out_of_scope_message(answer: str) -> bool:
+    """True when the answer is the pipeline's out-of-scope message.
+
+    Equality for the same reason as `is_refusal`: an answer that mentions the
+    knowledge base's scope and then answers the question is an answer.
+    """
+    return _normalise(answer) == _OUT_OF_SCOPE_NORMALISED
+
+
+def is_non_answer(answer: str) -> bool:
+    """True when the pipeline declined, by either of the two routes it has.
+
+    The generator emits REFUSAL when the context cannot support an answer; the
+    pipeline emits OUT_OF_SCOPE_MSG when the router refuses before retrieval.
+    Every reader that skips a refusal — the faithfulness checker and three of
+    the eval metrics — means this, not one of the two strings, and checking
+    only one made the router's own refusals unmeasurable.
+    """
+    return is_refusal(answer) or is_out_of_scope_message(answer)
 
 
 @dataclass

@@ -51,7 +51,7 @@ from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.orchestration.generator import is_refusal
+from atlas.orchestration.generator import is_non_answer
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -93,7 +93,7 @@ class FaithfulnessMetric(BaseMetric):
         retrieved_chunks: list[RetrievedChunk],
         relevant_doc_ids: list[str],
     ) -> MetricScore:
-        if is_refusal(generated_answer):
+        if is_non_answer(generated_answer):
             # Nothing to audit: the generator declined rather than asserted.
             # Scored 1.0 so a stray reader sees "not unfaithful", but marked
             # inapplicable so it never reaches the mean in either direction.

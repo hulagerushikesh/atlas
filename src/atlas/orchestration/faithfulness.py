@@ -34,7 +34,7 @@ import structlog
 
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.orchestration.generator import is_refusal
+from atlas.orchestration.generator import is_non_answer
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -112,7 +112,7 @@ class FaithfulnessChecker:
         if not self.enabled:
             return FaithfulnessResult(score=None, is_faithful=None, summary="check disabled")
 
-        if is_refusal(answer):
+        if is_non_answer(answer):
             # A refusal asserts nothing, so there is nothing to ground. Before
             # this, the auditor treated the refusal sentence itself as a claim,
             # found no passage supporting it, and returned 0.0 — the API then

@@ -14,9 +14,30 @@ Design rationale:
     - out_of_scope: Query falls outside the knowledge base domain.
                     → return a fixed out-of-scope response, no retrieval.
 
-    The classifier uses a one-shot JSON prompt. We include two examples in the
-    system prompt (one per interesting category) rather than zero-shot because
-    empirically it cuts misclassification of borderline complex queries ~40%.
+    The classifier uses a one-shot JSON prompt. We include examples in the
+    system prompt rather than going zero-shot because empirically it cuts
+    misclassification of borderline complex queries ~40%.
+
+    The out-of-scope examples are a *pair*, on purpose. Until 2026-10-19 the
+    only one was "What is the capital of France?", which teaches that a query
+    about something else entirely is out of scope and nothing else. The case
+    that actually failed is the near miss: a query that names the domain and
+    then asks about a third-party product the corpus does not document.
+    `fq-016` ("verify a Stripe webhook signature in FastAPI") was classified
+    `simple`, and the model's own reasoning said the pattern was "documented in
+    the FastAPI ecosystem" — the ecosystem, not the corpus. The QuickBooks
+    example reuses the subject of the first simple example so the contrast is
+    the scope rule and not the topic, and it names no product that appears in
+    any eval row, so the probe measures the rule rather than recall of an
+    answer. Measured: scope accuracy 19/21 → 21/21 on `scripts/probe_router.py`,
+    with the over-refusal count staying at 0.
+
+    The "when in doubt prefer simple" tie-break is kept but split in two. It
+    exists for a real failure — on 2026-10-13 a corpus uploaded through the
+    console was refused at the router before retrieval ever ran — so removing
+    it to fix under-refusal would trade one direction of error for the worse
+    one. It now applies to a subject the domain plausibly owns, and separately
+    to the simple/complex choice, rather than to scope in general.
 
     We deliberately keep the LLM call cheap (low max_tokens, temperature=0)
     because the router is on the critical path of every request. The structured
@@ -47,9 +68,20 @@ Categories:
 - "simple": Single factual question answerable from one passage of the knowledge base.
 - "complex": Requires comparing, synthesising, or reasoning across multiple \
 distinct facts or documents in the knowledge base.
-- "out_of_scope": Clearly unrelated to the domain above (e.g. personal advice, \
-small talk, or a topic the knowledge base does not cover). When in doubt, prefer \
-"simple" — retrieval will decide whether evidence exists.
+- "out_of_scope": Answering it would need knowledge the knowledge base does not \
+hold — personal advice, small talk, general knowledge, or a specific third-party \
+product, service or protocol it does not document.
+
+Deciding scope:
+Ask what a correct answer would have to be *about*, not which words the query \
+uses. A query that names the domain and then asks how to integrate some other \
+product is a question about that other product, and the domain's own \
+documentation cannot answer it. Naming the domain does not put a query in scope, \
+and the domain's wider ecosystem is not the domain.
+When you are genuinely unsure whether the knowledge base covers a subject, prefer \
+"simple" and let retrieval decide. That tie-break is for a subject the domain \
+plausibly owns; it does not apply when the subject is plainly someone else's \
+product.
 
 Examples:
 User: "What is the retention policy for financial records?"
@@ -57,6 +89,9 @@ Response: {{"classification": "simple", "reasoning": "Single policy lookup."}}
 
 User: "How does our Q3 revenue compare to Q2, and what drove the change?"
 Response: {{"classification": "complex", "reasoning": "Requires two data points and causal reasoning."}}
+
+User: "How do I export our financial records into QuickBooks?"
+Response: {{"classification": "out_of_scope", "reasoning": "Answering needs QuickBooks' documentation; naming a subject the knowledge base covers does not make this in scope."}}
 
 User: "What is the capital of France?"
 Response: {{"classification": "out_of_scope", "reasoning": "General knowledge, unrelated to the domain."}}

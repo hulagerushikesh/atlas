@@ -2269,3 +2269,36 @@ Format: date — decision — alternatives — reason.
   reader of a report sees a bare 1.0 with no count beside it. Sixth instance
   of the measurement-silences-its-own-gaps family, and the first closed with
   evidence that it had never actually fired.
+- **2026-10-19** — The router's out-of-scope rule is about what an answer
+  would be *about*, not about whether the query sounds unrelated; and both of
+  the pipeline's non-answers are now recognised by one predicate. *Alt:* drop
+  the "when in doubt prefer simple" tie-break; add a keyword or embedding
+  pre-filter for third-party product names; leave the eval harness alone and
+  accept the lower numbers; re-run the eval (₹6.3) instead of replaying the
+  declined rows. *Why:* the old definition — "clearly unrelated to the
+  domain", exemplified only by "What is the capital of France?" — teaches the
+  far case and says nothing about the near one, and the near one is what
+  failed: the model classified `fq-016` as answerable because the pattern is
+  "documented in the FastAPI ecosystem", which is a true sentence about the
+  ecosystem and a false one about the corpus. Dropping the tie-break would
+  have traded under-refusal for over-refusal, and over-refusal is the worse
+  error — on 2026-10-13 a whole uploaded corpus was refused before retrieval
+  ran. A keyword list would need maintaining per corpus and would not survive
+  a product nobody listed; the probe deliberately tests one (Amazon S3) that
+  appears in no prompt and no dataset, and the rule caught it. Leaving the
+  harness alone was not available once the first correct refusal showed what
+  it does: `answer_correctness` scored the refusal 0.000 while reasoning "the
+  pipeline answered instead of refusing", because the generator's `REFUSAL`
+  and the pipeline's out-of-scope message are two strings for one concept and
+  only the first was ever checked. They now sit together behind
+  `is_non_answer`, with a test asserting the pipeline emits the same object
+  the metrics test, because two private copies in two modules is precisely
+  how they drifted. Replaying rather than re-running is sound here and not a
+  shortcut: every declined-row branch short-circuits *before* its model call,
+  so the rescore is string comparison, and the replay script builds its
+  metrics with a provider that raises on any call — the ₹0 is enforced rather
+  than asserted. Measured both ways: `scripts/probe_router.py` 19/21 → 21/21
+  on scope with over-refusals unchanged at 0, and the full eval a tie on
+  every metric with p50 latency −12.8%. The prediction that was wrong: losing
+  decomposition on `fq-013` looked like a recall risk and its precision rose
+  0.73 → 0.93 with recall unchanged.

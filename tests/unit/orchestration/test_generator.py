@@ -9,7 +9,12 @@ import pytest
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.llm import GenerationResponse
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.orchestration.generator import AnswerGenerator
+from atlas.orchestration.generator import (
+    OUT_OF_SCOPE_MSG,
+    REFUSAL,
+    AnswerGenerator,
+    is_non_answer,
+)
 
 
 def _chunk(cid: str, source: str = "doc.pdf", page: int | None = None) -> RetrievedChunk:
@@ -84,3 +89,46 @@ class TestAnswerGenerator:
         gen = AnswerGenerator(_llm_returning("[1] is important. Also [1]."))
         result = await gen.generate("q", [_chunk("c1")])
         assert len(result.cited_chunks) == 1
+
+
+class TestThePipelineHasTwoNonAnswersAndBothMustBeRecognised:
+    """The generator refuses with REFUSAL; the router refuses with
+    OUT_OF_SCOPE_MSG before generation ever runs.
+
+    Four readers skip a refusal — the inference-time faithfulness checker and
+    three eval metrics — and until 2026-10-19 every one of them tested only
+    the generator's string. On the first eval run where the router correctly
+    refused an out-of-scope question, `answer_correctness` scored it 0.000
+    with the reasoning "the pipeline answered instead of refusing",
+    `answer_relevance` averaged 0.41 into the headline, and `faithfulness`
+    audited the out-of-scope sentence as two supported claims and returned
+    1.0. The router got better and three published numbers got worse.
+    """
+
+    def test_the_generators_refusal_is_a_non_answer(self) -> None:
+        assert is_non_answer(REFUSAL)
+
+    def test_the_pipelines_out_of_scope_message_is_a_non_answer(self) -> None:
+        assert is_non_answer(OUT_OF_SCOPE_MSG)
+
+    def test_a_real_answer_is_not(self) -> None:
+        assert not is_non_answer("FastAPI validates request bodies with Pydantic [1].")
+
+    def test_the_out_of_scope_check_is_equality_not_substring(self) -> None:
+        # Same rule as is_refusal: an answer that names the scope and then
+        # answers is an answer, and exempting it from every check that
+        # matters is the failure this mirrors.
+        hedged = f"{OUT_OF_SCOPE_MSG} That said, path parameters are declared in the path [1]."
+        assert not is_non_answer(hedged)
+
+    def test_punctuation_and_whitespace_do_not_change_the_verdict(self) -> None:
+        assert is_non_answer(f"  {OUT_OF_SCOPE_MSG}  ")
+        assert is_non_answer(OUT_OF_SCOPE_MSG.rstrip(".") + "!")
+
+    def test_the_constant_is_the_one_the_pipeline_actually_emits(self) -> None:
+        # The two used to be separate strings in separate modules, which is
+        # how they drifted apart without anything failing. This fails if
+        # either moves.
+        from atlas.orchestration import pipeline
+
+        assert pipeline.OUT_OF_SCOPE_MSG is OUT_OF_SCOPE_MSG

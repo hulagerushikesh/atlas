@@ -416,6 +416,77 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-19 (router out-of-scope; **₹7.01**) — the Stripe row refuses, and
+  the harness can finally see that it did. Two changes, because the first
+  alone made the published numbers *worse*.
+
+  **The prompt.** `out_of_scope` meant "clearly unrelated to the domain",
+  with one example — "What is the capital of France?" — which teaches the far
+  case and nothing about the near one. The near one is what failed, and the
+  model named the mechanism itself: it called `fq-016` a pattern "documented
+  in the FastAPI **ecosystem**". True of the ecosystem, false of the corpus.
+  The rule is now about what a correct answer would have to be *about*, with
+  a second example (exporting financial records to QuickBooks) that reuses
+  the subject of the first simple example, so the contrast carries the scope
+  rule rather than a topic, and names no product in any eval row. The "when
+  in doubt prefer simple" tie-break stays — it exists for the 2026-10-13
+  over-refusal — narrowed to subjects the domain plausibly owns.
+
+  **The harness.** The run that proved the prompt works also showed the eval
+  could not score it. The generator refuses with `REFUSAL`; the router
+  refuses with the pipeline's out-of-scope message; all four readers of a
+  refusal checked only the first string. On `fq-016`:
+
+  | metric | as run | why | replayed |
+  |---|---|---|---|
+  | `answer_correctness` | **0.000** | reasoning read "the pipeline answered instead of refusing" — it refused | **1.000** |
+  | `answer_relevance` | 0.408, counted | relevance of a refusal is undefined | excluded |
+  | `faithfulness` | **1.000**, counted | audited "This question appears to be outside the scope..." as two supported claims | excluded |
+
+  Both strings now sit together behind `is_non_answer`, with a test asserting
+  the pipeline emits the very constant the metrics check — two private copies
+  in two modules is how they drifted silently.
+
+  **Measured, not asserted.** New `scripts/probe_router.py` runs the router
+  alone — 16 dataset rows plus 6 controls, ≈₹0.3 against the full harness's
+  ≈₹6.3 — and exists because the last router-prompt change measured at
+  exactly zero. Scope **19/21 → 21/21**, over-refusals **0 → 0**. The two it
+  fixed are `fq-016` and an Amazon S3 question present in no prompt and no
+  dataset, so the rule generalised rather than an answer being recalled.
+  Full eval `router-scope_20261019-202434` vs `baseline-17`, after replaying
+  the three declined-row metrics for ₹0 (new
+  `scripts/replay_non_answer_metrics.py`, whose metrics are built with a
+  provider that raises on any call, so the ₹0 is enforced):
+
+  | metric | baseline-17 | router-scope | verdict |
+  |---|---|---|---|
+  | answer_correctness | 0.7452 | 0.7583 | tie |
+  | answer_relevance | 0.8382 | 0.8380 | tie *(15 shared rows)* |
+  | context_precision | 0.4533 | 0.4667 | tie |
+  | context_recall | 0.9378 | 0.9378 | tie |
+  | faithfulness | 1.0000 | 1.0000 | tie *(15 shared rows)* |
+  | warm p50 | 10,338 ms | **9,016 ms** | −12.8% |
+
+  **`baseline-17` stays the published baseline** and no figure in README or
+  STATUS needed restating. The +0.0131 on correctness is not a gain: it nets
+  `fq-016`'s +0.0625 against **0.0494 of judge noise on three rows that ran
+  an identical pipeline over identical chunks** (`fq-012` 0.50 → 0.00,
+  `fq-014` 1.00 → 0.83, `fq-015` 1.00 → 0.88). That spread is filed — it is
+  more than twice the comparator's 0.02 significance floor, and it is what
+  printed "Overall winner: A" before the replay. Read any correctness delta
+  under ~0.05 on this set as a tie.
+
+  One prediction of mine was wrong and is worth the record: `fq-013` stopped
+  decomposing as a side effect, which looked like a recall risk because it
+  needs two pages. Recall held at 1.000 and its precision rose **0.73 →
+  0.93**. Only two rows changed code path at all, which is what made the rest
+  of the diff legible as noise.
+
+  **709 tests at 93.65%**, gate green, `static/` untouched. BACKLOG: one
+  closed, one filed, open stays at **4**. **Not deployed** — the router
+  prompt ships in the image, so this needs a build when you want it live;
+  production is still rev `atlas-api-00016-ckx`.
+
 - 2026-10-19 (offline faithfulness default; **₹0**) — the twin filed earlier
   the same day is closed, and the published number was checked **before** the
   code changed rather than after. The filed entry prescribed the check, so it
