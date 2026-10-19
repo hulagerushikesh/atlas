@@ -440,11 +440,27 @@ daily spend cap, console markdown.
   **Shipped: rev `atlas-api-00016-ckx`, image `2190db6`, ≈₹0** (2m59s
   build). Verified free: `/app` 200, `/query` 401 unauthenticated,
   `SourceListResponse` in the live `openapi.json` carries `dense_chunks`,
-  `consistent` and `warning`. **The faithfulness change itself is not
-  verified live** — `/query` is declared `response_model=None`, so
-  `QueryResponse` is absent from `openapi.json` and the only way to see the
-  new nulls from outside is to pay for a query. Not done; the claim rests on
-  the 692-test suite and on the image being the committed tree.
+  `consistent` and `warning`. `QueryResponse` is **not** in `openapi.json`
+  — `/query` is declared `response_model=None` — so the nulls could only be
+  seen by paying for a query. Two were run, **₹0.26 total**:
+
+  | query | classification | `is_faithful` | score | cost |
+  |---|---|---|---|---|
+  | airspeed velocity of an unladen swallow | `out_of_scope` | **null** | null | $0.00013 |
+  | retry failed Stripe webhook deliveries | `simple` | true | 1.0 | $0.0029893 |
+
+  The first **proves the `PipelineResult` half live**: `faithfulness is
+  None` used to yield `True`, so every out-of-scope refusal reported as
+  audited and passed; it is now null. The second did **not** reach the
+  refusal branch, and correctly so — `is_refusal()` is an equality check,
+  not a substring one, and that answer opened with the refusal sentence and
+  then made cited claims, so it got a real audit and earned its 1.0. **The
+  refusal branch is therefore still unverified live** (it needs the
+  generator to emit the refusal sentence and nothing else, which two
+  attempts did not produce); it rests on
+  `test_refusal_is_neither_unfaithful_nor_perfectly_supported`. The second
+  query also re-confirms the open router debt: a Stripe question was
+  classified `simple`, not `out_of_scope`.
 
 - 2026-10-19 (`/namespaces/{ns}/sources` cross-check; **₹0**) — the endpoint
   no longer lets the sparse half speak for both. It reads the BM25 corpus as
