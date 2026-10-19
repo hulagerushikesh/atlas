@@ -2216,3 +2216,28 @@ Format: date — decision — alternatives — reason.
   "definitely empty" and is the same silencing that produced the bug — fourth
   instance of the family in three days, so it is now a test
   (`test_unreachable_qdrant_is_none_not_zero`) rather than a note.
+- **2026-10-19** — `FaithfulnessResult.score` / `.is_faithful` widened to
+  `float | None` / `bool | None`, and "no verdict" now returns `None` in the
+  two branches where nothing was audited: the check being off, and a refusal,
+  which asserts nothing to ground. *Alt:* keep `1.0`/`True` and document it;
+  add a `FAITHFULNESS_ENABLED` flag at the same time; return `None` from the
+  unparseable-judge branch too. *Why:* documenting it fixes nothing, because
+  the console is the caller and `strengthFrom()` reads the number, not the
+  docstring — `1.0` renders as **"Supported 1.00"**, the strongest badge the
+  UI has, awarded to an answer nobody checked. The refusal case was not a
+  loaded gun but **live**: every refusal not classified `out_of_scope` has
+  been displaying "Supported 1.00" for saying it did not know. No flag was
+  added — the item is that the value is dishonest, not that the switch is
+  missing, and adding the switch in the same commit would make the fix
+  harder to read. The unparseable branch deliberately keeps `0.0`/`False`:
+  there an audit ran and failed, which a human should triage, and `None`
+  would render it as the same quiet "Unchecked" as a check that never ran —
+  the distinction being drawn everywhere else in this change. One more
+  instance surfaced in the same file: `parsed.get("faithfulness_score", 1.0)`
+  scored a judge perfect for omitting the number it was asked for; fixed to
+  the same unverified branch. Its twin in `evaluation/metrics/faithfulness.py`
+  was **left and filed**, because it feeds the published 1.000 and changing
+  that number belongs in a commit that says so. Fifth instance of the family
+  in four days, and the first where fixing one instance surfaced two more in
+  the same file — which is the argument for widening the type rather than
+  patching each branch.

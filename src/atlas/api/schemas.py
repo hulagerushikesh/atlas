@@ -83,7 +83,10 @@ class QueryResponse(BaseModel):
     answer: str
     classification: str
     citations: list[CitationResponse]
-    is_faithful: bool
+    # Both null when no verdict was reached — check off, or a refusal, which
+    # asserts nothing to ground. Null is not false: nothing was found wrong,
+    # nothing was checked. Clients render it as "unchecked".
+    is_faithful: bool | None
     faithfulness_score: float | None
     retrieved_chunk_ids: list[str]
     timings: StageTimings

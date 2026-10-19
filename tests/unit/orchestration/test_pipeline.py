@@ -72,7 +72,9 @@ def _mock_generator(answer: str = "The answer [1].") -> MagicMock:
     return gen
 
 
-def _mock_faithfulness(faithful: bool = True, score: float = 0.95) -> MagicMock:
+def _mock_faithfulness(
+    faithful: bool | None = True, score: float | None = 0.95
+) -> MagicMock:
     f = MagicMock()
     f.check = AsyncMock(
         return_value=FaithfulnessResult(
@@ -201,6 +203,40 @@ class TestRAGPipeline:
         p = _pipeline(faithfulness=faithfulness)
         result = await p.run("q")
         assert result.is_faithful is False
+
+    @pytest.mark.asyncio
+    async def test_no_verdict_propagates_as_none_not_true(self) -> None:
+        """
+        A checker that reached no verdict (off, or nothing to ground) must not
+        arrive at the API as `is_faithful: true`. True is a claim that the
+        answer was audited and passed.
+        """
+        p = _pipeline(faithfulness=_mock_faithfulness(faithful=None, score=None))
+        result = await p.run("q")
+        assert result.is_faithful is None
+
+    @pytest.mark.asyncio
+    async def test_no_verdict_is_not_logged_as_a_faithfulness_flag(self) -> None:
+        """
+        The flag branch reads `is False`, not `not`: `not None` is True, so a
+        plain truthiness test would warn "unfaithful" about every answer the
+        checker never looked at, and the warning would stop meaning anything.
+        """
+        import structlog
+
+        p = _pipeline(faithfulness=_mock_faithfulness(faithful=None, score=None))
+        with structlog.testing.capture_logs() as logs:
+            await p.run("q")
+        assert not [e for e in logs if e.get("event") == "pipeline_faithfulness_flag"]
+
+    @pytest.mark.asyncio
+    async def test_a_real_failure_is_still_logged_as_a_flag(self) -> None:
+        import structlog
+
+        p = _pipeline(faithfulness=_mock_faithfulness(faithful=False, score=0.2))
+        with structlog.testing.capture_logs() as logs:
+            await p.run("q")
+        assert [e for e in logs if e.get("event") == "pipeline_faithfulness_flag"]
 
     @pytest.mark.asyncio
     async def test_answer_accessible_on_result(self) -> None:
