@@ -30,7 +30,7 @@ worse than `concat` — held, and for the mechanism it named. See DECISIONS
 ## One line
 
 **M2 is done and shipped: https://atlas.hulage.in is live and current** —
-Cloud Run rev **00015-gd7** (image `ed2cb69`, deployed 2026-10-19) in
+Cloud Run rev **00016-ckx** (image `2190db6`, deployed 2026-10-19) in
 `asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
 Firestore for keys and the spend counter, four Secret Manager secrets,
 ₹200/mo budget alert, and a `*/10` keep-warm job. `main` and production
@@ -131,7 +131,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **656 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00015-gd7**, image `ed2cb69`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00016-ckx**, image `2190db6`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -436,6 +436,15 @@ daily spend cap, console markdown.
   BACKLOG: one closed, one filed (the same default in the *offline* metric,
   left deliberately because it feeds the published faithfulness 1.000), so
   open stays at **5**.
+
+  **Shipped: rev `atlas-api-00016-ckx`, image `2190db6`, ≈₹0** (2m59s
+  build). Verified free: `/app` 200, `/query` 401 unauthenticated,
+  `SourceListResponse` in the live `openapi.json` carries `dense_chunks`,
+  `consistent` and `warning`. **The faithfulness change itself is not
+  verified live** — `/query` is declared `response_model=None`, so
+  `QueryResponse` is absent from `openapi.json` and the only way to see the
+  new nulls from outside is to pay for a query. Not done; the claim rests on
+  the 692-test suite and on the image being the committed tree.
 
 - 2026-10-19 (`/namespaces/{ns}/sources` cross-check; **₹0**) — the endpoint
   no longer lets the sparse half speak for both. It reads the BM25 corpus as
