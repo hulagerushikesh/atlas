@@ -11,7 +11,7 @@ from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.llm import GenerationResponse
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.faithfulness import FaithfulnessChecker
-from atlas.orchestration.generator import REFUSAL
+from atlas.orchestration.generator import OUT_OF_SCOPE_MSG, REFUSAL
 
 
 def _chunk(cid: str) -> RetrievedChunk:
@@ -166,3 +166,19 @@ class TestRefusals:
         result = await FaithfulnessChecker(llm=llm).check(hedged, [_chunk("c1")])
         llm.generate.assert_called_once()
         assert result.score == 0.4
+
+
+class TestTheCheckerSkipsTheRoutersRefusalToo:
+    """Defence in depth: today the pipeline short-circuits before the checker
+    on an out-of-scope route, so the checker never sees OUT_OF_SCOPE_MSG. It
+    should still abstain if it ever does — the same reasoning as the refusal
+    branch, and the eval metrics were caught out by exactly this gap.
+    """
+
+    @pytest.mark.asyncio
+    async def test_out_of_scope_message_is_not_audited(self) -> None:
+        llm = AsyncMock()
+        result = await FaithfulnessChecker(llm=llm).check(OUT_OF_SCOPE_MSG, [_chunk("c1")])
+        assert result.score is None
+        assert result.is_faithful is None
+        llm.generate.assert_not_called()

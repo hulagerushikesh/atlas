@@ -56,7 +56,11 @@ from atlas.interfaces.reranker import BaseReranker
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.decomposer import QueryDecomposer
 from atlas.orchestration.faithfulness import FaithfulnessChecker, FaithfulnessResult
-from atlas.orchestration.generator import AnswerGenerator, GeneratorResult
+from atlas.orchestration.generator import (
+    OUT_OF_SCOPE_MSG,
+    AnswerGenerator,
+    GeneratorResult,
+)
 from atlas.orchestration.grader import RetrievalGrader
 from atlas.orchestration.hyde import HyDEExpander
 from atlas.orchestration.router import QueryRouter
@@ -64,10 +68,6 @@ from atlas.orchestration.router import QueryRouter
 logger = structlog.get_logger(__name__)
 
 _MAX_RETRIES = 2
-_OUT_OF_SCOPE_MSG = (
-    "This question appears to be outside the scope of the knowledge base. "
-    "Please ask a question related to the available documentation."
-)
 
 
 @dataclass
@@ -136,7 +136,7 @@ class PipelineResult:
     is_faithful: bool | None = field(init=False)
 
     def __post_init__(self) -> None:
-        self.answer = self.generation.answer if self.generation else _OUT_OF_SCOPE_MSG
+        self.answer = self.generation.answer if self.generation else OUT_OF_SCOPE_MSG
         self.is_faithful = self.faithfulness.is_faithful if self.faithfulness else None
 
 

@@ -106,3 +106,59 @@ class TestTheDomainBelongsToACorpusNotTheProcess:
             scoped = cfg.model_copy(update={"domain": cfg.domain_for(namespace)})
             router = QueryRouter(_mock_llm("simple"), scoped)
             assert expected in router._system_prompt
+
+
+class TestTheClassifierPromptIsWellFormed:
+    """The prompt is the router's whole behaviour, and it is a format string.
+
+    Its JSON examples are written with doubled braces so `.format(domain=...)`
+    leaves them intact. Get that wrong and the prompt still builds, still
+    sends, and still classifies — just with examples that are no longer valid
+    JSON, which is the kind of break no mocked classification test can see.
+    These assert the prompt's shape rather than any verdict, because a mocked
+    LLM returns whatever it was told to and can prove nothing about quality.
+    Quality is measured by `scripts/probe_router.py` against a real model.
+    """
+
+    def _examples(self, prompt: str) -> list[dict[str, str]]:
+        import json
+        return [
+            json.loads(line.removeprefix("Response: "))
+            for line in prompt.splitlines()
+            if line.startswith("Response: ")
+        ]
+
+    def test_every_example_response_is_valid_json(self) -> None:
+        router = QueryRouter(_mock_llm("simple"), RouterConfig(domain="the FastAPI docs"))
+        examples = self._examples(router._system_prompt)
+        assert examples, "no Response: examples found — the prompt lost its few-shot block"
+        for example in examples:
+            assert set(example) == {"classification", "reasoning"}
+
+    def test_every_example_uses_a_label_the_router_can_return(self) -> None:
+        # An example teaching "outofscope" or "OUT_OF_SCOPE" would be copied
+        # faithfully by the model and then fall through `parsed.get` to
+        # "simple", refusing nothing and reporting nothing.
+        router = QueryRouter(_mock_llm("simple"), RouterConfig(domain="the FastAPI docs"))
+        for example in self._examples(router._system_prompt):
+            assert example["classification"] in {"simple", "complex", "out_of_scope"}
+
+    def test_both_out_of_scope_examples_survive(self) -> None:
+        # Two, deliberately: the unrelated question and the near miss. Until
+        # 2026-10-19 there was only the first, and fq-016 — a Stripe webhook
+        # question naming FastAPI — classified `simple`. Dropping either one
+        # back out is the regression this guards.
+        router = QueryRouter(_mock_llm("simple"), RouterConfig(domain="the FastAPI docs"))
+        refusals = [
+            e for e in self._examples(router._system_prompt)
+            if e["classification"] == "out_of_scope"
+        ]
+        assert len(refusals) >= 2
+
+    def test_the_doubt_tie_break_still_favours_answering(self) -> None:
+        # The counterweight to the near-miss rule. On 2026-10-13 an uploaded
+        # corpus was refused at the router before retrieval ran; the fix for
+        # under-refusal must not cost that guard.
+        router = QueryRouter(_mock_llm("simple"), RouterConfig(domain="the FastAPI docs"))
+        assert "unsure" in router._system_prompt
+        assert "let retrieval decide" in router._system_prompt

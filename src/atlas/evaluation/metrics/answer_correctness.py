@@ -59,7 +59,7 @@ from atlas.evaluation.metrics.base import BaseMetric
 from atlas.interfaces.evaluator import MetricScore
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.orchestration.generator import is_refusal
+from atlas.orchestration.generator import is_non_answer
 from atlas.orchestration.llm import parse_json_response
 
 logger = structlog.get_logger(__name__)
@@ -106,7 +106,7 @@ class AnswerCorrectnessMetric(BaseMetric):
         retrieved_chunks: list[RetrievedChunk],
         relevant_doc_ids: list[str],
     ) -> MetricScore:
-        refused = is_refusal(generated_answer)
+        refused = is_non_answer(generated_answer)
 
         if not relevant_doc_ids:
             # A declared out-of-scope row: the refusal *is* the correct

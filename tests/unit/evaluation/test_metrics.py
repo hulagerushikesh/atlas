@@ -24,7 +24,7 @@ from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.embedder import EmbeddingResult
 from atlas.interfaces.llm import GenerationResponse
 from atlas.interfaces.retriever import RetrievedChunk
-from atlas.orchestration.generator import REFUSAL
+from atlas.orchestration.generator import OUT_OF_SCOPE_MSG, REFUSAL
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -495,3 +495,52 @@ class TestOutOfScopeRowScoring:
         faith = await FaithfulnessMetric(_llm("{}")).score("q", "", REFUSAL, [], [])
         relevance = await AnswerRelevanceMetric(_llm("{}"), emb).score("q", "", REFUSAL, [], [])
         assert [m.applicable for m in (precision, recall, faith, relevance)] == [False] * 4
+
+
+class TestTheMetricsRecogniseTheRoutersRefusalToo:
+    """Every metric that skips a refusal must skip both of them.
+
+    These are the three readers that mis-scored `fq-016` on the
+    2026-10-19 `router-scope` run, the first in which the router correctly
+    classified the Stripe question out of scope. Each one tested the
+    generator's REFUSAL and not the pipeline's OUT_OF_SCOPE_MSG, so the row
+    added to measure the refusal path could not score for refusing.
+    """
+
+    @pytest.mark.asyncio
+    async def test_faithfulness_does_not_audit_the_out_of_scope_message(self) -> None:
+        # It had audited it as two supported claims and returned 1.0 — into
+        # the published faithfulness mean.
+        llm = _llm(json.dumps({"claims": [], "faithfulness_score": 0.0}))
+        ms = await FaithfulnessMetric(llm).score(
+            "q", "a", OUT_OF_SCOPE_MSG, [_chunk("c1", "d1")], []
+        )
+        assert ms.applicable is False
+        llm.generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_answer_relevance_does_not_score_the_out_of_scope_message(self) -> None:
+        llm, emb = AsyncMock(), AsyncMock()
+        ms = await AnswerRelevanceMetric(llm, emb).score("q", "a", OUT_OF_SCOPE_MSG, [], [])
+        assert ms.applicable is False
+        llm.generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_correctness_credits_the_router_for_refusing(self) -> None:
+        # The payoff. An out-of-scope row (no relevant_doc_ids) that the
+        # router refused is correct, and scored 0.0 with the reasoning
+        # "the pipeline answered instead of refusing" until this was fixed.
+        llm = AsyncMock()
+        ms = await AnswerCorrectnessMetric(llm).score("q", "out of scope", OUT_OF_SCOPE_MSG, [], [])
+        assert ms.score == pytest.approx(1.0)
+        assert "refused" in ms.reasoning
+        llm.generate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_an_answerable_row_still_loses_marks_for_refusing(self) -> None:
+        # The other direction, unchanged: refusing a question the dataset
+        # says is answerable is a real failure, not an abstention.
+        llm = AsyncMock()
+        ms = await AnswerCorrectnessMetric(llm).score("q", "ref", OUT_OF_SCOPE_MSG, [], ["d1"])
+        assert ms.score == pytest.approx(0.0)
+        assert ms.applicable is True

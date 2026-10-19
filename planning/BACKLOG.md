@@ -186,6 +186,23 @@ Newest at the bottom of each section.
   report JSONs took the default. If none did, the 1.000 stands as measured
   and the fix is free; if any did, the number is wrong and needs saying so.
 
+- **The correctness judge's run-to-run spread is wider than the
+  comparator's significance floor.** Between `baseline-17` and
+  `router-scope` — two runs where only `fq-013` and `fq-016` changed code
+  path at all — `answer_correctness` moved on three rows that ran an
+  identical pipeline over identical retrieved chunks: `fq-012` 0.50 → 0.00,
+  `fq-014` 1.00 → 0.83, `fq-015` 1.00 → 0.88, totalling **0.79 points, or
+  0.0494 of the 16-row mean**. The judge runs at temperature 0.0, so this is
+  the model's own non-determinism, not a setting. The comparator calls a
+  delta insignificant below **0.02**, which this evidence says is roughly
+  half the real floor for this metric on this set, and it printed "Overall
+  winner: A" off exactly that noise before the declined rows were replayed.
+  Free to settle: run the same dataset twice with no change at all and read
+  the spread directly (≈₹6.3 a run, so ≈₹12.6 for the pair), or compute it
+  retrospectively from the stored reports that share a fingerprint. Until
+  then, read any correctness delta under ~0.05 on this set as a tie whatever
+  the table says.
+
 - `rank-bm25` scores every chunk in Python per query (O(N)). Fine to ~50k
   chunks; replace with Qdrant sparse vectors or Tantivy after that.
 - ~~SQLite key store is single-node~~ `AUTH_STORE=firestore` on Cloud Run;
@@ -322,8 +339,58 @@ Newest at the bottom of each section.
   Original entry: every report in `eval_data/reports/` was measured on the
   fifteen-row set, so a fresh baseline had to be paid for regardless.
 
-- **The router does not treat a Stripe question as out of scope**, though
-  its own `domain` string names the boundary. It returned `complex`. The
+- ~~**The router does not treat a Stripe question as out of scope.**~~
+  **done 2026-10-19, ₹7.01.** Two changes, because the first one alone would
+  have made the published numbers worse.
+
+  *The prompt.* `out_of_scope` was defined as "clearly unrelated to the
+  domain", which only ever catches a question about something else entirely —
+  the lone example was "What is the capital of France?". The case that failed
+  is the near miss, and the model said so itself: it called `fq-016` a pattern
+  "documented in the FastAPI **ecosystem**". The definition is now about what
+  a correct answer would have to be *about*, with a second example — exporting
+  financial records to QuickBooks — that reuses the subject of the first
+  simple example so the contrast is the scope rule rather than the topic, and
+  names no product in any eval row. The "when in doubt prefer simple"
+  tie-break is kept, because it exists for the 2026-10-13 over-refusal, and
+  narrowed to subjects the domain plausibly owns.
+
+  *The harness.* The run that proved the prompt works also showed the eval
+  could not see it. The generator refuses with `REFUSAL`; the router refuses
+  with the pipeline's own out-of-scope message, and all four readers of a
+  refusal tested only the first string. `answer_correctness` scored `fq-016`
+  **0.000** with the reasoning "the pipeline answered instead of refusing",
+  `answer_relevance` averaged its 0.41 into the headline, and `faithfulness`
+  audited "This question appears to be outside the scope..." as two supported
+  claims and returned **1.0**. Making the router correct made three published
+  numbers worse. Both strings now live beside each other with one predicate,
+  `is_non_answer`, and a test asserts the pipeline emits the very constant the
+  metrics check, since separate strings in separate modules is how they
+  drifted apart silently.
+
+  *Measured, not asserted.* `scripts/probe_router.py` is new — the router
+  alone, 16 dataset rows plus 6 controls, ≈₹0.3 a run instead of ≈₹6, which
+  exists because the last router-prompt change measured at exactly zero.
+  Scope accuracy **19/21 → 21/21**, over-refusals **0 → 0**; the two it fixed
+  are `fq-016` and an Amazon S3 question that appears in no prompt and no
+  dataset, so the rule generalised rather than the answer being recalled. Full
+  eval `router-scope_20261019-202434` against `baseline-17`: after replaying
+  the three declined-row metrics for ₹0
+  (`scripts/replay_non_answer_metrics.py`), the comparator says **tie** on
+  every metric — correctness 0.7452 → 0.7583, relevance 0.8382 → 0.8380 over
+  the 15 shared rows, recall 0.9378 unchanged — with **p50 latency −12.8%**
+  because an out-of-scope query now skips the whole pipeline. `baseline-17`
+  stays the published baseline; nothing in README or STATUS needed restating.
+
+  One prediction from the entry below was wrong and worth recording: `fq-013`
+  stopped decomposing as a side effect, which looked like a recall risk
+  because it needs two pages. It kept recall 1.000 and its precision went
+  **0.73 → 0.93**. Only two rows changed path at all, which is what made the
+  rest of the diff readable as noise.
+
+  Original entry: the router **does not treat a Stripe question as out of
+  scope**, though its own `domain` string names the boundary. It returned
+  `complex`. The
   same "When in doubt, prefer 'simple'" sentence that misrouted `fq-012` is
   the likely cause, now visible in a second, different way. **Deliberately
   not fixed yet:** the last router-prompt fix looked just as obvious and
