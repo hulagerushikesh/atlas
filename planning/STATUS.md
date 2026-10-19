@@ -30,7 +30,7 @@ worse than `concat` — held, and for the mechanism it named. See DECISIONS
 ## One line
 
 **M2 is done and shipped: https://atlas.hulage.in is live and current** —
-Cloud Run rev **00014-5vp** (image `ac132a9`, deployed 2026-10-18) in
+Cloud Run rev **00015-gd7** (image `ed2cb69`, deployed 2026-10-19) in
 `asia-south1` behind a Vercel rewrite, Qdrant Cloud with 4,020 chunks,
 Firestore for keys and the spend counter, four Secret Manager secrets,
 ₹200/mo budget alert, and a `*/10` keep-warm job. `main` and production
@@ -131,7 +131,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **656 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00014-5vp**, image `ac132a9`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00015-gd7**, image `ed2cb69`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -428,11 +428,17 @@ daily spend cap, console markdown.
   9 new tests, **686 passing at 93.55%**, gate green on all three targets.
   BACKLOG open items **6 → 5**.
 
-  **This is in `main`, not in production.** The live service still runs
-  image `ac132a9`, so `/namespaces/{ns}/sources` there still answers with
-  the old four-field body and the live console has no warning. A redeploy is
-  owed before the fix is real for users; it is free (Cloud Build free tier)
-  and needs no re-ingest, since neither index changed.
+  **Shipped the same day: rev `atlas-api-00015-gd7`, image `ed2cb69`,
+  ≈₹0** (3m01s build, Cloud Build free tier; no re-ingest, neither index
+  changed). The gate passed both namespaces unchanged — 4,020/4,020 on
+  `default` and `headers`, ids and hashes agreeing. Verified live:
+  `/namespaces/default/sources` and `/namespaces/headers/sources` both
+  return `dense_chunks 4020, consistent true, warning null`, `/app` 200,
+  `/query` still 401 unauthenticated. The mismatch path cannot be
+  reproduced on the live service any more — the three orphan index
+  directories were deleted on the 18th, so `quickstart` now answers
+  `0 / 0 / consistent true`, which is the honest answer for a namespace
+  that holds nothing on either side.
 
 - 2026-10-18 (redeploy; **≈₹0**) — rev **`atlas-api-00014-5vp`**, image
   `ac132a9`, so the owed redeploy is discharged and the two halves of the
