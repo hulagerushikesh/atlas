@@ -2241,3 +2241,31 @@ Format: date — decision — alternatives — reason.
   in four days, and the first where fixing one instance surfaced two more in
   the same file — which is the argument for widening the type rather than
   patching each branch.
+- **2026-10-19** — The offline faithfulness judge fails loudly instead of
+  defaulting to 1.0, and the published 1.000 was checked before it changed.
+  `evaluation/metrics/faithfulness.py` had the same
+  `parsed.get("faithfulness_score", 1.0)` as its inference-time twin, but it
+  feeds a **published** number, so the audit came first: all 289 faithfulness
+  rows across the 19 stored report JSONs were scanned for the shapes the
+  default can produce (a score over zero claims; a 1.0 printed next to
+  unsupported claims). **Zero matched**, so the 1.000 is as measured and the
+  fix costs no re-run. *Alt:* return `0.0` from the metric; mark it
+  `applicable=False`; widen `MetricScore.score` to `float | None`. *Why:* the
+  harness already distinguishes the three states and prints all three — a
+  mean, a skipped count, and a failed count keyed on `score=-1.0` — so a
+  judge that produced no verdict is a **failure**, and the way to record one
+  is to raise and let the runner's existing `except` write the sentinel.
+  `0.0` would be a verdict of "hallucinated" for a judge that did not judge;
+  `applicable=False` would quietly shrink the denominator for what is a
+  broken judge, not an inapplicable sample. Widening the score to `None`
+  would ripple through reporter and comparator to express something two
+  existing conventions already express. A score over an **empty claims list**
+  does get `applicable=False`: supported/total with total 0 is not a number
+  the judge could have computed, and that matches
+  `AnswerCorrectnessMetric`'s no-facts branch exactly. The refusal branch
+  keeps `1.0`/`applicable=False` rather than following the runtime checker to
+  `None`, because it is already out of the mean *and* in the published
+  skipped count, so it cannot flatter anything — unlike the console, no
+  reader of a report sees a bare 1.0 with no count beside it. Sixth instance
+  of the measurement-silences-its-own-gaps family, and the first closed with
+  evidence that it had never actually fired.

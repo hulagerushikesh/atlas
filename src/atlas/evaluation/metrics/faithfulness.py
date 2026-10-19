@@ -30,6 +30,14 @@ Design rationale:
     pipeline for the most honest thing it can do. The refusal count is reported
     separately so the exclusion cannot quietly flatter the score.
 
+    A judge that returns no verdict fails the sample; it does not pass it.
+    Until 2026-10-19 a missing `faithfulness_score` key defaulted to 1.0 and
+    an empty claims list was scored at face value, so the two ways the judge
+    can answer without auditing anything both landed in the headline mean as
+    perfect. Both now go to the harness's existing honest paths — a raised
+    error (counted as failed, printed in bold) and `applicable=False`
+    (counted as skipped) respectively.
+
     Judge prompt temperature=0.0: faithfulness is a factual determination,
     not a creative judgement. Zero temperature minimises inter-run variance,
     making scores reproducible across eval runs.
@@ -114,8 +122,34 @@ class FaithfulnessMetric(BaseMetric):
         response = await self._llm.generate(request)
         parsed = parse_json_response(response.content)
 
-        score = float(parsed.get("faithfulness_score", 1.0))
+        if "faithfulness_score" not in parsed:
+            # Raise, don't default. This was `parsed.get("faithfulness_score",
+            # 1.0)`: a judge that answered with JSON but omitted the one number
+            # it was asked for scored the sample perfect, and a perfect score
+            # went into the headline mean indistinguishable from an audited
+            # one. The runner turns this exception into `score=-1.0,
+            # applicable=True`, which the mean drops and `_failed_counts`
+            # prints in bold — the harness already has a word for "this sample
+            # did not produce a verdict" and it is not 1.0.
+            raise ValueError(
+                f"faithfulness judge returned no faithfulness_score; keys={sorted(parsed)}"
+            )
+
         claims = parsed.get("claims", [])
+        if not claims:
+            # The judge was asked for supported/total and returned a score
+            # over an empty list, so whatever number it gave was not computed
+            # from anything. Inapplicable rather than taken at face value —
+            # same shape as AnswerCorrectnessMetric's no-facts branch, and
+            # `_inapplicable_counts` publishes it so the exclusion is visible.
+            return MetricScore(
+                metric_name=self.name,
+                score=0.0,
+                reasoning="Judge listed no claims; its score was computed over nothing.",
+                applicable=False,
+            )
+
+        score = float(parsed["faithfulness_score"])
         unsupported = [c["claim"] for c in claims if c.get("verdict") == "unsupported"]
 
         reasoning = (

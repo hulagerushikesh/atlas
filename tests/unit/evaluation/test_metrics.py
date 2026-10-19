@@ -188,6 +188,34 @@ class TestFaithfulnessMetric:
         ms = await metric.score("q", "a", "answer", [_chunk("c1", "d1")], [])
         assert "Fake claim" in ms.reasoning
 
+    @pytest.mark.asyncio
+    async def test_judge_without_a_score_raises_instead_of_scoring_perfect(self) -> None:
+        # This defaulted to 1.0. A judge that answered in JSON but left out the
+        # number it was asked for was recorded as a perfect audit and raised
+        # the headline mean. The runner catches the raise and records the
+        # failed sentinel, which the mean drops and the report prints.
+        payload = json.dumps({
+            "claims": [{"claim": "X", "verdict": "supported"}],
+            "summary": "looks fine",
+        })
+        metric = FaithfulnessMetric(_llm(payload))
+        with pytest.raises(ValueError, match="no faithfulness_score"):
+            await metric.score("q", "a", "answer", [_chunk("c1", "d1")], [])
+
+    @pytest.mark.asyncio
+    async def test_score_over_zero_claims_is_inapplicable_not_taken_at_face_value(
+        self,
+    ) -> None:
+        # supported/total with total == 0 is not a number the judge could have
+        # computed, so 1.0 here means "audited nothing", not "audited and
+        # passed". Excluded from the mean and counted as skipped.
+        payload = json.dumps({"claims": [], "faithfulness_score": 1.0})
+        metric = FaithfulnessMetric(_llm(payload))
+        ms = await metric.score("q", "a", "A real answer with claims.", [_chunk("c1", "d1")], [])
+        assert ms.applicable is False
+        assert ms.score == pytest.approx(0.0)
+        assert "no claims" in ms.reasoning
+
     def test_metric_name(self) -> None:
         llm = AsyncMock()
         assert FaithfulnessMetric(llm).name == "faithfulness"
