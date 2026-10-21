@@ -2383,3 +2383,31 @@ Format: date — decision — alternatives — reason.
   month standing. The keep-warm stays: it is what makes this a deploy-time
   and scale-up cost rather than a visitor-facing one, and its being
   ENABLED is a condition `planning/BUDGET.md` states and nothing checks.
+- **2026-10-21** — Warm the cross-encoder from `POST /warm`, called by
+  `atlas-keepwarm`, not from a background task. *Alt:* background task from
+  the lifespan (shipped first, and wrong); `--no-cpu-throttling`; load it in
+  the lifespan and accept the slower start; let the first query pay.
+  *Why:* Cloud Run allocates CPU per request by default — this service
+  carries no `run.googleapis.com/cpu-throttling: false` — so a thread
+  loading a model between requests is frozen as soon as the response is
+  sent. Rev `atlas-api-00018-zfc` served three requests in 4.6 minutes and
+  never logged `reranker_loaded_lazily`, for a load that takes 8.08 s where
+  CPU is continuous. The task is correct under docker-compose and stays for
+  that; the endpoint is what makes it finish in production, because a
+  request is the only time there is CPU to finish it in.
+  `--no-cpu-throttling` would fix it by paying for idle CPU, which is the
+  `--min-instances=1` bill under another name. `/warm` is deliberately not
+  `/health`: one wants to block until a slow dependency is ready and the
+  other wants to answer immediately, and merging them means a twenty-second
+  health check once per cold start.
+- **2026-10-21** — Correction to the entry above it: the cold start was not
+  ~21 s of image pull plus ~12 s of imports. Production measured
+  `pull_and_interpreter` at **0.72 s**, with ~0.64 s between "Starting new
+  instance" and the fork — Cloud Run streams image blocks on demand instead
+  of pulling the image up front, so the original 33.9 s was almost entirely
+  the torch import graph. The 12.41 s in-container figure was taken against
+  a warm local image where no streaming happens, and the pull/import split
+  derived from it was an inference presented a little too firmly. Removing
+  the duplicated 81.9 MB layer remains correct and is still worth keeping;
+  it is simply not where the time was, and the honest reading is that
+  deferring the import did essentially all of 36.9 s → 11.7 s.
