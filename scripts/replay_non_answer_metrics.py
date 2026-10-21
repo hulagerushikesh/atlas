@@ -149,6 +149,13 @@ async def main() -> int:
 
     if args.write:
         out = path.with_name(f"{path.stem}-replayed.json")
+        # Name the source in the file, not only in the filename. A replay is
+        # a corrected copy of one run, not a second run, and anything that
+        # reads a directory of reports has to be able to tell the difference
+        # — `scripts/measure_noise_floor.py` reads rerun-to-rerun movement
+        # off exactly this directory, and pairing a report with its own
+        # correction reports the correction as noise.
+        report["replayed_from"] = path.name
         out.write_text(json.dumps(report, indent=1))
         print(f"\nWrote {out}")
     else:

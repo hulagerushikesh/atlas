@@ -186,8 +186,53 @@ Newest at the bottom of each section.
   report JSONs took the default. If none did, the 1.000 stands as measured
   and the fix is free; if any did, the number is wrong and needs saying so.
 
-- **The correctness judge's run-to-run spread is wider than the
-  comparator's significance floor.** Between `baseline-17` and
+- ~~**The correctness judge's run-to-run spread is wider than the
+  comparator's significance floor.**~~ **done 2026-10-21, ₹0.** Measured off
+  the stored reports instead of paying for repeat runs, and the measurement
+  corrected the entry below on two counts.
+
+  *The title was wrong about the mechanism.* The judges are **deterministic**:
+  across every paired row where the two runs produced byte-identical answer
+  text, `answer_correctness` and `faithfulness` moved **0.0000**. The variance
+  enters earlier — the *generator* writes a different answer from the same
+  chunks, and correctness grades facts-present over a handful of facts, so one
+  reworded sentence swings a row by 0.5. "Judge noise" was the wrong name for
+  it.
+
+  *The floor was wrong in both directions, not one.* One blanket 0.02 served
+  five metrics with very different behaviour. Measured aggregate movement
+  between reruns on identical evidence:
+
+  | metric | measured | floor now | note |
+  |---|---|---|---|
+  | `context_precision` | 0.0000 | 0.01 | deterministic; floor is resolution, not noise |
+  | `context_recall` | 0.0000 | 0.01 | same |
+  | `faithfulness` | 0.0000 | 0.05 | **unvaried** — every observation was 1.00, so this is an assumption |
+  | `answer_relevance` | 0.0020 | 0.01 | per-row jitter ±0.04 cancels in the mean |
+  | `answer_correctness` | 0.0565 | 0.08 | three pairs only, hence the headroom |
+
+  So 0.02 was ten times too lax for `answer_relevance` and three times too
+  tight for `answer_correctness`. Re-running the comparison that prompted
+  this, `baseline-17` vs `router-scope`, flips `context_precision` +0.0134
+  from "ns" to a win and the overall verdict from tie to **B** — the gain was
+  always real, because that metric has no rerun noise at all.
+
+  `scripts/measure_noise_floor.py` is new and re-derives the table for free;
+  it exits non-zero if any floor has fallen under its measured noise, so this
+  cannot quietly rot. Two things it had to learn the hard way: a `-replayed`
+  report is a corrected copy of one run and pairing it against its source
+  reports the correction as noise (which put correctness at 1.0000 and would
+  have set the floor from a bug fix — `replay_non_answer_metrics.py` now
+  stamps `replayed_from` so this is detectable rather than a filename
+  convention), and a metric that never left one value has to be printed as
+  **unvaried** rather than deterministic, because those read identically in a
+  column of zeroes and mean opposite things.
+
+  Not fixed, and now clearer: a floor answers "is this bigger than a rerun",
+  not "is this more than one sample". That +0.0134 precision win is one row,
+  `fq-013`. The item below this one is the instrument for that question.
+
+  Original entry: between `baseline-17` and
   `router-scope` — two runs where only `fq-013` and `fq-016` changed code
   path at all — `answer_correctness` moved on three rows that ran an
   identical pipeline over identical retrieved chunks: `fq-012` 0.50 → 0.00,
@@ -202,6 +247,20 @@ Newest at the bottom of each section.
   retrospectively from the stored reports that share a fingerprint. Until
   then, read any correctness delta under ~0.05 on this set as a tie whatever
   the table says.
+
+- **The comparator decides a winner from two means, when it has the paired
+  per-sample scores to do better.** Its own docstring has said since the
+  first version that "with larger datasets you'd use a proper significance
+  test (Wilcoxon signed-rank, etc.)", and the dataset is 16 paired rows,
+  which is enough for the exact signed-rank test. The measured noise floors
+  shipped 2026-10-21 are the right answer to "is this bigger than a rerun"
+  and no answer at all to "is this more than one sample" — `context_precision
+  +0.0134` cleared its floor honestly on the strength of a single row. A
+  paired test answers both at once and would replace a hand-set constant per
+  metric with something derived per comparison. `scipy` is already a
+  dependency. Free: no new runs, the per-sample scores are in every report.
+  The floors should stay afterwards as the sanity check on a test that can be
+  fooled by a consistent but tiny shift.
 
 - `rank-bm25` scores every chunk in Python per query (O(N)). Fine to ~50k
   chunks; replace with Qdrant sparse vectors or Tantivy after that.

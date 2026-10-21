@@ -1210,5 +1210,6 @@
  "duration_seconds": 64.4,
  "model_calls": {
   "gemini-3.1-flash-lite": 119
- }
+ },
+ "replayed_from": "router-scope_20261019-202434.json"
 }

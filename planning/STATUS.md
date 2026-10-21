@@ -129,7 +129,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **709 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39455266549` on `bda328e`, 709 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **714 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39455266549` on `bda328e`, 709 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00017-x5r**, image `bda328e`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -415,6 +415,57 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-21 (per-metric noise floors; **₹0**) — the comparator's one
+  significance threshold is now five measured ones, and measuring it
+  corrected the item that asked for it.
+
+  **The mechanism was not what the name said.** Across every paired row where
+  two runs produced byte-identical answer text, `answer_correctness` and
+  `faithfulness` moved **0.0000**. The judges are deterministic. The variance
+  enters earlier: the *generator* writes a different answer from the same
+  chunks, and correctness grades facts-present over a handful of facts, so
+  one reworded sentence swings a row by 0.5. I had filed this as the judge's
+  non-determinism. It is the generator's, amplified by a coarse metric.
+
+  **0.02 was wrong in both directions at once**, measured off stored reports
+  for ₹0 by restricting to rows where two runs retrieved byte-identical
+  evidence — same input twice, so the movement between them is the floor:
+
+  | metric | measured | floor | note |
+  |---|---|---|---|
+  | `context_precision` | 0.0000 | 0.01 | deterministic; floor is resolution, not noise |
+  | `context_recall` | 0.0000 | 0.01 | same |
+  | `faithfulness` | 0.0000 | 0.05 | **unvaried** — every observation 1.00, so an assumption |
+  | `answer_relevance` | 0.0020 | 0.01 | per-row jitter ±0.04 cancels in the mean |
+  | `answer_correctness` | 0.0565 | 0.08 | three pairs only, hence headroom |
+
+  Ten times too lax for relevance, three times too tight for correctness.
+  Re-running `baseline-17` vs `router-scope` under the new floors flips
+  `context_precision` +0.0134 from "ns" to a **win** and the overall verdict
+  from tie to **B** — that gain was always real, because the metric has no
+  rerun noise at all.
+
+  **New `scripts/measure_noise_floor.py`** re-derives the table free and
+  exits non-zero if a floor has fallen under its measured noise, so this
+  cannot rot quietly. Two things it had to learn: a `-replayed` report is a
+  corrected copy of one run, and pairing it against its source reports the
+  correction as noise — that alone put correctness at 1.0000 and would have
+  set a floor from a bug fix, so `replay_non_answer_metrics.py` now stamps
+  `replayed_from` and the measurement skips superseded runs; and a metric
+  that never left one value prints as **unvaried**, not deterministic,
+  because a column of zeroes means opposite things in those two cases.
+
+  **Honest limit:** a floor answers "is this bigger than a rerun", not "is
+  this more than one sample". That +0.0134 precision win rests on one row,
+  `fq-013`. The paired Wilcoxon test the comparator's docstring has always
+  pointed at is now filed as its own item — 16 paired rows is enough for the
+  exact test and `scipy` is already a dependency.
+
+  **714 tests at 93.66%**, gate green, `static/` untouched. BACKLOG: one
+  closed, one filed, open stays at **4**. **Nothing to deploy** — the
+  comparator is an offline tool and is not in the serving path; production
+  stays on rev `atlas-api-00017-x5r`.
 
 - 2026-10-19 (router out-of-scope; **₹7.01**) — the Stripe row refuses, and
   the harness can finally see that it did. Two changes, because the first
