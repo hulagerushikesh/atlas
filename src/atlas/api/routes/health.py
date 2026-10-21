@@ -93,12 +93,22 @@ async def warm(request: Request) -> JSONResponse:
     task from the lifespan, which is correct on a normal host and does not
     work here: rev `atlas-api-00018-zfc` served two `/health` pings in its
     first three minutes and never logged `reranker_loaded_lazily`, because
-    the loading thread was frozen the moment each response was sent.
+    the loading thread is frozen the moment each response is sent.
 
     Doing it inside a request is what makes the load finish: CPU is
     allocated for as long as the handler runs. `atlas-keepwarm` already
     pings every ten minutes, so pointing it here means a cold-started
     instance has its model within ten minutes without anyone waiting.
+
+    What it costs is worth stating, because it is larger than it looks. On
+    rev `atlas-api-00020-pcg` this handler blocked for 37.0s on the first
+    call. The container has one vCPU and `startup-cpu-boost` only applies
+    while the instance is starting, so a load moved off the startup path is
+    a load that no longer gets the boost: the model costs ~37s here against
+    the ~25s it cost inside the old 36.9s eager start. The landing page is
+    up in 11s either way, which is the trade this endpoint exists to make,
+    but an instance that takes a `/query` before anything has warmed it
+    waits longer than it used to.
 
     It is not `/health`. A health check that blocks for twenty seconds once
     per cold start is a health check that trips alarms, and the two want
