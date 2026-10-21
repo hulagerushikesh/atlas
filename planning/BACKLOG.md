@@ -755,9 +755,33 @@ Newest at the bottom of each section.
       weights tree shipped twice. Ownership is now set as files are created
       and that layer is gone — 73.7 kB and 20.5 kB in its place.
 
-  Expected next cold start ~26 s rather than 36.9 s, confirmed or refuted by
-  `atlas_boot_profile` on the next deploy. `--min-instances=1` stays
-  rejected at Rs.650-700/month standing for a portfolio site.
+  **Measured in production on rev `atlas-api-00018-zfc`: 36.9 s → 11.7 s**
+  (instance start → `atlas_ready`), against a predicted ~26 s. Two things in
+  the prediction were wrong and the deploy is what showed it:
+
+  - **There is no ~21 s image pull.** `pull_and_interpreter` came back at
+    **0.72 s**, and only ~0.64 s passed between "Starting new instance" and
+    the process forking. Cloud Run streams image blocks on demand rather
+    than pulling the whole image first, so the old 33.9 s was almost
+    entirely the torch import graph, not pull. The in-container figure that
+    suggested otherwise was measured on a warm local image, where no
+    streaming happens — the split it implied was an inference and the
+    inference was wrong. The 81.9 MB layer fix is still right; it is just
+    not where the seconds were.
+  - **The background warm does not run on Cloud Run.** The service uses the
+    default request-scoped CPU allocation (no
+    `run.googleapis.com/cpu-throttling: false`), so a thread loading the
+    model between requests gets almost no CPU. `atlas-api-00018-zfc` served
+    three requests in 4.6 minutes and never logged
+    `reranker_loaded_lazily`, for a load that takes 8.08 s on a host with
+    continuous CPU. Fixed by `POST /warm`, which does the load inside a
+    request — the only time CPU is allocated — with `atlas-keepwarm`
+    retargeted from `/health` to `/warm`. It is a separate route because a
+    health check that blocks for twenty seconds once per cold start is a
+    health check that trips alarms.
+
+  `--min-instances=1` stays rejected at Rs.650-700/month standing for a
+  portfolio site.
 
 - ~~**Re-check Artifact Registry size.**~~ **Checked 2026-09-29, Rs.0: 2,196
   MB**, down from 4,342 MB. The cleanup policy is doing its job — `keep

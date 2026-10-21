@@ -78,3 +78,41 @@ async def health(request: Request) -> JSONResponse:
         ).model_dump(),
         status_code=200 if overall != "down" else 503,
     )
+
+
+@router.post("/warm", include_in_schema=False)
+@router.get("/warm", include_in_schema=False)
+async def warm(request: Request) -> JSONResponse:
+    """Load the cross-encoder now, inside a request, and report what happened.
+
+    This endpoint exists because of how Cloud Run allocates CPU. The service
+    runs with the default request-scoped allocation — no
+    `run.googleapis.com/cpu-throttling: false` — so a container gets CPU
+    while it is handling a request and almost none between requests. The
+    first attempt at deferring the reranker started the load as a background
+    task from the lifespan, which is correct on a normal host and does not
+    work here: rev `atlas-api-00018-zfc` served two `/health` pings in its
+    first three minutes and never logged `reranker_loaded_lazily`, because
+    the loading thread was frozen the moment each response was sent.
+
+    Doing it inside a request is what makes the load finish: CPU is
+    allocated for as long as the handler runs. `atlas-keepwarm` already
+    pings every ten minutes, so pointing it here means a cold-started
+    instance has its model within ten minutes without anyone waiting.
+
+    It is not `/health`. A health check that blocks for twenty seconds once
+    per cold start is a health check that trips alarms, and the two want
+    opposite things from a slow dependency.
+    """
+    reranker = request.app.state.atlas.registry._shared.reranker
+    if reranker is None:
+        return JSONResponse({"reranker": "disabled"})
+
+    already = reranker.is_loaded
+    t = time.perf_counter()
+    await reranker.warm()
+    return JSONResponse({
+        "reranker": "loaded" if reranker.is_loaded else "failed",
+        "was_already_loaded": already,
+        "seconds": round(time.perf_counter() - t, 2),
+    })

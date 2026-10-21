@@ -137,6 +137,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     # needs it: the landing page, the console and /health do not. Held on
     # app.state so the task is not garbage collected mid-load, which is the
     # documented way a bare create_task disappears.
+    #
+    # This finishes under docker-compose and on any host with continuously
+    # allocated CPU. It does *not* finish on Cloud Run as configured: the
+    # service uses the default request-scoped CPU allocation, so between
+    # requests this thread gets almost none and the load never completes —
+    # rev atlas-api-00018-zfc proved it by never logging
+    # `reranker_loaded_lazily`. `POST /warm` is what loads the model there,
+    # because a request is the only time CPU exists; `atlas-keepwarm` calls
+    # it. The task stays because it is the right behaviour everywhere else
+    # and costs nothing where it is throttled.
     warm_task: asyncio.Task[None] | None = None
     if shared.reranker is not None:
         warm_task = asyncio.create_task(shared.reranker.warm())

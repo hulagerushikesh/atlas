@@ -129,9 +129,9 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **752 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **758 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00017-x5r**, image `bda328e`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00018-zfc**, image `f7ac05c`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` (retarget to `/warm`, see 2026-10-21); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -442,10 +442,28 @@ daily spend cap, console markdown.
   that layer is gone. Verified by building and running the image locally,
   not by reasoning about the Dockerfile.
 
-  **752 tests at 93.48%**, gate green, `static/` untouched. BACKLOG: one
-  closed, open drops to **2**. **Needs a deploy** to take effect, and the
-  next cold start's `atlas_boot_profile` line is what confirms or refutes
-  the expected ~26 s.
+  **Deployed as `atlas-api-00018-zfc`, and the deploy refuted two of my own
+  claims.** Measured: **36.9 s → 11.7 s** instance start → `atlas_ready`,
+  against a predicted ~26 s. There is no ~21 s image pull —
+  `pull_and_interpreter` is **0.72 s** and only ~0.64 s separates "Starting
+  new instance" from the fork, because Cloud Run streams image blocks on
+  demand rather than pulling up front. The 12.41 s in-container figure came
+  from a warm local image where no streaming happens, so the pull/import
+  split I derived from it was an inference stated too firmly: the old
+  33.9 s was almost entirely the torch import. Removing the duplicated
+  81.9 MB layer is still right, just not where the seconds were.
+
+  And the background warm **does not run on Cloud Run**: the service uses
+  default request-scoped CPU allocation, so a thread loading the model
+  between requests is frozen the moment a response is sent — three requests
+  in 4.6 minutes and no `reranker_loaded_lazily`, for an 8.08 s load.
+  `POST /warm` does it inside a request instead, with `atlas-keepwarm`
+  retargeted from `/health` to `/warm`; separate from `/health` because a
+  twenty-second health check once per cold start trips alarms.
+
+  **758 tests at 93.50%**, gate green, `static/` untouched. BACKLOG: one
+  closed, open drops to **2**. Needs one more deploy plus the scheduler
+  retarget for `/warm` to take effect.
 
 - 2026-10-21 (paired Wilcoxon test; **₹0**) — a metric delta now has to clear
   two gates to be called a result: its measured rerun floor **and** an exact
