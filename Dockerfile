@@ -6,10 +6,22 @@
 #      instance never downloads from Hugging Face on its first request.
 # torch (CPU) is still the bulk of the image; RERANKER_ENABLED=false skips
 # loading it at runtime if a deploy ever needs to be lighter.
+#
+# Ownership is set as files are created, never afterwards. A trailing
+# `chown -R atlasuser /app /opt/hf` cost 81.9 MB of the 554.6 MB image
+# measured on `bda328e`: chown rewrites every inode it touches, so the whole
+# baked-weights tree was copied into a second layer and shipped twice. The
+# user is therefore created before anything it owns, `COPY --chown` sets the
+# owner in the copy itself, and the weights are downloaded as the runtime
+# user into a directory already assigned to it.
 
 FROM python:3.11-slim
 
 WORKDIR /app
+
+# Before any layer whose files it needs to own, so nothing has to be
+# re-owned later.
+RUN adduser --disabled-password --gecos "" atlasuser
 
 RUN pip install --no-cache-dir uv
 
@@ -22,20 +34,19 @@ RUN uv pip install --system --no-cache \
     && mkdir -p src/atlas && touch src/atlas/__init__.py \
     && uv pip install --system --no-cache -e ".[gcp]"
 
-# Bake the reranker weights into the image (~90 MB).
+# Bake the reranker weights into the image (~108 MB compressed, measured on
+# bda328e — the "~90 MB" this comment used to claim was never checked).
 ENV HF_HOME=/opt/hf \
     RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+RUN mkdir -p /opt/hf /app/data && chown atlasuser:atlasuser /opt/hf /app /app/data
+USER atlasuser
 RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('${RERANKER_MODEL}')"
 
-COPY src/ src/
+COPY --chown=atlasuser:atlasuser src/ src/
 # BM25 index for the demo corpus (~3.5 MB per namespace). Baking it in keeps
 # the deploy to one artifact; the dense side of the same corpus lives in
 # Qdrant Cloud. Re-ingest locally and rebuild to change the corpus.
-COPY data/index/ data/index/
-
-RUN adduser --disabled-password --gecos "" atlasuser \
-    && mkdir -p /app/data && chown -R atlasuser:atlasuser /app /opt/hf
-USER atlasuser
+COPY --chown=atlasuser:atlasuser data/index/ data/index/
 
 # Cloud Run injects PORT; compose leaves it unset and gets 8010.
 ENV PORT=8010 \

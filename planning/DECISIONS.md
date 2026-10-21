@@ -2361,3 +2361,25 @@ Format: date — decision — alternatives — reason.
   block instead of as a tie: "no evidence either way" and "evidence of no
   difference" are the distinction this project keeps having to re-learn, and
   a verdict that collapses them is the bug in a new place.
+- **2026-10-21** — Load the cross-encoder behind the bound port, and set
+  file ownership as files are created. *Alt:* `--min-instances=1`; shrink
+  the image by dropping the baked weights; leave it to the keep-warm.
+  *Why:* the 36.9 s cold start was attributed rather than measured, and the
+  attribution was a third wrong. `atlas_boot_profile` — two timestamps, one
+  recorded in `atlas/__init__.py` because `atlas.api.__init__` imports
+  `create_app` eagerly and a timer started in `asgi.py` begins *after* torch
+  has loaded and reports 0.00 s — splits the opaque 33.9 s into ~21 s of
+  image pull and **12.41 s of imports**, measured in-container with the
+  image already local. Deferring the reranker import takes that to 2.55 s;
+  the model then loads in the background in 8.1 s, and only `/query` ever
+  needed it. It is a wrapper rather than a flag because the failure mode
+  that matters is answering a query with the fused order and no sign the
+  reranker was missing — so a query arriving early waits, and a model that
+  cannot load fails that query loudly while the landing page and `/health`
+  keep serving. Separately, the trailing `chown -R atlasuser /app /opt/hf`
+  cost **81.9 MB of a 554.6 MB image**: chown rewrites every inode it
+  touches, so the entire baked-weights tree was copied into a second layer
+  and shipped twice. `--min-instances=1` is still refused at Rs.650-700 a
+  month standing. The keep-warm stays: it is what makes this a deploy-time
+  and scale-up cost rather than a visitor-facing one, and its being
+  ENABLED is a condition `planning/BUDGET.md` states and nothing checks.

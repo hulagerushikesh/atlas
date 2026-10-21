@@ -44,7 +44,7 @@ from atlas.orchestration.pipeline import RAGPipeline
 from atlas.orchestration.router import QueryRouter
 from atlas.retrieval.dense import QdrantDenseRetriever
 from atlas.retrieval.hybrid import HybridRetriever
-from atlas.retrieval.reranker import CrossEncoderReranker
+from atlas.retrieval.lazy import LazyCrossEncoderReranker
 from atlas.retrieval.sparse import BM25Retriever
 
 logger = structlog.get_logger(__name__)
@@ -81,8 +81,11 @@ class SharedComponents:
         self.settings = settings
         self.embedder = OpenAIEmbedder(settings.openai)
         self.llm = OpenAILLMProvider(settings.openai)
+        # Lazy: constructing this must not import torch, because that import
+        # is 12.41 s of a 36.9 s cold start and it ran before uvicorn bound
+        # the port. The model loads behind the server via `warm()`.
         self.reranker = (
-            CrossEncoderReranker(settings.reranker) if settings.reranker.enabled else None
+            LazyCrossEncoderReranker(settings.reranker) if settings.reranker.enabled else None
         )
         api_key = settings.qdrant.api_key.get_secret_value() if settings.qdrant.api_key else None
         self.qdrant_client = AsyncQdrantClient(

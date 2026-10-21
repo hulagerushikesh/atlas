@@ -25,6 +25,7 @@ Design rationale:
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -131,8 +132,21 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     if settings.budget.daily_usd > 0:
         logger.info("daily_budget_enabled", usd=settings.budget.daily_usd)
 
+    # Load the cross-encoder behind the server rather than in front of it.
+    # The import alone is 12.41 s of a 36.9 s cold start, and only /query
+    # needs it: the landing page, the console and /health do not. Held on
+    # app.state so the task is not garbage collected mid-load, which is the
+    # documented way a bare create_task disappears.
+    warm_task: asyncio.Task[None] | None = None
+    if shared.reranker is not None:
+        warm_task = asyncio.create_task(shared.reranker.warm())
+    app.state.reranker_warm_task = warm_task
+
     logger.info("atlas_ready")
     yield
+    if warm_task is not None and not warm_task.done():
+        # Shutdown should not wait on a model nobody is going to use.
+        warm_task.cancel()
 
     # Shutdown
     if redis_client is not None:
