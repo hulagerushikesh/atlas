@@ -238,3 +238,49 @@ GET /metrics
 
 Standard Prometheus text exposition. Scrape from your Prometheus instance or
 use the bundled `monitoring/prometheus.yml` with `make monitor-up`.
+
+## The keep-warm job
+
+`atlas-keepwarm` is a Cloud Scheduler job, created by hand rather than by
+`scripts/deploy_gcp.sh`, so it survives deploys and is not reproduced by
+them. If it is ever deleted, recreate it with every flag below — two of
+them are load-bearing and neither is a gcloud default:
+
+```bash
+gcloud scheduler jobs create http atlas-keepwarm \
+  --location=asia-south1 \
+  --project=atlas-rag-rush \
+  --schedule="*/10 * * * *" \
+  --uri="https://atlas-api-cde2q3b7lq-el.a.run.app/warm" \
+  --http-method=GET \
+  --attempt-deadline=120s
+```
+
+`--uri` must be `/warm`, not `/health`. The ping exists to put the
+cross-encoder into a cold instance, and `/health` does not load it — it
+answers in about a second and leaves the instance exactly as cold as it
+found it. Cloud Run allocates CPU per request on this service, so the
+lifespan's background warm cannot finish on its own; a request is the only
+time there is CPU to finish it in.
+
+`--attempt-deadline=120s` matters for the same reason. The gcloud default
+is **60 s**, which was ample against `/health` and is not against `/warm`:
+the load measured **37.0 s in-handler and 54.1 s wall** on
+`atlas-api-00020-pcg`, and a cold instance pays container start on top. A
+60 s deadline would therefore fail first on precisely the cold instance the
+job exists for, then retry against a load already in flight. 120 s matches
+the service's own `timeoutSeconds`, so the scheduler gives up no earlier
+than Cloud Run does.
+
+Note the hostname. The job must call the Cloud Run URL directly, not
+`atlas.hulage.in` — the custom domain goes through a Vercel rewrite, and a
+keep-warm that depends on the proxy stops testing the thing it is keeping
+warm.
+
+Check it with:
+
+```bash
+gcloud scheduler jobs describe atlas-keepwarm --location=asia-south1 --project=atlas-rag-rush --format="value(state, attemptDeadline, httpTarget.uri)"
+```
+
+Expected: `ENABLED  120s  https://atlas-api-cde2q3b7lq-el.a.run.app/warm`.
