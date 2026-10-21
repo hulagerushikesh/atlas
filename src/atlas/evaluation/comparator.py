@@ -11,18 +11,33 @@ Design rationale:
     - An overall winner (most metrics improved)
     - A markdown table suitable for a PR description or portfolio README
 
-    Statistical note: a delta smaller than what the same pipeline produces on
-    a rerun is not a result, and how small that is depends on the metric.
-    `_NOISE_FLOORS` carries a measured figure per metric rather than one
-    blanket 0.02, because the blanket value was simultaneously ten times too
-    lax for answer_relevance and three times too tight for answer_correctness
-    — and the tight direction is the one that printed "Overall winner" off
-    0.0565 of noise on 2026-10-19. The floors come from
-    `scripts/measure_noise_floor.py`, which reads them off stored reports for
-    free; re-run it as more reports accumulate. A paired significance test
-    (Wilcoxon signed-rank over the per-sample scores the reports already
-    store) is the better instrument and is filed in BACKLOG — the floors are
-    what the evidence supports today.
+    Statistical note: a delta has to clear two gates before this module calls
+    it a result, because the two answer different questions and each has been
+    wrong here on its own.
+
+      - **The rerun floor.** A delta smaller than what the same pipeline
+        produces on a rerun is not a result, and how small that is depends on
+        the metric. `_NOISE_FLOORS` carries a measured figure per metric
+        rather than one blanket 0.02, because the blanket value was
+        simultaneously ten times too lax for answer_relevance and three times
+        too tight for answer_correctness — and the tight direction is the one
+        that printed "Overall winner" off 0.0565 of noise on 2026-10-19. The
+        floors come from `scripts/measure_noise_floor.py`, which reads them
+        off stored reports for free; re-run it as more reports accumulate.
+      - **A paired test.** `atlas.evaluation.significance` runs an exact
+        two-sided Wilcoxon signed-rank test over the per-sample scores the
+        reports have always stored. The floors answer "is this bigger than a
+        rerun" and say nothing about "is this more than one sample", and on
+        2026-10-21 that gap printed `context_precision +0.0134` as a win for
+        router-scope off a single moved row out of fifteen. The test puts
+        that case in its own category: with one differing pair the smallest
+        p it can return is 1.0, so it is reported as **underpowered** rather
+        than as a tie, because "no evidence either way" and "evidence of no
+        difference" are not the same finding.
+
+    Keeping both is deliberate. A test alone will reject a shift that is
+    consistent across every row and far too small to care about; a floor
+    alone cannot see how many rows it rests on.
 
     We compare aggregate scores (means over all samples) rather than doing
     per-sample paired comparisons, which requires both runs to have covered
@@ -91,6 +106,12 @@ from statistics import mean
 
 from atlas.cost import estimate_usage_cost
 from atlas.evaluation.reporter import percentile
+from atlas.evaluation.significance import (
+    DEFAULT_ALPHA,
+    SignedRankResult,
+    min_pairs_for,
+    signed_rank_test,
+)
 from atlas.interfaces.evaluator import EvalResult
 
 # How much a metric moves between two runs of the *same* pipeline — the floor a
@@ -187,7 +208,11 @@ class MetricDelta:
     score_b: float
     delta: float           # b - a
     winner: str            # "A" | "B" | "tie" | "n/a"
-    is_significant: bool   # |delta| >= threshold
+    # Both gates passed: the delta clears this metric's rerun floor *and* a
+    # paired test over the per-sample scores rejected. Either alone has been
+    # wrong here — the floor called a one-row move a win on 2026-10-21, and a
+    # test on its own will reject a consistent shift far too small to matter.
+    is_significant: bool
     # "A" or "B" when only the other run measured this metric at all. Such a
     # row has no delta: the absent side is not a zero, it is a run that never
     # asked the question.
@@ -197,6 +222,11 @@ class MetricDelta:
     # the stored aggregates were used because the denominators already
     # matched.
     paired_n: int | None = None
+    # The paired Wilcoxon signed-rank test over the per-sample scores. `None`
+    # only when no pairing was possible at all, which is a report old enough
+    # to have no usable per-sample rows — reported as a note, never silently
+    # treated as a test that passed.
+    test: SignedRankResult | None = None
 
 
 @dataclass
@@ -228,6 +258,12 @@ class ComparisonResult:
     # What could not be verified. Printed with the table, because a
     # comparison nobody could check should not look like one that was.
     notes: list[str] = field(default_factory=list)
+    # Deltas the paired test could not stand behind, and why. Kept out of
+    # `notes` on the same reasoning that split `budget_notes` out of it: "the
+    # two runs may not have measured the same rows" and "these are the right
+    # rows and there are too few of them" are different facts, and a reader
+    # who sees them under one heading learns neither.
+    power_notes: list[str] = field(default_factory=list)
     # Latency and cost against planning/BUDGET.md. Kept apart from `notes`,
     # which is about whether the two runs measured the same thing: a budget
     # that could not be checked is a different fact from a dataset that could
@@ -251,15 +287,16 @@ class ComparisonResult:
         lines = [
             f"## A/B Comparison: {self.config_a_name} vs {self.config_b_name}",
             "",
-            f"| Metric | {self.config_a_name} | {self.config_b_name} | Delta | Winner |",
-            "| --- | --- | --- | --- | --- |",
+            f"| Metric | {self.config_a_name} | {self.config_b_name} | Delta "
+            f"| Paired test | Winner |",
+            "| --- | --- | --- | --- | --- | --- |",
         ]
         for d in self.deltas:
             if d.missing_in:
                 measured = f"{d.score_b:.4f}" if d.missing_in == "A" else f"{d.score_a:.4f}"
                 cells = ("—", measured) if d.missing_in == "A" else (measured, "—")
                 lines.append(
-                    f"| {d.metric} | {cells[0]} | {cells[1]} | — | not measured in "
+                    f"| {d.metric} | {cells[0]} | {cells[1]} | — | — | not measured in "
                     f"{d.missing_in} |"
                 )
                 continue
@@ -268,7 +305,7 @@ class ComparisonResult:
             paired = "" if d.paired_n is None else f" *(paired n={d.paired_n})*"
             lines.append(
                 f"| {d.metric} | {d.score_a:.4f} | {d.score_b:.4f} | "
-                f"{delta_str}{sig}{paired} | {d.winner} |"
+                f"{delta_str}{sig}{paired} | {_test_cell(d.test)} | {d.winner} |"
             )
         lines.append("")
 
@@ -327,17 +364,43 @@ class ComparisonResult:
             if not d.missing_in
         )
         lines.append(
-            f"*(ns) = within this metric's rerun noise. Floors: {floors}. "
-            f"Measured by `scripts/measure_noise_floor.py`; a metric with no "
-            f"measured floor uses {_DEFAULT_NOISE_FLOOR:g}.*"
+            f"*(ns) = not a result. A delta has to clear two gates: this "
+            f"metric's rerun floor, and an exact two-sided Wilcoxon "
+            f"signed-rank test over the paired per-sample scores at "
+            f"α={DEFAULT_ALPHA:g}. Floors: {floors}. Measured by "
+            f"`scripts/measure_noise_floor.py`; a metric with no measured "
+            f"floor uses {_DEFAULT_NOISE_FLOOR:g}. **underpowered** = fewer "
+            f"than {min_pairs_for(DEFAULT_ALPHA)} rows differ, so no "
+            f"arrangement of them could reach α — absence of evidence, not "
+            f"evidence of absence.*"
         )
         for note in self.notes:
             lines.append("")
             lines.append(f"> **Unverified:** {note}")
+        for note in self.power_notes:
+            lines.append("")
+            lines.append(f"> **Too few rows:** {note}")
         for note in self.budget_notes:
             lines.append("")
             lines.append(f"> **Budget:** {note}")
         return "\n".join(lines)
+
+
+def _test_cell(test: SignedRankResult | None) -> str:
+    """One table cell for the paired test, including its non-outcomes.
+
+    Each state gets its own words. "identical", "underpowered" and a p of
+    0.85 all end in the same tie, and a reader who cannot tell them apart
+    cannot tell a measured null from an unmeasurable one.
+    """
+    if test is None:
+        return "**not run** (no paired rows)"
+    if test.verdict == "identical":
+        return f"— (all {test.n_pairs} rows equal)"
+    if test.verdict == "underpowered":
+        return f"**underpowered** ({test.n_nonzero}/{test.n_pairs} differ)"
+    assert test.p_value is not None
+    return f"p={test.p_value:.4f} (n={test.n_nonzero}/{test.n_pairs})"
 
 
 def _fmt(value: float, unit: str) -> str:
@@ -441,6 +504,36 @@ def _mean_over(result: EvalResult, metric: str, ids: set[str]) -> float | None:
         and ms.score != _FAILED_SENTINEL
     ]
     return round(mean(scores), 4) if scores else None
+
+
+def _scores_by_id(result: EvalResult, metric: str) -> dict[str, float]:
+    """Each sample's score for *metric*, keyed by sample id.
+
+    Same filter as `_scored_ids`, so the keys of this and the members of that
+    are the same set by construction rather than by coincidence.
+    """
+    return {
+        s.sample_id: ms.score
+        for s in result.sample_results
+        for ms in s.metrics
+        if ms.metric_name == metric
+        and ms.applicable
+        and ms.score != _FAILED_SENTINEL
+    }
+
+
+def _paired_scores(
+    result_a: EvalResult, result_b: EvalResult, metric: str, ids: set[str]
+) -> list[tuple[float, float]]:
+    """(A, B) score pairs for *metric* over *ids*, matched by sample id.
+
+    Matched by id and not by position: `sample_results` is a list, two runs
+    can order it differently, and zipping two differently-ordered lists
+    produces pairs that are not pairs. The test cannot detect that — a
+    scrambled pairing looks exactly like a null result.
+    """
+    sa, sb = _scores_by_id(result_a, metric), _scores_by_id(result_b, metric)
+    return [(sa[i], sb[i]) for i in sorted(ids) if i in sa and i in sb]
 
 
 def _budgeted(
@@ -699,6 +792,7 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
     regression bought.
     """
     notes = _check_comparable(result_a, result_b)
+    power_notes: list[str] = []
 
     all_metrics = sorted(
         set(result_a.aggregate_scores) | set(result_b.aggregate_scores)
@@ -788,7 +882,42 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
             paired_n = len(shared)
 
         delta = sb - sa
-        significant = abs(delta) >= noise_floor(metric)
+        clears_floor = abs(delta) >= noise_floor(metric)
+
+        # Two gates, because they answer two different questions and this
+        # comparator has now been wrong on each of them separately. The floor
+        # asks "is this bigger than rerunning the same pipeline"; the paired
+        # test asks "is this more than one sample getting lucky". A delta has
+        # to survive both to be called a result.
+        pairs = _paired_scores(result_a, result_b, metric, scored_a & scored_b)
+        test = signed_rank_test(pairs) if pairs else None
+        if test is None:
+            # No per-sample rows to pair. Fall back to the floor alone and
+            # say so: an unverifiable claim must not render like a verified
+            # one, which is the whole lesson of the notes list above.
+            notes.append(
+                f"'{metric}' could not be tested pairwise — no sample carries "
+                f"a usable score in both runs — so its verdict rests on the "
+                f"rerun floor alone, which cannot tell a broad shift from one "
+                f"row moving."
+            )
+            significant = clears_floor
+        elif test.verdict == "tested":
+            significant = clears_floor and test.is_significant
+        else:
+            # "identical" or "underpowered". Neither supports a winner.
+            # "underpowered" in particular is not evidence of no difference,
+            # so it is named in the notes rather than left to read as a tie.
+            significant = False
+            if test.verdict == "underpowered" and clears_floor:
+                power_notes.append(
+                    f"'{metric}' moved {delta:+.4f}, clearing its "
+                    f"{noise_floor(metric):g} rerun floor, but {test.describe()}. "
+                    f"It is called a tie: a floor says the move is bigger than "
+                    f"a rerun, not that it is bigger than one row. Scoring "
+                    f"{min_pairs_for(DEFAULT_ALPHA)} differing rows is the "
+                    f"least that could reject."
+                )
 
         if not significant:
             winner = "tie"
@@ -807,6 +936,7 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
             winner=winner,
             is_significant=significant,
             paired_n=paired_n,
+            test=test,
         ))
 
     overall = "B" if b_wins > a_wins else ("A" if a_wins > b_wins else "tie")
@@ -824,6 +954,7 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
         deltas=deltas,
         overall_winner=overall,
         notes=notes,
+        power_notes=power_notes,
         budget=budget,
         budget_notes=budget_notes,
     )

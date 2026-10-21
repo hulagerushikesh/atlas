@@ -2330,3 +2330,34 @@ Format: date — decision — alternatives — reason.
   paired observation was 1.00 against 1.00 — and the script prints it as
   **unvaried** rather than deterministic, because a column of zeroes means
   opposite things in those two cases.
+- **2026-10-21** — A metric delta needs two gates, not one: the measured
+  rerun floor **and** an exact paired Wilcoxon signed-rank test over the
+  per-sample scores. *Alt:* keep the floors alone; replace them with the
+  test alone; call `scipy.stats.wilcoxon`. *Why:* the two answer different
+  questions and each is wrong without the other. A floor says a delta is
+  bigger than rerunning the same pipeline; it cannot see how many rows it
+  rests on, and on `baseline-17` vs `router-scope` it published
+  `context_precision +0.0134` as a win carried entirely by `fq-013`. A test
+  alone has the opposite failure: a shift consistent across every row
+  rejects at any size, including sizes nobody should act on — 0.800 → 0.802
+  on fifteen rows is p=0.0001 and inside `answer_relevance`'s rerun noise.
+  Requiring both retracts the precision claim and puts that comparison back
+  at **tie**, which is what the evidence supports. The test is implemented
+  in `atlas/evaluation/significance.py` rather than imported, because
+  BACKLOG's "scipy is already a dependency" was wrong — it arrives
+  transitively under `sentence-transformers`, and the comparator ships
+  inside the API image, so importing it there would tie the eval harness to
+  a reranker's private requirements. scipy is instead declared in the `dev`
+  extra and used as an independent oracle: 2,000 random tie-free cases must
+  agree to within 1e-12. Only tie-free, because scipy's exact method is
+  derived for distinct ranks while metric scores tie constantly; the
+  implementation here conditions on the observed rank vector and stays exact
+  either way, so forcing agreement under ties would copy a known limitation.
+  The p-value is counted with a subset-sum DP over doubled ranks rather than
+  by enumerating 2^n sign patterns — identical answer, 0.15 ms at n=16, and
+  still exact at n=200 where enumeration would not finish. Below six
+  differing rows the smallest achievable two-sided p is above 0.05, so the
+  test is reported as **underpowered** in its own column and its own notes
+  block instead of as a tie: "no evidence either way" and "evidence of no
+  difference" are the distinction this project keeps having to re-learn, and
+  a verdict that collapses them is the bug in a new place.
