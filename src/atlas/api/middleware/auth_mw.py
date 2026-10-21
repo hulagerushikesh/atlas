@@ -6,7 +6,7 @@ store, checks rate limits, and attaches the key record to request.state.
 
 Auth is bypassed when AUTH_ENABLED=false (the default) so the dev experience
 requires no keys. When enabled, the following paths are always public:
-  /health, /docs, /redoc, /openapi.json, /metrics, /, /app/*, /out/*
+  /health, /warm, /docs, /redoc, /openapi.json, /metrics, /, /app/*, /out/*
 """
 
 from __future__ import annotations
@@ -23,7 +23,17 @@ from atlas.api import auth as auth_db
 
 # /keys is guarded by X-Admin-Secret, not a Bearer key — it has to be reachable
 # before the first key exists.
-_PUBLIC_PATHS = {"/health", "/docs", "/redoc", "/openapi.json", "/metrics", "/", "/keys"}
+#
+# /warm is public for the same reason /health is: `atlas-keepwarm` calls it
+# unauthenticated every ten minutes, and it was added to the allowlist only
+# after production answered it 401 — the endpoint existed and could not be
+# reached by the one caller it was written for. It makes no model calls and
+# cannot spend: the worst an anonymous caller achieves is loading a
+# cross-encoder that the next request would have loaded anyway, and every
+# call after that returns immediately.
+_PUBLIC_PATHS = {
+    "/health", "/warm", "/docs", "/redoc", "/openapi.json", "/metrics", "/", "/keys",
+}
 _PUBLIC_PREFIXES = ("/app", "/out", "/namespaces")
 
 
