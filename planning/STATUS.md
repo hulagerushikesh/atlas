@@ -1,4 +1,4 @@
-# Status — 2026-10-19 (v0.1.0, all four milestones done, 16 of 17, CI green)
+# Status — 2026-10-21 (v0.1.0, all four milestones done, 16 of 17, CI green)
 
 **16 of the 17 ROADMAP exit criteria are ticked (≈94%), and all four
 milestones are marked done as of 2026-10-14.** That fraction is the project's
@@ -129,9 +129,9 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **656 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `38389533285` on `212157c`, 595 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **709 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39455266549` on `bda328e`, 709 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00016-ckx**, image `2190db6`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00017-x5r**, image `bda328e`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -483,9 +483,32 @@ daily spend cap, console markdown.
   of the diff legible as noise.
 
   **709 tests at 93.65%**, gate green, `static/` untouched. BACKLOG: one
-  closed, one filed, open stays at **4**. **Not deployed** — the router
-  prompt ships in the image, so this needs a build when you want it live;
-  production is still rev `atlas-api-00016-ckx`.
+  closed, one filed, open stays at **4**.
+
+  **Shipped 2026-10-21: rev `atlas-api-00017-x5r`, image `bda328e`, ≈₹0**
+  (2m54s build, free tier, no re-ingest). The pre-build index check passed
+  clean on both namespaces — 4020 dense / 4020 sparse, 0 id-only on either
+  side, 0 content hashes differing, headers on 4020/4020. Verified free:
+  `/app` 200, `/query` 401 unauthenticated, `/health` qdrant ok, and
+  `/namespaces/default/sources` returning `dense_chunks: 4020`,
+  `consistent: true`, `warning: null` — the 19 Oct cross-check live.
+
+  **The router change itself cost ₹0.02 to prove** and is the cheapest live
+  verification this project has done, because the thing being verified is a
+  refusal and a refusal skips retrieval, generation and the judge:
+
+  ```
+  classification      : out_of_scope        (production returned "simple" before)
+  answer              : the out-of-scope message
+  is_faithful         : null
+  faithfulness_score  : null
+  ```
+
+  Metered at `$0.000195` on `/health`'s own budget counter. The nulls are
+  the 19 Oct faithfulness fix holding in the same call, so that change now
+  has a second live witness. **Still unverified live: the generator's
+  `REFUSAL` branch** — this query refused at the router, which is a
+  different path and emits a different string.
 
 - 2026-10-19 (offline faithfulness default; **₹0**) — the twin filed earlier
   the same day is closed, and the published number was checked **before** the
