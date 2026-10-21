@@ -129,7 +129,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **714 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **739 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00017-x5r**, image `bda328e`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -415,6 +415,36 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-21 (paired Wilcoxon test; **₹0**) — a metric delta now has to clear
+  two gates to be called a result: its measured rerun floor **and** an exact
+  two-sided Wilcoxon signed-rank test over the per-sample scores every report
+  has always stored (`src/atlas/evaluation/significance.py`). The two answer
+  different questions and each is wrong alone. Re-running `baseline-17` vs
+  `router-scope` under both **retracts yesterday's own headline**:
+  `context_precision +0.0134` cleared the 0.01 floor honestly and is carried
+  by a single row of fifteen, where the smallest p the test can return is
+  1.000, so the overall verdict goes from **B** back to **tie**. The other
+  direction is gated too — 0.800 → 0.802 across all fifteen rows is p=0.0001
+  and still inside `answer_relevance`'s rerun noise, so the floor vetoes it.
+
+  **Three corrections to the entry that asked for this.** `scipy` is *not* a
+  dependency; it installs transitively under `sentence-transformers`, and the
+  comparator ships inside the API image, so the test is implemented in-repo
+  and scipy is declared in the `dev` extra as an independent oracle instead
+  (2,000 random tie-free cases must agree to 1e-12). Tie-free only, because
+  scipy's exact method is derived for distinct ranks while metric scores tie
+  constantly — the implementation here conditions on the observed rank
+  vector and stays exact either way. And "not significant" was the wrong
+  word for most of this dataset: below six differing rows the smallest
+  achievable p is above 0.05, so those are reported as **underpowered**, in
+  their own table column and their own `Too few rows:` notes block, rather
+  than as ties.
+
+  **739 tests at 93.82%**, gate green, `static/` untouched. BACKLOG: one
+  closed, open drops to **3**. **Nothing to deploy** — the comparator is an
+  offline tool and is not in the serving path; production stays on rev
+  `atlas-api-00017-x5r`.
 
 - 2026-10-21 (per-metric noise floors; **₹0**) — the comparator's one
   significance threshold is now five measured ones, and measuring it

@@ -248,19 +248,42 @@ Newest at the bottom of each section.
   then, read any correctness delta under ~0.05 on this set as a tie whatever
   the table says.
 
-- **The comparator decides a winner from two means, when it has the paired
-  per-sample scores to do better.** Its own docstring has said since the
-  first version that "with larger datasets you'd use a proper significance
-  test (Wilcoxon signed-rank, etc.)", and the dataset is 16 paired rows,
-  which is enough for the exact signed-rank test. The measured noise floors
-  shipped 2026-10-21 are the right answer to "is this bigger than a rerun"
-  and no answer at all to "is this more than one sample" — `context_precision
-  +0.0134` cleared its floor honestly on the strength of a single row. A
-  paired test answers both at once and would replace a hand-set constant per
-  metric with something derived per comparison. `scipy` is already a
-  dependency. Free: no new runs, the per-sample scores are in every report.
-  The floors should stay afterwards as the sanity check on a test that can be
-  fooled by a consistent but tiny shift.
+- ~~**The comparator decides a winner from two means, when it has the paired
+  per-sample scores to do better.**~~ **done 2026-10-21, Rs.0.**
+  `atlas/evaluation/significance.py` runs an exact two-sided Wilcoxon
+  signed-rank test over the paired per-sample scores, and `compare` now
+  needs *both* gates: the delta clears the metric's rerun floor **and** the
+  test rejects at alpha=0.05. Re-running `baseline-17` vs `router-scope`
+  under it retracts the claim that prompted this entry — `context_precision
+  +0.0134` is carried by one row of fifteen, where the smallest p the test
+  can return is 1.000 — and the overall verdict goes back from **B** to
+  **tie**.
+
+  Three things the entry got wrong or did not foresee:
+
+  - **`scipy` is not a dependency.** It is a transitive install under
+    `sentence-transformers`. Importing it from `src/atlas` would have made
+    the comparator — which ships inside the API image — depend on a
+    reranker's private requirements. The test is implemented in-repo and
+    checked against `scipy.stats.wilcoxon` in the suite, with scipy added to
+    the `dev` extra so the oracle is declared rather than assumed.
+  - **Ties are the common case, not a corner.** scipy's exact method is
+    derived for distinct ranks; metric scores tie constantly. The
+    implementation here conditions on the observed rank vector, which stays
+    exact under ties, and the cross-check is restricted to tie-free input
+    where both must agree to the last bit.
+  - **"Not significant" was the wrong word for most of this dataset.** With
+    n differing rows the smallest achievable two-sided p is 2^(1-n), so
+    below six differing rows the test cannot reject however the rows fall.
+    That is reported as **underpowered** in its own column and its own notes
+    block, never as a tie: absence of evidence and evidence of absence are
+    the distinction this whole line of work keeps rediscovering.
+
+  Original entry: the comparator decided a winner from two means when it had
+  the paired per-sample scores to do better; its own docstring had said
+  since v1 that a proper significance test was the right instrument, and the
+  measured noise floors answered "is this bigger than a rerun" and nothing
+  about "is this more than one sample".
 
 - `rank-bm25` scores every chunk in Python per query (O(N)). Fine to ~50k
   chunks; replace with Qdrant sparse vectors or Tantivy after that.

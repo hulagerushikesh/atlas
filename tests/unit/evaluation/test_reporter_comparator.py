@@ -11,6 +11,7 @@ import pytest
 
 from atlas.cost import estimate_usage_cost
 from atlas.evaluation.comparator import (
+    ComparisonResult,
     DatasetMismatch,
     compare,
     noise_floor,
@@ -34,13 +35,29 @@ from atlas.usage import ModelUsage
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+# Enough rows for a delta to be provable. `compare` now gates a winner on a
+# paired signed-rank test as well as the rerun floor, and that test cannot
+# reject below six differing rows whatever they say — so a one-row fixture
+# can express a delta but not a result, and every "B wins" assertion built on
+# one was asserting something the comparator should refuse. Eight unanimous
+# rows give p=0.0078, comfortably inside alpha with room to flip one.
+_ROWS = 8
+
+
+def _ids(count: int = _ROWS) -> list[str]:
+    return [f"s{i + 1}" for i in range(count)]
+
+
 def _result(name: str, scores: dict) -> EvalResult:
+    # Every row carries the run's mean, so `aggregate_scores` stays the mean
+    # of the rows and the fixture says one thing rather than two.
     samples = [
         SampleResult(
-            sample_id="s1", question="q", generated_answer="a",
+            sample_id=sid, question="q", generated_answer="a",
             retrieved_chunk_ids=["c1"],
             metrics=[MetricScore(metric_name=k, score=v) for k, v in scores.items()],
         )
+        for sid in _ids()
     ]
     return EvalResult(
         pipeline_config=PipelineConfig(name=name),
@@ -77,7 +94,7 @@ class TestReporter:
     def test_markdown_contains_sample_count(self) -> None:
         result = _result("cfg", {"faithfulness": 0.8})
         md = _md_table(result)
-        assert "1 samples" in md
+        assert f"{_ROWS} samples" in md
 
     def test_output_dir_created(self, tmp_path: Path) -> None:
         output = tmp_path / "nested" / "reports"
@@ -355,8 +372,8 @@ class TestComparabilityGuard:
             compare(a, b)
 
     def test_matching_fingerprints_compare_cleanly(self) -> None:
-        a = _provenance("a", {"m": 0.30}, ["s1"], fingerprint="same")
-        b = _provenance("b", {"m": 0.50}, ["s1"], fingerprint="same")
+        a = _provenance("a", {"m": 0.30}, _ids(), fingerprint="same")
+        b = _provenance("b", {"m": 0.50}, _ids(), fingerprint="same")
 
         comparison = compare(a, b)
 
@@ -616,10 +633,11 @@ def _graded(
         pipeline_config=PipelineConfig(name="run"),
         sample_results=[
             SampleResult(
-                sample_id="s1", question="q", generated_answer="a",
+                sample_id=sid, question="q", generated_answer="a",
                 retrieved_chunk_ids=["c1"],
                 metrics=[MetricScore(metric_name=k, score=v) for k, v in scores.items()],
             )
+            for sid in _ids()
         ],
         aggregate_scores=scores,
         dataset_fingerprint="fp",
@@ -643,7 +661,10 @@ class TestOneSidedMetrics:
 
     def test_it_renders_without_a_delta(self) -> None:
         md = compare(_graded(None), _graded(0.85)).as_markdown()
-        assert "| answer_correctness | — | 0.8500 | — | not measured in A |" in md
+        assert (
+            "| answer_correctness | — | 0.8500 | — | — | not measured in A |"
+            in md
+        )
 
     def test_it_is_called_out_in_the_notes(self) -> None:
         notes = compare(_graded(None), _graded(0.85)).notes
@@ -1257,3 +1278,140 @@ class TestTheNoiseFloorIsPerMetricAndMeasured:
         ).as_markdown()
         assert "answer_correctness 0.08" in md
         assert "measure_noise_floor.py" in md
+
+
+class TestAWinnerNeedsMoreThanOneRow:
+    """The gap the measured noise floors left open, closed 2026-10-21.
+
+    A floor answers "is this delta bigger than rerunning the same pipeline".
+    It cannot answer "is this delta bigger than one sample", and on
+    `baseline-17` vs `router-scope` the two answers differed: a
+    `context_precision` move of +0.0134 cleared the 0.01 floor honestly while
+    resting entirely on `fq-013`. `compare` now also runs an exact paired
+    signed-rank test over the per-sample scores, and a winner needs both.
+    """
+
+    @staticmethod
+    def _one_row_moved(metric: str, base: float, moved: float) -> ComparisonResult:
+        """Fifteen rows, fourteen identical, one different — the real shape."""
+        a = _scored("A", {f"s{i}": {metric: base} for i in range(15)})
+        b = _scored(
+            "B",
+            {
+                f"s{i}": {metric: moved if i == 13 else base}
+                for i in range(15)
+            },
+        )
+        return compare(a, b)
+
+    def test_a_delta_over_the_floor_carried_by_one_row_is_not_a_win(self) -> None:
+        result = self._one_row_moved("context_precision", 0.45, 0.65)
+        delta = result.deltas[0]
+
+        # The delta is real and clears the 0.01 floor — this is not a case of
+        # the floor being raised until the problem went away.
+        assert delta.delta == pytest.approx(0.0133, abs=1e-4)
+        assert abs(delta.delta) >= noise_floor("context_precision")
+        assert delta.winner == "tie"
+        assert not delta.is_significant
+        assert result.overall_winner == "tie"
+
+    def test_it_says_the_delta_cleared_the_floor_and_still_failed(self) -> None:
+        result = self._one_row_moved("context_precision", 0.45, 0.65)
+        assert result.notes == [] or all(
+            "context_precision" not in n for n in result.notes
+        )
+        note = " ".join(result.power_notes)
+        assert "clearing its 0.01 rerun floor" in note
+        assert "only 1 of 15 paired rows differ" in note
+
+    def test_the_same_delta_spread_over_every_row_is_a_win(self) -> None:
+        # Same metric, same floor, a delta of the same order — but carried by
+        # all fifteen rows instead of one. This is what the test is for: it
+        # distinguishes the two, and the floor alone cannot.
+        a = _scored("A", {f"s{i}": {"context_precision": 0.45} for i in range(15)})
+        b = _scored("B", {f"s{i}": {"context_precision": 0.47} for i in range(15)})
+        result = compare(a, b)
+
+        assert result.deltas[0].winner == "B"
+        assert result.deltas[0].is_significant
+        assert result.overall_winner == "B"
+
+    def test_an_underpowered_row_is_not_reported_as_a_measured_null(self) -> None:
+        md = self._one_row_moved("context_precision", 0.45, 0.65).as_markdown()
+        # "underpowered" and "p=0.9" both end in a tie and mean opposite
+        # things. The table has to say which one happened.
+        assert "**underpowered** (1/15 differ)" in md
+        assert "Too few rows:" in md
+
+    def test_identical_rows_are_not_called_underpowered(self) -> None:
+        a = _scored("A", {f"s{i}": {"faithfulness": 1.0} for i in range(15)})
+        result = compare(a, _scored("B", {f"s{i}": {"faithfulness": 1.0} for i in range(15)}))
+
+        assert result.deltas[0].test is not None
+        assert result.deltas[0].test.verdict == "identical"
+        assert "— (all 15 rows equal)" in result.as_markdown()
+        # Nothing to warn about: the runs agreed, which is a measurement.
+        assert result.power_notes == []
+
+    def test_a_tiny_delta_consistent_across_every_row_still_needs_the_floor(self) -> None:
+        # The test alone would reject this: fifteen rows all moving the same
+        # way is p=0.0001. It is 0.002 of answer_relevance, which is inside
+        # what a rerun does. Both gates, in the other direction.
+        a = _scored("A", {f"s{i}": {"answer_relevance": 0.800} for i in range(15)})
+        b = _scored("B", {f"s{i}": {"answer_relevance": 0.802} for i in range(15)})
+        result = compare(a, b)
+
+        assert result.deltas[0].test is not None
+        assert result.deltas[0].test.is_significant
+        assert abs(result.deltas[0].delta) < noise_floor("answer_relevance")
+        assert result.deltas[0].winner == "tie"
+
+    def test_the_footnote_names_both_gates(self) -> None:
+        md = self._one_row_moved("context_precision", 0.45, 0.65).as_markdown()
+        assert "Wilcoxon" in md
+        assert "measure_noise_floor.py" in md
+        assert "absence of evidence, not evidence of absence" in md
+
+
+class TestAnUntestableMetricSaysSo:
+    """A delta the paired test could not reach must not render like one it passed."""
+
+    @staticmethod
+    def _unscorable(name: str, aggregate: float) -> EvalResult:
+        """A run that stored an aggregate but no usable per-sample score.
+
+        `applicable=False` on every row: the metric declined each sample, so
+        the mean has no rows under it to pair. Reports from before the
+        three-state vocabulary can look like this.
+        """
+        return EvalResult(
+            pipeline_config=PipelineConfig(name=name),
+            sample_results=[
+                SampleResult(
+                    sample_id=f"s{i}", question="q", generated_answer="a",
+                    retrieved_chunk_ids=["c1"],
+                    metrics=[
+                        MetricScore(
+                            metric_name="faithfulness", score=aggregate, applicable=False
+                        )
+                    ],
+                )
+                for i in range(15)
+            ],
+            aggregate_scores={"faithfulness": aggregate},
+        )
+
+    def test_it_falls_back_to_the_floor_and_names_the_fallback(self) -> None:
+        result = compare(self._unscorable("A", 0.60), self._unscorable("B", 0.90))
+
+        assert result.deltas[0].test is None
+        # The floor alone still decides, because refusing every verdict on an
+        # old report would make the comparator useless against the baselines
+        # already on disk. What it must not do is stay quiet about it.
+        assert result.deltas[0].winner == "B"
+        assert any("could not be tested pairwise" in n for n in result.notes)
+
+    def test_the_table_marks_the_test_as_not_run(self) -> None:
+        md = compare(self._unscorable("A", 0.60), self._unscorable("B", 0.90)).as_markdown()
+        assert "**not run** (no paired rows)" in md
