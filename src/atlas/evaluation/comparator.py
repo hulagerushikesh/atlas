@@ -11,12 +11,18 @@ Design rationale:
     - An overall winner (most metrics improved)
     - A markdown table suitable for a PR description or portfolio README
 
-    Statistical note: with ~30 eval samples, individual metric differences of
-    < 0.02 are within noise — we flag these as "no significant change" to avoid
-    over-claiming. The threshold (0.02) is a pragmatic choice; with larger
-    datasets you'd use a proper significance test (Wilcoxon signed-rank, etc.).
-    The ComparisonResult.is_significant dict makes this explicit rather than
-    burying it in the numbers.
+    Statistical note: a delta smaller than what the same pipeline produces on
+    a rerun is not a result, and how small that is depends on the metric.
+    `_NOISE_FLOORS` carries a measured figure per metric rather than one
+    blanket 0.02, because the blanket value was simultaneously ten times too
+    lax for answer_relevance and three times too tight for answer_correctness
+    — and the tight direction is the one that printed "Overall winner" off
+    0.0565 of noise on 2026-10-19. The floors come from
+    `scripts/measure_noise_floor.py`, which reads them off stored reports for
+    free; re-run it as more reports accumulate. A paired significance test
+    (Wilcoxon signed-rank over the per-sample scores the reports already
+    store) is the better instrument and is filed in BACKLOG — the floors are
+    what the evidence supports today.
 
     We compare aggregate scores (means over all samples) rather than doing
     per-sample paired comparisons, which requires both runs to have covered
@@ -87,7 +93,60 @@ from atlas.cost import estimate_usage_cost
 from atlas.evaluation.reporter import percentile
 from atlas.interfaces.evaluator import EvalResult
 
-_SIGNIFICANCE_THRESHOLD = 0.02   # deltas below this are considered noise
+# How much a metric moves between two runs of the *same* pipeline — the floor a
+# delta has to clear before it is a result rather than a rerun.
+#
+# One number used to serve every metric, and it was wrong in both directions at
+# once. Measured 2026-10-21 by `scripts/measure_noise_floor.py` over the three
+# reports that share a dataset fingerprint, restricted to rows whose retrieved
+# evidence was byte-identical, so the only thing varying is what the pipeline
+# did with the same chunks:
+#
+#     context_precision   0.0000      context_recall     0.0000
+#     faithfulness        0.0000*     answer_relevance   0.0020
+#     answer_correctness  0.0565
+#
+# At 0.02 flat, a real 0.01 shift in answer_relevance was dismissed as noise
+# while 0.0565 of pure noise in answer_correctness printed "Overall winner".
+# That second case is not hypothetical: it is what the 2026-10-19 router run
+# reported before the declined rows were replayed.
+#
+# Where the variance comes from is worth knowing, because it is not where the
+# name suggests. Given byte-identical answer text the judges reproduce exactly
+# — 0.0000 across every paired observation. The movement enters through the
+# *generator* writing a different answer from the same chunks, which
+# answer_correctness then grades in coarse steps (facts present over a handful
+# of facts), so one reworded sentence swings a single row by 0.5.
+#
+# * faithfulness measured 0.0000, but every paired observation was 1.0 against
+#   1.0, so the measurement says nothing about how it behaves off the ceiling.
+#   It is given a judged-metric floor on the assumption that it moves like
+#   answer_correctness, and that assumption should be retired the first time a
+#   run scores it below 1.0.
+_NOISE_FLOORS: dict[str, float] = {
+    # Deterministic given the same corpus: set arithmetic over retrieved ids,
+    # no model in the path. The floor is not noise but resolution — one
+    # sample's smallest real contribution on a 15–16 row set.
+    "context_precision": 0.01,
+    "context_recall": 0.01,
+    # Judged, but the per-row jitter is symmetric and cancels in the mean:
+    # ±0.04 on a row, 0.002 on the aggregate.
+    "answer_relevance": 0.01,
+    # Judged and coarse-grained. 0.0565 measured over three pairs, which is a
+    # thin sample, so the floor carries headroom.
+    "answer_correctness": 0.08,
+    # Assumed, not measured — see the note above.
+    "faithfulness": 0.05,
+}
+
+# A metric with no measured floor. Deliberately the old blanket value: it is
+# the honest thing to say about a number nobody has characterised.
+_DEFAULT_NOISE_FLOOR = 0.02
+
+
+def noise_floor(metric: str) -> float:
+    """The smallest delta in *metric* that is not explained by rerunning."""
+    return _NOISE_FLOORS.get(metric, _DEFAULT_NOISE_FLOOR)
 
 # `runner` records this score for a sample that errored, and leaves it out of
 # the mean. Repeated here rather than imported because this module reads
@@ -258,8 +317,19 @@ class ComparisonResult:
             lines.append(f"**Overall winner: {self.overall_winner}**")
 
         lines.append("")
+        # Per metric, because one number for all of them is what this
+        # replaced. A reader who cannot see which floor applied cannot tell a
+        # tie that means "smaller than rerun noise" from one that means
+        # "smaller than a number somebody picked".
+        floors = ", ".join(
+            f"{d.metric} {noise_floor(d.metric):g}"
+            for d in self.deltas
+            if not d.missing_in
+        )
         lines.append(
-            f"*(ns) = not significant (|delta| < {_SIGNIFICANCE_THRESHOLD})*"
+            f"*(ns) = within this metric's rerun noise. Floors: {floors}. "
+            f"Measured by `scripts/measure_noise_floor.py`; a metric with no "
+            f"measured floor uses {_DEFAULT_NOISE_FLOOR:g}.*"
         )
         for note in self.notes:
             lines.append("")
@@ -718,7 +788,7 @@ def compare(result_a: EvalResult, result_b: EvalResult) -> ComparisonResult:
             paired_n = len(shared)
 
         delta = sb - sa
-        significant = abs(delta) >= _SIGNIFICANCE_THRESHOLD
+        significant = abs(delta) >= noise_floor(metric)
 
         if not significant:
             winner = "tie"

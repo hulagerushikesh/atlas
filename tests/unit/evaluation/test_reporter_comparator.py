@@ -11,9 +11,9 @@ import pytest
 
 from atlas.cost import estimate_usage_cost
 from atlas.evaluation.comparator import (
-    _SIGNIFICANCE_THRESHOLD,
     DatasetMismatch,
     compare,
+    noise_floor,
     save_comparison,
 )
 from atlas.evaluation.dataset import (
@@ -110,7 +110,7 @@ class TestComparator:
         assert delta.delta == pytest.approx(0.2, abs=1e-4)
 
     def test_insignificant_delta_is_tie(self) -> None:
-        tiny = _SIGNIFICANCE_THRESHOLD / 2
+        tiny = noise_floor("faithfulness") / 2
         a = _result("A", {"faithfulness": 0.8})
         b = _result("B", {"faithfulness": 0.8 + tiny})
         comparison = compare(a, b)
@@ -665,7 +665,10 @@ class TestAnswersFingerprint:
             compare(_graded(0.80, answers="before"), _graded(0.85, answers="after"))
 
     def test_the_same_references_compare_fine(self) -> None:
-        assert compare(_graded(0.80), _graded(0.85)).overall_winner == "B"
+        # 0.95, not 0.85: +0.05 sits inside answer_correctness's measured
+        # rerun noise and is correctly a tie now. The subject here is that
+        # the guard lets the comparison through at all.
+        assert compare(_graded(0.80), _graded(0.95)).overall_winner == "B"
 
     def test_a_rewrite_does_not_block_a_precision_comparison(self) -> None:
         """The other four metrics cannot depend on the reference answer, so
@@ -678,7 +681,7 @@ class TestAnswersFingerprint:
     def test_a_report_without_the_field_is_not_refused(self) -> None:
         """Every report written before 2026-09-28 carries an empty one."""
         old = _graded(0.80, answers="")
-        assert compare(old, _graded(0.85)).overall_winner == "B"
+        assert compare(old, _graded(0.95)).overall_winner == "B"
 
 
 # ── The budget: planning/BUDGET.md, enforced by compare() ─────────────────────
@@ -1014,8 +1017,16 @@ class TestPairedMetricComparison:
         assert delta.score_a == pytest.approx(0.60)
         assert delta.score_b == pytest.approx(0.66)
         assert delta.delta == pytest.approx(0.06)
-        assert delta.winner == "B"
         assert delta.paired_n == 2
+        # Sign, not winner. Pairing is what this class is about, and pairing
+        # turns an apparent -0.0733 regression into a +0.06 improvement. The
+        # winner label is a separate judgement: +0.06 is inside
+        # answer_correctness's measured rerun noise of 0.0565, so the
+        # comparator calls it a tie, and that is correct. Before the floors
+        # were measured this asserted "B", which is how a delta smaller than
+        # noise used to win a column.
+        assert delta.delta > 0
+        assert delta.winner == "tie"
 
     def test_the_pairing_is_stated_not_silent(self) -> None:
         a, b = self._runs()
@@ -1184,3 +1195,65 @@ class TestCostPerQueryBudget:
         line = next(d for d in compare(a, b).budget if d.name == "cost per query")
         assert line.value_b == pytest.approx(0.0040, rel=1e-3)
         assert "died partway is excluded" in " ".join(compare(a, b).budget_notes)
+
+
+class TestTheNoiseFloorIsPerMetricAndMeasured:
+    """One blanket 0.02 was wrong in both directions on the same report.
+
+    Measured 2026-10-21 by `scripts/measure_noise_floor.py` over reruns of
+    the same pipeline on identical evidence: answer_relevance moves 0.0020 in
+    the aggregate and answer_correctness moves 0.0565. At a flat 0.02 the
+    first could not win below 0.02 — ten times its real floor — while the
+    second declared "Overall winner: A" off pure rerun movement, which is
+    what the 2026-10-19 router run printed before its declined rows were
+    replayed.
+    """
+
+    def test_an_unmeasured_metric_keeps_the_old_blanket_value(self) -> None:
+        # Honest default: 0.02 is what we can say about a number nobody has
+        # characterised, and silently treating it as precise would be worse.
+        assert noise_floor("some_future_metric") == pytest.approx(0.02)
+
+    def test_the_coarse_judged_metric_has_the_widest_floor(self) -> None:
+        assert noise_floor("answer_correctness") > noise_floor("answer_relevance")
+        assert noise_floor("answer_correctness") > noise_floor("context_recall")
+
+    def test_the_same_delta_is_a_tie_for_one_metric_and_a_win_for_another(self) -> None:
+        # The entire point, in one assertion pair. 0.06 is inside what
+        # answer_correctness does on a rerun and far outside what
+        # answer_relevance does.
+        correctness = compare(
+            _result("A", {"answer_correctness": 0.70}),
+            _result("B", {"answer_correctness": 0.76}),
+        ).deltas[0]
+        relevance = compare(
+            _result("A", {"answer_relevance": 0.70}),
+            _result("B", {"answer_relevance": 0.76}),
+        ).deltas[0]
+        assert correctness.delta == pytest.approx(relevance.delta)
+        assert correctness.winner == "tie"
+        assert relevance.winner == "B"
+
+    def test_every_floor_clears_the_noise_the_script_measured(self) -> None:
+        # Guards the direction that caused the bug. If someone lowers a floor
+        # under the measured figure, noise starts winning columns again.
+        # These are the numbers in `scripts/measure_noise_floor.py`'s output
+        # on the reports committed with this change.
+        measured = {
+            "context_precision": 0.0000,
+            "context_recall": 0.0000,
+            "answer_relevance": 0.0020,
+            "answer_correctness": 0.0565,
+        }
+        for metric, noise in measured.items():
+            assert noise_floor(metric) >= noise, f"{metric} floor is under its measured noise"
+
+    def test_the_report_names_the_floor_it_applied(self) -> None:
+        # A reader who cannot see which floor applied cannot tell "smaller
+        # than rerun noise" from "smaller than a number somebody picked".
+        md = compare(
+            _result("A", {"answer_correctness": 0.70}),
+            _result("B", {"answer_correctness": 0.76}),
+        ).as_markdown()
+        assert "answer_correctness 0.08" in md
+        assert "measure_noise_floor.py" in md

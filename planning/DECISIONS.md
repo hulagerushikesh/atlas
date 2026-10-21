@@ -2302,3 +2302,31 @@ Format: date — decision — alternatives — reason.
   every metric with p50 latency −12.8%. The prediction that was wrong: losing
   decomposition on `fq-013` looked like a recall risk and its precision rose
   0.73 → 0.93 with recall unchanged.
+- **2026-10-21** — The comparator's significance floor is per metric and
+  measured, not one constant for all five. *Alt:* keep 0.02 everywhere; raise
+  it to 0.08 everywhere; run the same dataset twice (≈₹12.6) to measure the
+  spread directly; skip the floors and go straight to a paired Wilcoxon test.
+  *Why:* 0.02 was simultaneously ten times too lax for `answer_relevance`
+  (measured 0.0020) and three times too tight for `answer_correctness`
+  (measured 0.0565), and the tight direction is the one that printed
+  "Overall winner: A" off pure rerun movement on 2026-10-19. Raising it
+  everywhere fixes that case and makes the two deterministic metrics —
+  measured at exactly 0.0000 across every paired observation — unable to
+  report a real change; the same comparison flips `context_precision`
+  +0.0134 from "ns" to a win once its floor reflects that it has no rerun
+  noise. Paying ₹12.6 for repeat runs was unnecessary: reports store
+  per-sample scores and retrieved chunk ids, so rows where two runs retrieved
+  byte-identical evidence are reruns of the same input and the movement
+  between them *is* the floor, for ₹0 and across three pairs at once. The
+  Wilcoxon test is the better instrument and is filed rather than built here,
+  because a floor and a significance test answer different questions — "is
+  this bigger than a rerun" and "is this more than one sample" — and shipping
+  the second inside a commit about the first would make neither reviewable.
+  The measurement corrected the entry that requested it: the judges are
+  deterministic given identical answer text (0.0000 everywhere), and the
+  variance is the *generator* rewording an answer that a coarse
+  facts-present metric then grades half a point differently. `faithfulness`
+  is the one floor that is an assumption rather than a measurement — every
+  paired observation was 1.00 against 1.00 — and the script prints it as
+  **unvaried** rather than deterministic, because a column of zeroes means
+  opposite things in those two cases.
