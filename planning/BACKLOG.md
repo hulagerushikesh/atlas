@@ -724,31 +724,40 @@ Newest at the bottom of each section.
   path the image bakes), but the dense vectors are overwritten in place. A
   full revert is `CHUNK_CONTEXT_HEADERS=false` plus another ~Rs.6.45 ingest.
 
-- **The live site takes ~36 s to answer its first request.** Reported
-  2026-09-29 as "atlas.hulage.in is just loading", and it is real: a cold
-  `/` timed out at 30 s with zero bytes, `/health` then took 6.2 s, and
-  every request after that was fast (`/` 0.43 s, `/app` 0.15 s, all three
-  bundles 200). Nothing is broken — both pages render and the console logs
-  no errors.
+- ~~**The live site takes ~36 s to answer its first request.**~~ **done
+  2026-10-21, Rs.0.** Two parts of the entry were already out of date and
+  the remaining 36 s is now measured rather than attributed.
 
-  Cloud Run `atlas-api` has no `minScale` annotation, so it scales to zero
-  and the container is gone about fifteen minutes after the last visitor.
-  The app itself is not the problem: the startup log puts `atlas_startup` →
-  `atlas_ready` at **2.9 s**. The other ~33 s is everything before Python's
-  first log line — image pull and importing torch and transformers. The
-  image is ~2.15 GB because the reranker weights are baked in, which was the
-  right call for query latency and is what makes the first boot slow.
+  **Stale:** "Cloud Scheduler is not enabled on the project yet" — the
+  `atlas-keepwarm` job (`*/10` against `/health`) has existed since
+  2026-09-29, is ENABLED, and the scheduler log shows an unbroken run of
+  HTTP 200s. Cloud Run recorded three container starts in two days, all
+  deploys, none from scaling to zero. A normal visitor has not paid a cold
+  start for weeks. "~2.15 GB" was the uncompressed size; what Cloud Run
+  actually pulls is **554.6 MB** compressed.
 
-  Options, and neither is mine to run:
-    - `--min-instances=1`: removes the cold start entirely. Idle billing on
-      1 vCPU + 2 GiB is roughly **Rs.650-700/month**, standing, which is a
-      lot for a portfolio site.
-    - A ping every ~10 minutes to keep one instance warm. Cloud Run bills
-      CPU only during requests, so ~4,300 pings/month of a few hundred ms
-      sits inside the free tier — call it **Rs.0-20/month**. Cloud Scheduler
-      is not enabled on the project yet. This is the cheap answer.
-  Doing nothing is also defensible for a demo, as long as the README says
-  the first load is slow instead of leaving a visitor watching a spinner.
+  **Still real, and measured on rev `atlas-api-00017-x5r`:** instance start
+  → Python's first log line **33.9 s**, then 2.9 s of startup, **36.9 s**
+  total. That 33.9 s was one opaque block, so the entry had to guess what
+  was in it. It is now split by `atlas_boot_profile`, printed from
+  `atlas.api.asgi`, and measured in-container with the image already local:
+  **12.41 s of it was the import graph**, leaving roughly 21 s of pull. The
+  imports were a third of the problem and nobody knew.
+
+  **Fixed, both halves:**
+    - `LazyCrossEncoderReranker` defers torch, transformers and
+      sentence-transformers until something reranks, and the lifespan warms
+      the model behind the bound port. Only `/query` needs it; the landing
+      page and the console never did. In-container import cost **12.41 s →
+      2.55 s**, with the model finishing 8.1 s later in the background.
+    - The final `chown -R atlasuser /app /opt/hf` was **81.9 MB of the
+      554.6 MB image**: chown rewrites every inode, so the whole baked-
+      weights tree shipped twice. Ownership is now set as files are created
+      and that layer is gone — 73.7 kB and 20.5 kB in its place.
+
+  Expected next cold start ~26 s rather than 36.9 s, confirmed or refuted by
+  `atlas_boot_profile` on the next deploy. `--min-instances=1` stays
+  rejected at Rs.650-700/month standing for a portfolio site.
 
 - ~~**Re-check Artifact Registry size.**~~ **Checked 2026-09-29, Rs.0: 2,196
   MB**, down from 4,342 MB. The cleanup policy is doing its job — `keep

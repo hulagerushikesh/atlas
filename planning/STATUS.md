@@ -129,7 +129,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **739 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **752 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00017-x5r**, image `bda328e`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10`; budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -415,6 +415,37 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-21 (cold start; **₹0**) — the 36.9 s cold start was attributed,
+  never measured, and the attribution was a third wrong. Two parts of the
+  BACKLOG entry were also simply stale: `atlas-keepwarm` (`*/10` → `/health`)
+  has been ENABLED since 2026-09-29 with an unbroken run of 200s, and Cloud
+  Run logged three container starts in two days, all deploys, none from
+  scaling to zero — **no ordinary visitor has paid a cold start for weeks**.
+  "~2.15 GB" was the uncompressed size; the pull is **554.6 MB**.
+
+  `atlas_boot_profile` now splits the block Cloud Run reports as one. The
+  timestamp lives in `atlas/__init__.py`, not `asgi.py`, because
+  `atlas.api.__init__` imports `create_app` eagerly — the first attempt
+  timed from `asgi.py` and reported **0.00 s** for the import it existed to
+  measure. Split, in-container with the image already local: ~21 s image
+  pull and **12.41 s of imports**.
+
+  Both halves fixed. `LazyCrossEncoderReranker` defers torch, transformers
+  and sentence-transformers until something reranks and warms the model
+  behind the bound port — **12.41 s → 2.55 s**, model arriving 8.1 s later
+  in the background, landing page served in 7 ms meanwhile. A query that
+  arrives early waits rather than being answered with the fused order and
+  no sign the reranker was missing. And the trailing `chown -R` was
+  **81.9 MB of the 554.6 MB image** — chown rewrites every inode, so the
+  baked-weights tree shipped twice; ownership is set at creation now and
+  that layer is gone. Verified by building and running the image locally,
+  not by reasoning about the Dockerfile.
+
+  **752 tests at 93.48%**, gate green, `static/` untouched. BACKLOG: one
+  closed, open drops to **2**. **Needs a deploy** to take effect, and the
+  next cold start's `atlas_boot_profile` line is what confirms or refutes
+  the expected ~26 s.
 
 - 2026-10-21 (paired Wilcoxon test; **₹0**) — a metric delta now has to clear
   two gates to be called a result: its measured rerun floor **and** an exact
