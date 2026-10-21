@@ -131,7 +131,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **761 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00018-zfc**, image `f7ac05c`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` (retarget to `/warm`, see 2026-10-21); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00020-pcg**, image `e2ea083`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -456,10 +456,12 @@ daily spend cap, console markdown.
   And the background warm **does not run on Cloud Run**: the service uses
   default request-scoped CPU allocation, so a thread loading the model
   between requests is frozen the moment a response is sent — three requests
-  in 4.6 minutes and no `reranker_loaded_lazily`, for an 8.08 s load.
-  `POST /warm` does it inside a request instead, with `atlas-keepwarm`
-  retargeted from `/health` to `/warm`; separate from `/health` because a
-  twenty-second health check once per cold start trips alarms.
+  in 4.6 minutes and no `reranker_loaded_lazily`. `POST /warm` does it
+  inside a request instead, with `atlas-keepwarm` retargeted from `/health`
+  to `/warm`; separate from `/health` because a health check that blocks
+  once per cold start trips alarms. (The 8.08 s I quoted for that load was
+  a local container on a laptop; on Cloud Run's one vCPU it is ~37 s — see
+  the 2026-10-21 verification entry.)
 
   **And `/warm` shipped behind the auth middleware.** Rev
   `atlas-api-00019-qrn` answered `atlas-keepwarm`'s own unauthenticated URL
@@ -473,8 +475,33 @@ daily spend cap, console markdown.
   14.1 s after**.
 
   **761 tests at 93.68%**, gate green, `static/` untouched. BACKLOG: one
-  closed, open drops to **2**. Needs one more deploy plus the scheduler
-  retarget for `/warm` to take effect.
+  closed, open drops to **2**.
+
+- 2026-10-21 (verifying `/warm` in production; **₹0**) — `atlas-api-00020-pcg`
+  answers `POST /warm` with `{"reranker":"loaded","was_already_loaded":false,
+  "seconds":37.04}` instead of 401, and every call after it returns in
+  0.15–0.40 s. `atlas-keepwarm` is ENABLED, `*/10`, already on `/warm`. The
+  cold-start fix is live end to end.
+
+  **The 37.04 s is the part worth keeping.** `startup-cpu-boost` is `true`
+  on this service and the container has **one vCPU**, and the boost only
+  applies while the instance is *starting* — so moving the model load off
+  the startup path also moved it out of the boost. The load costs ~37 s in a
+  request against the ~25 s it cost inside the old 36.9 s eager start. The
+  landing page is up in 11 s either way, which is the trade `/warm` exists
+  to make, but **an instance that takes a `/query` before anything warms it
+  now waits longer than it used to**: ~11 s boot + up to ~37 s load against
+  a flat ~37 s before. The keep-warm covers the steady state; it does not
+  cover a second instance spun up by a burst (`maxScale: 2`,
+  `containerConcurrency: 8`).
+
+  Logs also corrected a claim I had written into the code. `reranker_loaded_lazily`
+  reported **54.1 s** while the handler reported 37.04 s, because the lifespan
+  background task had started the load 17 s earlier and got nowhere until my
+  request woke the instance. So the background warm is not inert on Cloud
+  Run — it is a head start that cannot cash in without traffic. The comments
+  in `app.py` and `health.py` said "never completes"; they now say what was
+  measured.
 
 - 2026-10-21 (paired Wilcoxon test; **₹0**) — a metric delta now has to clear
   two gates to be called a result: its measured rerun floor **and** an exact

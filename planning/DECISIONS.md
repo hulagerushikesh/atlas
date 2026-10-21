@@ -2411,3 +2411,23 @@ Format: date — decision — alternatives — reason.
   the duplicated 81.9 MB layer remains correct and is still worth keeping;
   it is simply not where the time was, and the honest reading is that
   deferring the import did essentially all of 36.9 s → 11.7 s.
+- **2026-10-21** — Keep the model load in a request on one vCPU, and accept
+  that it costs ~37 s there, rather than raising `--cpu` or moving the load
+  back under `startup-cpu-boost`. *Alt:* `--cpu=2` (the load roughly halves);
+  a Cloud Run startup probe on `/warm`, which would run the load inside the
+  boost window; revert to the eager import. *Why:* this is the first entry
+  here written against a number from production rather than a laptop. Rev
+  `atlas-api-00020-pcg` blocked 37.04 s on the first `/warm`, not the 8.08 s
+  quoted when `/warm` was designed, because `startup-cpu-boost: 'true'`
+  applies only while an instance is *starting* — a load moved off the
+  startup path is a load that no longer gets the boost, and this container
+  has `cpu: '1'`. So the cold start did not simply get smaller; it changed
+  shape. The landing page went 36.9 s → 11 s, and the worst case — an
+  instance taking a `/query` before anything has warmed it — went from a
+  flat ~37 s to ~11 s + up to ~37 s. That worst case is worth accepting
+  only because `atlas-keepwarm` fires every ten minutes on `/warm`, so it
+  needs a burst past one instance to happen at all (`maxScale: 2`). A
+  startup probe is the tidier fix on paper and is rejected because it puts
+  the whole load back in front of the port binding, which is the thing the
+  11 s bought. `--cpu=2` is the real option if a `/query` is ever seen
+  waiting; it is a billing change and so the user's call, not mine.
