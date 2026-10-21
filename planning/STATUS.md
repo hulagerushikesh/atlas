@@ -71,8 +71,11 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
       rejected.**
 
 - [x] ~~**Keep-warm ping for the cold start**~~ **done 2026-10-07.** Job
-      `atlas-keepwarm`, `*/10 * * * *` against `/health`, created and
-      verified firing. Chosen 2026-09-29 over `min-instances=1`
+      `atlas-keepwarm`, `*/10 * * * *`, created and verified firing.
+      Retargeted from `/health` to `/warm` 2026-10-21, with
+      `--attempt-deadline=120s`; the recreate command is in
+      `docs/deploy.md` because the job is hand-made and the gcloud default
+      deadline is 60 s, which is under the load it has to wait for. Chosen 2026-09-29 over `min-instances=1`
       (Rs.650-700/month) at roughly Rs.0-20/month: the service has no
       `cpu-throttling: false` annotation, so an idle instance is not billed
       for CPU and the ping costs only the requests. The cold path it hides

@@ -113,10 +113,20 @@ for the same reason.
 
 Cold is excluded from the warm p95 because mixing them makes the headline
 number a function of traffic rather than of the code. It gets its own ceiling
-and one condition: **`atlas-keepwarm` stays ENABLED**. The `*/10` schedule is
-what makes cold rare rather than typical. If that job is ever deleted, the
-60,000 ms line is not a budget, it is the normal user experience, and this
-section has to be rewritten rather than quietly inherited.
+and one condition: **`atlas-keepwarm` stays ENABLED, on `/warm`, with an
+attempt deadline above the model load**. The `*/10` schedule is what makes
+cold rare rather than typical. If that job is ever deleted, the 60,000 ms
+line is not a budget, it is the normal user experience, and this section has
+to be rewritten rather than quietly inherited.
+
+The deadline is part of the condition as of 2026-10-21 and was not before.
+The job pinged `/health`, which answers in about a second, so the gcloud
+default `attemptDeadline` of 60 s was never near anything. It now pings
+`/warm`, which loads the cross-encoder and measured **37.0 s in-handler and
+54.1 s wall** on `atlas-api-00020-pcg` — so the default would have been a
+60 s budget for a 54 s job, failing first on exactly the cold instance the
+job exists for. Set to **120 s**, matching the service's own
+`timeoutSeconds`, so the scheduler gives up no earlier than Cloud Run does.
 
 ## Regression rule
 
