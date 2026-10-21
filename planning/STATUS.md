@@ -129,7 +129,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **758 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **761 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00018-zfc**, image `f7ac05c`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` (retarget to `/warm`, see 2026-10-21); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -461,7 +461,18 @@ daily spend cap, console markdown.
   retargeted from `/health` to `/warm`; separate from `/health` because a
   twenty-second health check once per cold start trips alarms.
 
-  **758 tests at 93.50%**, gate green, `static/` untouched. BACKLOG: one
+  **And `/warm` shipped behind the auth middleware.** Rev
+  `atlas-api-00019-qrn` answered `atlas-keepwarm`'s own unauthenticated URL
+  with **401** — an endpoint written to fix a cold start, unreachable by the
+  one caller it exists for. Nothing in the suite caught it because nothing
+  asserted which paths the middleware lets through; it does now. `/warm` is
+  public for the same reason `/health` is, and it cannot spend: it makes no
+  model calls and every call after the first returns immediately.
+
+  Cold start across three measured starts: **36.9 s before, 11.7 s and
+  14.1 s after**.
+
+  **761 tests at 93.68%**, gate green, `static/` untouched. BACKLOG: one
   closed, open drops to **2**. Needs one more deploy plus the scheduler
   retarget for `/warm` to take effect.
 
