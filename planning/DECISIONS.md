@@ -2574,3 +2574,30 @@ Format: date — decision — alternatives — reason.
   query charges the spend cap and increments none of the three usage
   counters, and `log_usage` is fired with `asyncio.create_task` so a record
   can be lost to scale-in.
+
+- **2026-10-22** — **The per-query cost log was verified in production, not
+  just in tests, and the whole accounting chain agreed.** Shipped in
+  `87caf12`, deployed as `atlas-api-00025-bnj` (build `ceee4593`, 2m34s).
+  *Alt:* trust the two mutation-verified unit tests and let the first real
+  user query be the first run. *Why not:* the fields exist so that a p95
+  can be computed from them later, and a field that is silently wrong is
+  worse than a missing one — a mean computed from bad rows reads as a
+  measurement. One query, ₹0.20, approved before spending.
+
+  | source | prompt | completion | cost |
+  |---|---|---|---|
+  | response body | 6911 | 1095 | $0.00336865 |
+  | `query_complete` log line | 6911 | 1095 | $0.00336865 |
+  | Firestore spend delta | — | — | $0.003369 |
+
+  Three independent paths — the body the caller sees, the line Cloud Logging
+  stores, and the counter the daily cap enforces — agree to six significant
+  figures. That checks more than the new log fields: it is the first
+  end-to-end confirmation that what a caller is told, what is recorded, and
+  what is charged are the same number.
+
+  Side effect worth keeping: that query is the **second-dearest of the 35**
+  ever recorded ($0.0033686 against $0.0034677), both from long answers. The
+  expensive end of the distribution is a repeatable region, not one odd
+  draw, which is the part the n=1 figure could not establish. Counters now
+  read n=35, mean **$0.0022882 ≈ ₹0.201**, headroom +119%.
