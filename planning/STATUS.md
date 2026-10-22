@@ -134,7 +134,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **761 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00020-pcg**, image `e2ea083`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00023-486**, image `e2ea083`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -479,6 +479,39 @@ daily spend cap, console markdown.
 
   **761 tests at 93.68%**, gate green, `static/` untouched. BACKLOG: one
   closed, open drops to **2**.
+
+- 2026-10-22 (does a second vCPU help the cold start? **no**; ~Rs.2.2) —
+  measured instead of assumed, with `atlas-keepwarm` paused so nothing
+  could warm an instance behind the test, and reverted afterwards.
+
+  | | cpu=1 (`00021-pk7`) | cpu=2 (`00022-snb`) |
+  |---|---|---|
+  | `atlas_imports_and_app` | 10.24 s | 9.72 s |
+  | `reranker_loaded_lazily` | **43.38 s** | **43.49 s** |
+  | unwarmed `/query` | 48.82 s | 46.29 s |
+  | warm `/query` | 12.07, 10.15 s | 8.77, 10.11, 9.12 s |
+
+  The model load moved **0.11 s** — it is a sequential torch import and a
+  weight load, so a second core has nothing to do — while doubling the
+  billing rate on every request-second. The warm column looks better at
+  cpu=2 and is not evidence: n is two and three, the ranges overlap, and
+  the Gemini call dominates. **Reverted to `cpu: '1'`**, probe env var
+  removed, live config byte-for-byte what it was before.
+
+  **The second-instance case stopped being hypothetical.** Rev
+  `atlas-api-00023-486` logged `reranker_loaded_lazily` twice — 39.68 s for
+  the instance `/warm` reached and **49.76 s** on a second instance Cloud
+  Run started by itself, under four sequential requests. A real `/query`
+  took **44.6 s** against it. The keep-warm warms one instance; it cannot
+  warm the one that does not exist yet. See DECISIONS 2026-10-22 for the
+  startup-probe option that would fix it and why it is not taken yet.
+
+  Two caches also showed themselves: the first two queries of a batch
+  returned in **0.13 s and 0.11 s** because they repeated earlier
+  questions, which is the cache working and would have been read as a
+  cpu=2 win if I had not noticed the questions were duplicates.
+
+  Spend for the whole experiment: **$0.0256** of the $0.60 daily budget.
 
 - 2026-10-21 (verifying `/warm` in production; **₹0**) — `atlas-api-00020-pcg`
   answers `POST /warm` with `{"reranker":"loaded","was_already_loaded":false,
