@@ -2471,3 +2471,32 @@ Format: date — decision — alternatives — reason.
   11 s landing page is the thing this whole line of work bought; it is the
   first thing to try if a 44 s query is ever seen by a real user rather
   than by a test. `--min-instances=1` remains rejected at Rs.650-700/month.
+- **2026-10-22** — Add a Cloud Run startup probe on `/warm`, reversing the
+  "not taken yet" in the entry above. *Alt:* leave the default TCP probe
+  and rely on `atlas-keepwarm`; `--min-instances=1` (Rs.650-700/month).
+  *Why:* the default probe marks an instance ready as soon as uvicorn
+  binds, about 11 s, with 43 s of model still to come — so readiness meant
+  "can accept a request", not "can answer one". The probe makes those the
+  same thing. Measured on `atlas-api-00024-5ht`: first `/query` against a
+  freshly deployed revision **48.82 s → 12.21 s**, with
+  `reranker_loaded_lazily 38.08` inside startup instead of inside a
+  request.
+
+  A 12-query burst then forced the scale-up case that motivated this. The
+  second instance took five requests, logged **exactly one** load (34.81 s)
+  during startup, and completed all five only afterwards — so no query ran
+  against an unloaded model, which was the defect. Being honest about what
+  that buys: those five requests were routed to the instance the moment it
+  was created and waited 66-116 s anyway. For a request that *arrives*
+  during a scale-up, waiting for a probe to load the model and paying the
+  load inside the request are close to the same wall clock. The win is on
+  the deploy path, where it is large and measured, and in the elimination
+  of a half-ready state; it is not a latency win for the first requests of
+  a burst, and this entry should not be read as claiming one.
+
+  *Cost:* revision readiness 15-20 s → **73 s**, paid on every deploy and
+  every scale-up. The case to watch is **scale to zero**, where a visitor
+  would now wait ~73 s for the landing page against the 11 s the lazy
+  loading bought. `atlas-keepwarm` is what prevents that, so the probe
+  makes that job load-bearing for a second, independent reason — if it is
+  ever disabled, the probe must come off with it.

@@ -284,3 +284,52 @@ gcloud scheduler jobs describe atlas-keepwarm --location=asia-south1 --project=a
 ```
 
 Expected: `ENABLED  120s  https://atlas-api-cde2q3b7lq-el.a.run.app/warm`.
+
+## The startup probe
+
+`scripts/deploy_gcp.sh` sets a Cloud Run startup probe on `/warm`:
+
+```
+--startup-probe "httpGet.path=/warm,httpGet.port=8080,periodSeconds=10,
+                 timeoutSeconds=10,failureThreshold=20,initialDelaySeconds=0"
+```
+
+An instance is not routed traffic until that probe succeeds, which means
+it is not routed traffic until the cross-encoder is loaded. Cloud Run's
+default is a TCP check on the port, so before this an instance was ready
+the moment uvicorn bound — about 11 s — with 43 s of model still to come,
+charged to whichever request arrived first. Measured on
+`atlas-api-00024-5ht`: the first `/query` against a freshly deployed
+revision went from **48.82 s to 12.21 s**, and the startup log shows
+`reranker_loaded_lazily 38.08` happening inside startup rather than inside
+a request.
+
+The shape of the settings follows from `timeoutSeconds <= periodSeconds`.
+A probe that waits long enough for a 43 s load in one attempt would also
+have to wait that long before its *first* attempt, so instead this polls
+every 10 s and lets attempts fail: the early ones get connection-refused
+while uvicorn binds, the next ones call `/warm` and time out while the
+load runs behind them, and the first one that lands after the model is in
+returns immediately and the instance goes ready. `failureThreshold=20`
+gives a 200 s budget against the ~53 s actually needed.
+
+**`/warm` must keep answering 200 when the model fails to load.** It
+reports the failure in the body (`{"reranker": "failed"}`) and not in the
+status, deliberately. An error status here does not degrade the service —
+the instance never becomes ready, and with `--max-instances 2` that is the
+whole service. `tests/unit/api/test_warm_endpoint.py` pins this in
+`TestTheStartupProbeCannotBrickAnInstance`; before the probe existed
+nothing did, and a change to 503-on-failure would have shipped green.
+
+### What it costs
+
+Revision readiness went from roughly 15-20 s to **73 s**. That is paid on
+every deploy, and on every scale-up: a second instance now takes ~73 s to
+start carrying load instead of ~15 s.
+
+The case to watch is **scale to zero**. With the probe, a visitor arriving
+at a service with no running instance waits for the model before seeing
+the landing page — about 73 s, against the 11 s the lazy loading bought.
+`atlas-keepwarm` every ten minutes is what keeps that from happening, so
+the probe makes that job load-bearing for a second reason. If the job is
+ever disabled, disable the probe with it.
