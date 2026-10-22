@@ -2500,3 +2500,35 @@ Format: date — decision — alternatives — reason.
   loading bought. `atlas-keepwarm` is what prevents that, so the probe
   makes that job load-bearing for a second, independent reason — if it is
   ever disabled, the probe must come off with it.
+
+- **2026-10-22** — **The STATUS "AR/AC contradiction" was a mislabelling, not
+  two disagreeing measurements. Both figures kept; the stale pointer fixed.**
+  BACKLOG filed it on 2026-10-22 as "both are presented as current and they
+  cannot both be," and prescribed deleting whichever is stale. Checking the
+  stored reports says neither is:
+
+  | report | rows | fingerprint | AR | AC |
+  |---|---|---|---|---|
+  | `correctness-first_20260928-211522.json` | 15 | `486ff3dab9b597b5` | 0.8276 | 0.7440 |
+  | `baseline-16_20261003-182853.json` | 16 | `80c1a625bc7b7533` | 0.8377 | 0.7105 |
+
+  Different datasets, so the comparator would refuse to diff them and is
+  right to. Context precision 0.4667, context recall 0.9378 and faithfulness
+  1.0000 are identical to four decimals in both — `fq-016` is inapplicable to
+  the context metrics and the pipeline did not refuse it — which is exactly
+  why the two sets read as interchangeable and the difference in the other
+  two read as a contradiction.
+
+  The one real defect was next to them: the Evaluation (D) evidence cell
+  quoted the 16-row numbers and then cited
+  `eval_data/reports/ctx-headers_20260927-120939.json`, a retrieval-only
+  report from six days earlier that contains none of them. Fixed to
+  `baseline-16_20261003-182853.json`.
+
+  *Alt:* delete the 15-row column, as the backlog item suggested. *Why not:*
+  it is the only record of the first correctness run and of the progression
+  the whole section exists to show, and DECISIONS 2026-09-28 and README both
+  cite 0.7440 by that date. Deleting a correct measurement to remove an
+  ambiguity about which one is current trades a real loss for a labelling
+  fix. The two cells now carry a ‡ naming their report, their row count and
+  the current replacement.

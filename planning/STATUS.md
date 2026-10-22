@@ -128,7 +128,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Ingestion (A) | Done, **proven idempotent live** (uuid5 ids, skip-before-embed) | 6c52438; 155 docs / 4,021 chunks, re-run 0.3 s |
 | Hybrid retrieval (B) | Done, dense path proven against real Qdrant local mode | `tests/integration/test_qdrant_roundtrip.py` (90b3432) |
 | Orchestration (C) | Done; evidence provenance + per-stage timings exposed | f17a28e |
-| Evaluation (D) | **Run live x16.** Current baseline (`default`, 16 rows, 2026-10-03): P 0.4667 - R 0.9378 - F 1.000 - AR 0.8377 - **AC 0.7105**, $0.0709 (~Rs.6.24) a run, all on `gemini-3.1-flash-lite`. The `default` namespace is **not** behind any more — context headers are live in it (4016/4020 chunks, verified 2026-10-07), which is why this run reproduces the old `headers` experiment's precision exactly. Context metrics skip a row only when it has no relevant document: `fq-016`, added 2026-09-29, is the first declared out-of-scope row, so the `applicable=False` guards are reachable again. The dataset is checked before a run is paid for (`atlas.evaluation.dataset`): every label must resolve to something the matcher could match, and an empty label set must carry `metadata.out_of_scope: true`. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/ctx-headers_20260927-120939.json` |
+| Evaluation (D) | **Run live x16.** Current baseline (`default`, 16 rows, 2026-10-03): P 0.4667 - R 0.9378 - F 1.000 - AR 0.8377 - **AC 0.7105**, $0.0709 (~Rs.6.24) a run, all on `gemini-3.1-flash-lite`. The `default` namespace is **not** behind any more — context headers are live in it (4016/4020 chunks, verified 2026-10-07), which is why this run reproduces the old `headers` experiment's precision exactly. Context metrics skip a row only when it has no relevant document: `fq-016`, added 2026-09-29, is the first declared out-of-scope row, so the `applicable=False` guards are reachable again. The dataset is checked before a run is paid for (`atlas.evaluation.dataset`): every label must resolve to something the matcher could match, and an empty label set must carry `metadata.out_of_scope: true`. Reports carry per-stage p50/p95 and the model that served the run. **The retrieval-only harness has mispredicted four times running** - no grader, no retry, no decomposition; use it only to ask whether a document is reachable at all | `eval_data/reports/baseline-16_20261003-182853.json` |
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
@@ -167,8 +167,8 @@ against any label set for Rs.0 — so no run was repeated to produce this.
 | Context precision | 0.3733 | 0.3477 | 0.3867 | 0.4667 | 0.4667 | **0.4667** |
 | Context recall | 0.9244 | 0.9333 | 0.9333 | 0.9378 | 0.9378 | **0.9378** |
 | Faithfulness | 1.0000 | 1.0000 | 1.0000 | 1.0000 | 1.0000 | **1.0000** |
-| Answer relevance | 0.8277 | 0.8253 | 0.8271 | 0.8328 | 0.8347 | **0.8276** |
-| **Answer correctness** | — | — | — | — | — | **0.7440** |
+| Answer relevance | 0.8277 | 0.8253 | 0.8271 | 0.8328 | 0.8347 | **0.8276** ‡ |
+| **Answer correctness** | — | — | — | — | — | **0.7440** ‡ |
 | Tokens / eval | 37,599 † | 44,224 † | 35,928 † | 39,461 † | 39,319 † | **167,740** |
 | Cost / eval | ~Rs.0.73 † | ~Rs.0.86 † | ~Rs.0.70 † | ~Rs.0.77 † | ~Rs.0.77 † | **~Rs.5.92** |
 | Latency p50 | 15.0 s | 11.0 s | 10.0 s | 9.7 s | 10.3 s | **10.8 s** |
@@ -182,6 +182,16 @@ available check on the replay method: an offline recomputation predicted
 `+ headers` column was earned without spending anything, and now it is
 confirmed. It is also the first report to carry a dataset fingerprint, so
 every future comparison against it is checked rather than assumed.
+
+‡ **Fifteen rows — not the current figure for these two metrics.**
+`correctness-first_20260928-211522.json`, dataset fingerprint
+`486ff3dab9b597b5`. Answer relevance and answer correctness are the only
+metrics `fq-016` moves, and the 16-row baseline below reads AR **0.8377** /
+AC **0.7105** (`baseline-16_20261003-182853.json`, fingerprint
+`80c1a625bc7b7533`). Precision 0.4667, recall 0.9378 and faithfulness 1.0000
+are identical to four decimals in both reports, which is why only these two
+cells carry the mark. Quote 0.8276 / 0.7440 as history, 0.8377 / 0.7105 as
+current.
 
 The `+ correctness` column is the same pipeline again
 (`correctness-first_20260928-211522.json`), with the fifth metric added and
@@ -418,6 +428,24 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-22 (AR/AC labelling; **₹0**) — the BACKLOG item saying STATUS
+  contradicts itself on answer relevance and correctness was **wrong about
+  the kind of problem**, and acting on its prescription would have destroyed
+  a real measurement. 0.8276 / 0.7440 is `correctness-first_20260928-211522`
+  over fifteen rows; 0.8377 / 0.7105 is `baseline-16_20261003-182853` over
+  sixteen. Different dataset fingerprints, so neither is stale and the
+  comparator refuses to diff them. They read as interchangeable because the
+  other three metrics — 0.4667 / 0.9378 / 1.0000 — are identical to four
+  decimals in both reports, `fq-016` being inapplicable to the context
+  metrics and not refused by the pipeline.
+
+  The defect sitting beside them was real: the Evaluation (D) evidence cell
+  quoted the 16-row figures and cited `ctx-headers_20260927-120939.json`, a
+  retrieval-only report from six days earlier that contains none of them.
+  Both AR and AC cells in the progression table now carry a ‡ naming their
+  report, row count, fingerprint and current replacement; the evidence cell
+  points at the baseline it quotes. See DECISIONS 2026-10-22.
 
 - 2026-10-21 (cold start; **₹0**) — the 36.9 s cold start was attributed,
   never measured, and the attribution was a third wrong. Two parts of the
