@@ -939,12 +939,23 @@ Newest at the bottom of each section.
   can describe each one instead of falling back to the generic sentence for all
   but one. `ROUTER_DOMAIN_NAMESPACE` (2026-10-13) is the one-corpus version.
 
-- **`cost / query` is still n=1.** BUDGET.md names it the weakest number in
-  the file: one production query with a 1,178-token answer, likely toward the
-  expensive end. The resume therefore cites the enforced **$0.005 ceiling**
-  rather than the measured $0.0034677. Firming it up is free — record
-  `token_usage` per sample on the next eval run that happens anyway and
-  recompute from n=16.
+- **A streamed query is invisible to every usage counter except the spend
+  cap.** The standard `/query` path increments `log_usage` (the Firestore
+  per-key counters), `COST_USD` and `TOKEN_USAGE`; the streaming path at
+  `query.py:250` charges `spend.add()` and none of the other three. So a
+  streamed query is correctly capped and then absent from `/metrics`, from
+  the per-key usage stats, and from any cost-per-query computed off them.
+  Found 2026-10-22 while measuring `cost / query`: exactly one streamed
+  query exists in 90 days, so the n=34 mean is over 34 of 35 and the error
+  is negligible *today* — the console is the streaming client, so that stops
+  being true as soon as anyone uses it. The spend cap being right is why
+  this never showed up as money going missing.
+- **`log_usage` is fire-and-forget, so a count can be lost.** Both call sites
+  wrap it in `asyncio.create_task` to keep it off the response path
+  (`query.py:474`, `query.py:522`). An instance torn down in that window
+  drops the record. Cloud Run scale-in during a burst is exactly when this
+  happens and exactly when the queries are most worth counting. Only matters
+  now that these counters are load-bearing for BUDGET.
 
 ## Nice to have
 

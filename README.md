@@ -188,7 +188,7 @@ answer came back with faithfulness 1.0 and citations resolving to the file from
 step 5.
 
 ```bash
-make test       # 764 tests. Works before step 4: the dataset guards resolve
+make test       # 766 tests. Works before step 4: the dataset guards resolve
                 # their labels from data/corpus/fastapi.files.json, so a clean
                 # clone checks them with no corpus and no network.
 make help       # every target, with a one-line description

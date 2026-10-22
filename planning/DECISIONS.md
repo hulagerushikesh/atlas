@@ -2532,3 +2532,45 @@ Format: date — decision — alternatives — reason.
   ambiguity about which one is current trades a real loss for a labelling
   fix. The two cells now carry a ‡ naming their report, their row count and
   the current replacement.
+
+- **2026-10-22** — **`cost / query` firmed from n=1 to n=34 for ₹0, from a
+  counter that had been running all along.** BUDGET's "weakest number"
+  section had a plan: record `token_usage` per sample on the next eval run
+  and recompute from n=16. *Alt (taken):* read `FirestoreKeyStore`'s
+  per-key `usage` counters instead. *Why:* the eval run is the wrong
+  population. A sample in an eval run pays for two LLM judges that a
+  production query never calls, so its per-sample cost answers a different
+  question and would have overstated `cost / query` while appearing to
+  settle it. The production counters
+  (`usage.{total_queries,cache_hits,prompt_tokens,completion_tokens}`) have
+  accumulated on each key document since the store shipped, across
+  instances and across restarts, and nothing had ever read them.
+
+  37 queries recorded, 3 cache hits, so **n=34 paid**: 187,281 prompt and
+  19,931 completion tokens, **$0.0022564 ≈ ₹0.199 a query**. The n=1 figure
+  of $0.0034677 was **1.54x the mean** — BUDGET had already guessed the
+  direction ("likely toward the expensive end") and was roughly right about
+  the size. Nothing about the budget changes: headroom under the $0.005
+  ceiling widens from +44% to +122%.
+
+  Cross-check before trusting it: the live instance's `/metrics` prices its
+  own token counters at exactly `atlas_estimated_cost_usd_total`
+  ($0.02439070, agreeing to ten decimal places), which says `COST_USD` and
+  `TOKEN_USAGE` cover the same request set and that the pricing table
+  applied here is the one production actually uses.
+
+  **What was not obtained is the distribution.** Firestore stores sums, not
+  rows, so a per-query ceiling is now being judged against a mean, which is
+  the weaker comparison. Four independent slices bound the spread —
+  $0.000474 (`demo` key, n=2), $0.0020125 (n=26, by subtraction),
+  $0.0030488 (the live instance, n=8, exact), $0.0034677 (n=1) — 6.4x
+  between the extremes and all four under the ceiling. `query_complete` now
+  logs `prompt_tokens`, `completion_tokens` and `cost_usd` so the next few
+  dozen production queries yield a real p95 from Cloud Logging for nothing;
+  three mutations of those fields were each confirmed to fail the new tests.
+
+  Two accounting gaps surfaced and are filed rather than fixed, because
+  both are in paths that cannot be exercised without spending: a **streamed**
+  query charges the spend cap and increments none of the three usage
+  counters, and `log_usage` is fired with `asyncio.create_task` so a record
+  can be lost to scale-in.

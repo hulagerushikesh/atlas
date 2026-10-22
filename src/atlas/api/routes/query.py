@@ -528,11 +528,21 @@ async def query(
             cache_hit=False,
         ))
 
+    # Tokens and cost are logged here, not only returned in the body and
+    # summed into counters, because a sum cannot be turned back into a
+    # distribution. On 2026-10-22 `cost / query` had to be answered from the
+    # Firestore counters, which store totals: that gives a mean over n=34 and
+    # no p95 at all, while the ceiling it is judged against is a per-query
+    # one. One line per query in Cloud Logging is what makes the percentile
+    # recoverable later without paying for the queries again.
     log.info(
         "query_complete",
         classification=result.classification,
         chunks=len(result.retrieved_chunks),
         faithful=result.is_faithful,
         total_ms=timings.total_ms,
+        prompt_tokens=response.token_usage.prompt_tokens,
+        completion_tokens=response.token_usage.completion_tokens,
+        cost_usd=response.token_usage.estimated_cost_usd,
     )
     return response
