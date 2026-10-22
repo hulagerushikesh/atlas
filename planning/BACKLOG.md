@@ -939,6 +939,22 @@ Newest at the bottom of each section.
   can describe each one instead of falling back to the generic sentence for all
   but one. `ROUTER_DOMAIN_NAMESPACE` (2026-10-13) is the one-corpus version.
 
+- **STATUS contradicts itself on answer relevance and correctness.** Line 131
+  gives the current `default` baseline (16 rows, 2026-10-03) as AR **0.8377**
+  / AC **0.7105**; the progression table's latest column gives AR **0.8276** /
+  AC **0.7440**. Both are presented as current and they cannot both be. Found
+  2026-10-22 while sourcing resume numbers, and it is the reason neither
+  figure went on the resume — precision, recall and faithfulness agree across
+  both places and were used instead. Resolve by naming the report file behind
+  each column, the way the `live 09-28` column already does, and deleting
+  whichever is stale. Free: both runs are stored under `eval_data/reports/`.
+- **`cost / query` is still n=1.** BUDGET.md names it the weakest number in
+  the file: one production query with a 1,178-token answer, likely toward the
+  expensive end. The resume therefore cites the enforced **$0.005 ceiling**
+  rather than the measured $0.0034677. Firming it up is free — record
+  `token_usage` per sample on the next eval run that happens anyway and
+  recompute from n=16.
+
 ## Nice to have
 
 - `make demo` — seed a tiny corpus and open the console.

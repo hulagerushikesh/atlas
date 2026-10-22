@@ -480,6 +480,38 @@ daily spend cap, console markdown.
   **761 tests at 93.68%**, gate green, `static/` untouched. BACKLOG: one
   closed, open drops to **2**.
 
+- 2026-10-22 (M1 resume bullets — **the last exit criterion**; **Rs.0**) —
+  the Atlas block in `customise resume/resume_v5a.tex` rewritten against this
+  repo's figures instead of remembered ones, typeset with `tectonic` to check
+  it still fits (2 pages before, 2 after, Atlas still on page 1), backup at
+  `resume_v5a.tex.bak-20261022`. **All 17 ROADMAP exit criteria are now
+  ticked.**
+
+  Four numbers in the old bullets had gone stale, and sourcing them properly
+  is most of what this task was:
+
+  | claim | was | now |
+  |---|---|---|
+  | context recall | 0.78 | **0.9378** (from 0.667) |
+  | tests | 340 at 90% | **764 at 93.68%** |
+  | `src` LOC | 7,400 | **11,541** |
+  | cost / query | `~$0.0005` | **$0.005 enforced ceiling** |
+
+  The cost line was wrong by about **7x** and is the one worth dwelling on.
+  The honest measured figure is $0.0034677 — but BUDGET.md records that as
+  **n=1**, one production query with a 1,178-token answer, and names it the
+  weakest number in the file. A single-sample number does not belong on a
+  resume as though it were an average, so the bullet cites the ceiling that
+  is actually enforced in code instead. Same for answer relevance and
+  correctness: STATUS gives two different current values for both (see
+  BACKLOG), so neither was used. Precision, recall and faithfulness agree
+  across every source and carried the bullet.
+
+  Also added: the cold-start and significance work, which did not exist when
+  these bullets were last written — 36.9 s → 11.7 s, the startup probe, and
+  the exact paired Wilcoxon test rejecting a +0.013 "win" that rested on 1 of
+  15 rows.
+
 - 2026-10-22 (startup probe on `/warm`; ~Rs.6) — an instance is no longer
   routed traffic until its cross-encoder is loaded. Cloud Run's default is
   a TCP check, so readiness used to mean "uvicorn bound" (~11 s) with 43 s

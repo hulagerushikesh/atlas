@@ -4,9 +4,10 @@ Four milestones. Each has exit criteria; a milestone is not done until every
 one is ticked. Order is fixed — M2 without M1's numbers would deploy something
 unmeasured.
 
-**All four are done as of 2026-10-14, and 16 of the 17 exit criteria are
-ticked.** The one still open is M1's resume-bullets line, which is the user's
-to do. There is deliberately **no M5 yet**: picking one is a decision, not a
+**All four are done as of 2026-10-14, and as of 2026-10-22 all 17 exit
+criteria are ticked** — the last one, M1's resume-bullets line, closed when
+the Atlas block in `customise resume/resume_v5a.tex` was rewritten against
+this repo's own figures. There is deliberately **no M5 yet**: picking one is a decision, not a
 backlog item, and the pool to pick it from is *Parked* at the bottom of this
 file plus `planning/BACKLOG.md`. Until one is opened, "what's next" is
 whatever `planning/STATUS.md` lists under *Blocked on you* — mostly two paid
@@ -23,7 +24,7 @@ Exit criteria:
 - [x] Console `/app` and landing `/` verified against the live API
 - [x] BM25 per-namespace bug fixed with a test (plus the collection-name mismatch nobody knew about)
 - [x] README placeholders replaced with measured numbers; landing has a Measured section
-- [ ] Resume bullets updated with the same numbers — **user's job**, resume lives in `customise resume/`
+- [x] ~~Resume bullets updated with the same numbers~~ **done 2026-10-22.** `customise resume/resume_v5a.tex`, Atlas block rewritten against the repo's own figures and typeset to check it still fits (2 pages before, 2 after). Four numbers in the old bullets had gone stale: recall 0.78 → **0.9378**, 340 tests at 90% → **764 at 93.68%**, 7,400 LOC → **11,541**, and `~$0.0005 per query`, which was wrong by about 7x — replaced with the **$0.005 enforced ceiling** rather than the measured $0.0035, because BUDGET.md records that figure as n=1 and names it the weakest number in the file. Backup at `resume_v5a.tex.bak-20261022`; wording is the user's to adjust
 
 Plan: [milestones/M1-first-live-run.md](milestones/M1-first-live-run.md)
 
