@@ -134,7 +134,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **766 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00024-5ht**, image `e2ea083`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00025-bnj**, image `87caf12`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -445,13 +445,24 @@ daily spend cap, console markdown.
   `atlas_estimated_cost_usd_total` to ten decimals.
 
   **The distribution is still missing** — Firestore stores sums, so a
-  per-query ceiling is being judged against a mean. Four slices bound it at
-  $0.000474 … $0.0034677, 6.4x, all under the ceiling. `query_complete` now
+  per-query ceiling is being judged against a mean. Five slices bound it at
+  $0.000474 … $0.0034677, 7.3x, all under the ceiling. `query_complete` now
   logs tokens and cost per query so Cloud Logging yields a real p95 later for
   nothing; 3 mutations of those fields each fail the new tests. Two
   accounting gaps filed, not fixed: a streamed query charges the spend cap
   but no usage counter, and `log_usage` is fire-and-forget. 764 → **766
   tests**. See DECISIONS 2026-10-22.
+
+  Deployed the same day as `atlas-api-00025-bnj` (image `87caf12`, build
+  `ceee4593`, 2m34s) and **confirmed live** with one query (₹0.20, approved):
+  the logged line read 6911 / 1095 / **0.00336865**, matching the response
+  body exactly and the Firestore spend delta ($0.003369) to six significant
+  figures — body, log and cap all agree, which is the whole accounting chain
+  checked end to end. That query took the counters to **n=35**, mean
+  **$0.0022882 ≈ ₹0.201**, and is the second-dearest ever observed, so the
+  expensive end of the distribution is a real region and not one odd draw.
+  The startup probe logged exactly one `reranker_loaded_lazily` (44.25 s)
+  inside startup, as designed.
 
 - 2026-10-22 (AR/AC labelling; **₹0**) — the BACKLOG item saying STATUS
   contradicts itself on answer relevance and correctness was **wrong about

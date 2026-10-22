@@ -31,15 +31,15 @@ The increase from M1 to now is therefore **ratified, not hidden**:
 |---|---|---|---|
 | context recall | 0.667 | **0.938** | +0.271 |
 | p50 latency | ≈7,000 ms | 10,053 ms | +44% |
-| cost / query | ≈₹0.03 | **₹0.199** ‡ | ≈6.6x |
+| cost / query | ≈₹0.03 | **₹0.201** ‡ | ≈6.7x |
 
 ‡ **Was ₹0.31, from a single query.** Recomputed 2026-10-22 as the mean over
-**n=34** paid production queries — see *Weakest number* below. The old figure
+**n=35** paid production queries — see *Weakest number* below. The old figure
 was not wrong, it was one draw: it sits 1.54x above the mean of the
 population it was drawn from.
 
 Six times the cost for 0.27 recall was the right trade at this corpus size and
-this traffic — ₹0.199 a query against a ₹50–100 daily cap is roughly 250
+this traffic — ₹0.201 a query against a ₹50–100 daily cap is roughly 250
 queries a day, far past what Atlas serves. The budget below starts from the current
 measurement and governs **what happens next**.
 
@@ -75,8 +75,8 @@ At n=16, nearest-rank p95 *is* the slowest sample, for the total and for every
 stage. That is a conservative read of the budget, not a lenient one, and it
 stops being true once the dataset passes 20 rows.
 
-Cost, mean over **n=34** paid production queries, lifetime to 2026-10-22:
-**$0.0022564 ≈ ₹0.199**, 6,094 tokens a query. Source is the Firestore
+Cost, mean over **n=35** paid production queries, lifetime to 2026-10-22:
+**$0.0022882 ≈ ₹0.201**, 6,149 tokens a query. Source is the Firestore
 per-key usage counters (`atlas_api_keys/*.usage`), which accumulate across
 instances and survive restarts. The single query on `58e4e00` (2026-10-07,
 7,986 tokens, **$0.0034677 ≈ ₹0.31**) is still the highest single-query value
@@ -96,7 +96,7 @@ today's number fails on noise and teaches everyone to ignore it.
 | warm p50, total | **12,000 ms** | 10,053 | +19% |
 | warm p95, total | **20,000 ms** | 17,072 | +17% |
 | cold start | **60,000 ms** | 49,000 | +22% |
-| cost / query | **$0.005** (≈₹0.44) | $0.0022564 (n=34 mean) | +122% |
+| cost / query | **$0.005** (≈₹0.44) | $0.0022882 (n=35 mean) | +119% |
 | eval run, 16 rows | **$0.100** (≈₹8.80) | $0.0709 | +41% |
 | daily spend | **$0.60** | enforced in prod, 429 past it | — |
 
@@ -212,17 +212,19 @@ restarts.
 
 | | value |
 |---|---|
-| queries recorded, lifetime | 37 |
+| queries recorded, lifetime | 38 |
 | cache hits (cost $0) | 3 |
-| **paid queries, n** | **34** |
-| prompt tokens (embeddings flattened in) | 187,281 |
-| completion tokens | 19,931 |
-| **cost / query, mean** | **$0.0022564 ≈ ₹0.199** |
-| tokens / query, mean | 6,094 |
+| **paid queries, n** | **35** |
+| prompt tokens (embeddings flattened in) | 194,192 |
+| completion tokens | 21,026 |
+| **cost / query, mean** | **$0.0022882 ≈ ₹0.201** |
+| tokens / query, mean | 6,149 |
 
-The n=1 figure was **1.54x the mean** — the suspicion recorded here, that a
+The n=1 figure was **1.52x the mean** — the suspicion recorded here, that a
 1,178-token answer sat toward the expensive end, was right in direction and
-roughly right in size.
+roughly right in size. A second long answer landed on 2026-10-22 at
+**$0.00336865** for a 1,095-token completion, so the expensive end is a
+real, repeatable region of the distribution and not one odd draw.
 
 **What is still missing is the distribution, not the mean.** Firestore stores
 sums, not rows, so there is no p95 and a ceiling is being judged against a
@@ -234,14 +236,18 @@ spread:
 | `demo` key | 2 | 0.0004740 | per-key counters |
 | all but the live instance | 26 | 0.0020125 | by subtraction |
 | the live instance's own queries | 8 | 0.0030488 | `/metrics`, exact |
+| one query, 2026-10-22 | 1 | 0.0033686 | body, log line and spend delta, agreeing |
 | one query, 2026-10-07 | 1 | 0.0034677 | response body |
 
-6.4x between the cheapest and dearest slice mean, and **every one of them is
+7.3x between the cheapest and dearest slice mean, and **every one of them is
 under the $0.005 ceiling**, including the single most expensive query ever
 observed. That is the strongest statement the stored data supports. A real
-p95 needs per-query rows; `query_complete` now logs `prompt_tokens`,
-`completion_tokens` and `cost_usd`, so the next few dozen production queries
-will produce one from Cloud Logging for nothing.
+p95 needs per-query rows; `query_complete` logs `prompt_tokens`,
+`completion_tokens` and `cost_usd` as of `87caf12`, live on
+`atlas-api-00025-bnj` and **confirmed in production 2026-10-22**: the logged
+line read 6911 / 1095 / 0.00336865, matching the response body exactly and
+the Firestore spend delta ($0.003369) to six significant figures. The next
+few dozen production queries produce a p95 from Cloud Logging for nothing.
 
 Two accounting gaps found while measuring, both recorded in BACKLOG:
 a **streamed** query charges the spend cap but increments none of
