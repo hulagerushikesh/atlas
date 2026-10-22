@@ -2431,3 +2431,43 @@ Format: date — decision — alternatives — reason.
   the whole load back in front of the port binding, which is the thing the
   11 s bought. `--cpu=2` is the real option if a `/query` is ever seen
   waiting; it is a billing change and so the user's call, not mine.
+- **2026-10-22** — Stay on `cpu: '1'`. The entry above this one said
+  "`--cpu=2` is the real option if a `/query` is ever seen waiting"; that
+  was a guess and it is now measured wrong. Two revisions, same image,
+  same procedure, keep-warm paused so nothing could warm an instance
+  behind the test:
+
+  | | cpu=1 (`00021-pk7`) | cpu=2 (`00022-snb`) |
+  |---|---|---|
+  | `atlas_imports_and_app` | 10.24 s | 9.72 s |
+  | `reranker_loaded_lazily` | **43.38 s** | **43.49 s** |
+  | unwarmed `/query` | 48.82 s | 46.29 s |
+
+  *Why:* the load is a sequential torch import followed by a weight load.
+  A second vCPU has nothing to run on it, so the number that matters moved
+  by 0.11 s — within noise of itself — while the billing rate for every
+  request-second doubles. Warm queries came out 8.77/10.11/9.12 s at cpu=2
+  against 12.07/10.15 s at cpu=1, which looks like an improvement and is
+  not evidence of one: n is two and three, the samples overlap, and warm
+  latency is dominated by a Gemini call whose own variance is larger than
+  the gap. Reverted to `cpu: '1'` and the probe env var removed; live
+  config is back to exactly what it was before the test.
+
+  The honest conclusion is that **nothing about the cold start is a CPU
+  quantity problem**, and the remaining lever is whether an instance is
+  allowed to serve before its model is in.
+- **2026-10-22** — Known and accepted: `atlas-keepwarm` warms *one*
+  instance, and a second instance will serve an unwarmed query. This
+  stopped being hypothetical during the cpu test. Revision
+  `atlas-api-00023-486` logged `reranker_loaded_lazily` **twice** — 39.68 s
+  for the instance `/warm` reached, then **49.76 s** on a second instance
+  that Cloud Run started on its own, under four sequential requests and no
+  concurrency to speak of. The user-visible cost was a **44.6 s** `/query`.
+  *Alt considered, not taken:* a Cloud Run **startup probe on `/warm`**,
+  which would make every instance load its model before it is allowed to
+  take traffic, and would fix the scale-up case properly rather than
+  relying on a ten-minute ping to find the instance. It is rejected *for
+  now* only because it puts the load back in front of readiness and the
+  11 s landing page is the thing this whole line of work bought; it is the
+  first thing to try if a 44 s query is ever seen by a real user rather
+  than by a test. `--min-instances=1` remains rejected at Rs.650-700/month.
