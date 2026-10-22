@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 from unittest.mock import AsyncMock, MagicMock
 
+import structlog.testing
 from fastapi.testclient import TestClient
 
 from atlas.cost import estimate_usage_cost
@@ -311,3 +312,48 @@ class TestStreamingFailures:
             events = self._events(resp)
 
         assert not [e for e in events if e["type"] == "done"]
+
+
+class TestTheCompletionLogCarriesTheCostOfTheQuery:
+    """A sum cannot be turned back into a distribution.
+
+    On 2026-10-22 `cost / query` had to be answered from the Firestore usage
+    counters, which store totals per key. That yields a mean over n=34 and no
+    percentile at all, while the ceiling in BUDGET.md is a per-query one. The
+    tokens and the cost were in the response body and in two Prometheus
+    counters, and in neither case per query. One structured log line per query
+    is what makes a p95 recoverable later without paying for the queries
+    again, so these fields are part of the contract, not decoration.
+    """
+
+    @staticmethod
+    def _complete(logs: list[dict[str, object]]) -> dict[str, object]:
+        events = [entry for entry in logs if entry.get("event") == "query_complete"]
+        assert len(events) == 1, [entry.get("event") for entry in logs]
+        return events[0]
+
+    def test_it_logs_the_tokens_and_the_cost(self, client: TestClient) -> None:
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        _bill(pipeline, **{"gpt-4o-mini": (1000, 100)})
+
+        with structlog.testing.capture_logs() as logs:
+            body = client.post("/query", json={"query": "q"}).json()
+
+        logged = self._complete(logs)
+        assert logged["prompt_tokens"] == body["token_usage"]["prompt_tokens"]
+        assert logged["completion_tokens"] == body["token_usage"]["completion_tokens"]
+        assert logged["cost_usd"] == body["token_usage"]["estimated_cost_usd"]
+
+    def test_the_logged_cost_is_not_zero_for_a_query_that_spent(
+        self, client: TestClient
+    ) -> None:
+        # A silent zero here would read as a free query and drag any mean
+        # computed from these lines downwards, which is the exact failure the
+        # n=1 figure already had in the other direction.
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        _bill(pipeline, **{"gpt-4o-mini": (1000, 100)})
+
+        with structlog.testing.capture_logs() as logs:
+            client.post("/query", json={"query": "q"})
+
+        assert self._complete(logs)["cost_usd"] > 0

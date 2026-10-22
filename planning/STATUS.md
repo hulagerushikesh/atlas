@@ -132,7 +132,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **764 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **766 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00024-5ht**, image `e2ea083`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -429,6 +429,30 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-22 (`cost / query`, n=1 → n=34; **₹0**) — BUDGET's plan for this
+  said to recompute from the next eval run, and that plan was wrong: an eval
+  sample pays two LLM judges a production query never calls, so it answers a
+  different question. The right source was already stored and had never been
+  read — `FirestoreKeyStore.log_usage` has been accumulating per-key
+  `usage.{total_queries,cache_hits,prompt_tokens,completion_tokens}` across
+  instances and restarts since the store shipped. 37 queries, 3 cache hits,
+  **n=34 paid**, 207,212 tokens → **$0.0022564 ≈ ₹0.199 a query**. The n=1
+  figure was **1.54x the mean**; headroom under the $0.005 ceiling goes from
+  +44% to +122% and no budget decision changes.
+
+  Trusted only after a cross-check: the live instance's `/metrics` token
+  counters, priced through `atlas.cost`, reproduce its
+  `atlas_estimated_cost_usd_total` to ten decimals.
+
+  **The distribution is still missing** — Firestore stores sums, so a
+  per-query ceiling is being judged against a mean. Four slices bound it at
+  $0.000474 … $0.0034677, 6.4x, all under the ceiling. `query_complete` now
+  logs tokens and cost per query so Cloud Logging yields a real p95 later for
+  nothing; 3 mutations of those fields each fail the new tests. Two
+  accounting gaps filed, not fixed: a streamed query charges the spend cap
+  but no usage counter, and `log_usage` is fire-and-forget. 764 → **766
+  tests**. See DECISIONS 2026-10-22.
+
 - 2026-10-22 (AR/AC labelling; **₹0**) — the BACKLOG item saying STATUS
   contradicts itself on answer relevance and correctness was **wrong about
   the kind of problem**, and acting on its prescription would have destroyed
@@ -574,7 +598,7 @@ daily spend cap, console markdown.
   the status — an error status would stop the instance ever becoming ready,
   and with `--max-instances 2` that is the service. Verified by mutation:
   changing the endpoint to 503-on-failure fails exactly the new test.
-  **764 tests.**
+  **766 tests.**
 
 - 2026-10-22 (does a second vCPU help the cold start? **no**; ~Rs.2.2) —
   measured instead of assumed, with `atlas-keepwarm` paused so nothing
