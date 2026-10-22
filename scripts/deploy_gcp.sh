@@ -108,6 +108,8 @@ gcloud run deploy "${SERVICE}" \
   --cpu 1 --memory 2Gi --concurrency 8 \
   --min-instances 0 --max-instances 2 \
   --timeout 120 \
+  --startup-probe "httpGet.path=/warm,httpGet.port=8080,periodSeconds=10,\
+timeoutSeconds=10,failureThreshold=20,initialDelaySeconds=0" \
   --set-env-vars "AUTH_ENABLED=true,AUTH_STORE=firestore,RERANKER_ENABLED=true,\
 BUDGET_DAILY_USD=${BUDGET_DAILY_USD:-0.60},BUDGET_STORE=firestore,\
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/,\

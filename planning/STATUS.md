@@ -132,9 +132,9 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **761 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **764 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00023-486**, image `e2ea083`, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00024-5ht**, image `e2ea083`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -479,6 +479,42 @@ daily spend cap, console markdown.
 
   **761 tests at 93.68%**, gate green, `static/` untouched. BACKLOG: one
   closed, open drops to **2**.
+
+- 2026-10-22 (startup probe on `/warm`; ~Rs.6) — an instance is no longer
+  routed traffic until its cross-encoder is loaded. Cloud Run's default is
+  a TCP check, so readiness used to mean "uvicorn bound" (~11 s) with 43 s
+  of model still to come, charged to whichever request arrived first.
+
+  | | before (`00023-486`) | after (`00024-5ht`) |
+  |---|---|---|
+  | first `/query` on a fresh revision | 48.82 s | **12.21 s** |
+  | where the load happens | inside a request | inside startup (38.08 s) |
+  | revision ready in | ~15-20 s | **73 s** |
+
+  A 12-query burst forced the scale-up case. The second instance took five
+  requests, logged **exactly one** load (34.81 s) during startup, and
+  completed all five only after it — no query ran against an unloaded
+  model, which was the defect. **What that does not buy:** those five
+  requests were routed to the instance the moment it was created and
+  waited 66-116 s regardless. For a request arriving *during* a scale-up,
+  waiting on the probe and paying the load in-request are roughly the same
+  wall clock. The deploy-path win is real and measured; a burst-latency
+  win is not claimed.
+
+  **The cost is scale-to-zero.** A visitor arriving with no instance
+  running now waits ~73 s for the landing page against the 11 s the lazy
+  loading bought. `atlas-keepwarm` is the only thing preventing it, which
+  makes that job load-bearing for a second, independent reason — if it is
+  ever disabled the probe has to come off with it. Recorded in
+  `docs/deploy.md` and DECISIONS.
+
+  Three tests added for a property that was previously unpinned and is now
+  load-bearing: `/warm` answers **200** when the model fails to load, when
+  the reranker is disabled, and on GET. The failure goes in the body, not
+  the status — an error status would stop the instance ever becoming ready,
+  and with `--max-instances 2` that is the service. Verified by mutation:
+  changing the endpoint to 503-on-failure fails exactly the new test.
+  **764 tests.**
 
 - 2026-10-22 (does a second vCPU help the cold start? **no**; ~Rs.2.2) —
   measured instead of assumed, with `atlas-keepwarm` paused so nothing

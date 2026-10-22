@@ -89,3 +89,36 @@ class TestHealthStaysFast:
         # trips alarms. The two endpoints want opposite things here.
         assert "/warm" in paths
         assert "/health" in paths
+
+
+class TestTheStartupProbeCannotBrickAnInstance:
+    """`/warm` is a Cloud Run startup probe as of 2026-10-22.
+
+    That makes its status code load-bearing in a way its body never was. An
+    instance is not routed traffic until this endpoint answers, so an error
+    status here does not degrade the service — it stops the instance ever
+    becoming ready, and with `--max-instances 2` that is the service. The
+    endpoint deliberately reports a failed load as 200 with
+    `{"reranker": "failed"}`: the body carries the bad news, the status
+    carries "this container is alive". Nothing pinned that before, so a
+    perfectly reasonable change to 503 on failure would have shipped green
+    and taken production down on the first bad load.
+    """
+
+    def test_a_failed_load_still_answers_200(self) -> None:
+        response = _client_with(_Reranker(loads=False)).post("/warm")
+        assert response.status_code == 200
+        assert response.json()["reranker"] == "failed"
+
+    def test_a_disabled_reranker_still_answers_200(self) -> None:
+        # RERANKER_ENABLED=false is a supported configuration, and an
+        # instance running it must still be able to start.
+        response = _client_with(None).post("/warm")
+        assert response.status_code == 200
+        assert response.json()["reranker"] == "disabled"
+
+    def test_the_probe_verb_answers_200_too(self) -> None:
+        # Cloud Run's httpGet probe issues GET, not POST.
+        response = _client_with(_Reranker()).get("/warm")
+        assert response.status_code == 200
+        assert response.json()["reranker"] == "loaded"
