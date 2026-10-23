@@ -939,14 +939,21 @@ Newest at the bottom of each section.
   can describe each one instead of falling back to the generic sentence for all
   but one. `ROUTER_DOMAIN_NAMESPACE` (2026-10-13) is the one-corpus version.
 
-- **`log_usage` is fire-and-forget, so a count can be lost.** `_charge`
-  wraps it in `asyncio.create_task` to keep it off the response path. An
-  instance torn down in that window drops the record. Cloud Run scale-in
-  during a burst is exactly when this happens and exactly when the queries
-  are most worth counting. Only matters now that these counters are
-  load-bearing for BUDGET's `cost / query`. Awaiting it instead adds a
-  Firestore round trip to every response, so the fix is probably a flush on
-  shutdown rather than a synchronous write.
+- ~~**`log_usage` is fire-and-forget, so a count can be lost.**~~ **done
+  2026-10-23, Rs.0.** `atlas.api.background` owns the three un-awaited
+  writes on `/query` — the per-key record and both cache writes. `spawn()`
+  holds a strong reference until the task ends, so a garbage collection
+  can no longer drop one mid-flight, and logs its exception against the
+  task's name instead of letting asyncio print an unattributed traceback at
+  collection time. `drain()` runs first in the lifespan's shutdown, bounded
+  at 5s because Cloud Run allows ten between SIGTERM and SIGKILL and the
+  redis close still has to happen; what it could not wait for is logged as
+  a count, since that is the only evidence the budget is too small. No
+  Firestore round trip was added to any response.
+
+  Writing it found two bugs in `ed9dbd0`, both in the same nine lines and
+  both fatal, caught before the commit was pushed or deployed. See
+  DECISIONS 2026-10-23.
 
 ## Nice to have
 

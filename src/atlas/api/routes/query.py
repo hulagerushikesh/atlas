@@ -49,6 +49,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from atlas.api.background import spawn
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import get_app_state, get_cache, get_registry
@@ -213,14 +214,17 @@ async def _charge(
     if api_key_id is not None:
         from atlas.api import auth as _auth  # noqa: PLC0415 — circular at module scope
 
-        asyncio.create_task(_auth.log_usage(
-            api_key_id=api_key_id,
-            namespace=namespace,
-            prompt_tokens=sum(u.prompt_tokens for u in usage.by_model.values()),
-            completion_tokens=sum(u.completion_tokens for u in usage.by_model.values()),
-            latency_ms=latency_ms,
-            cache_hit=False,
-        ))
+        spawn(
+            _auth.log_usage(
+                api_key_id=api_key_id,
+                namespace=namespace,
+                prompt_tokens=sum(u.prompt_tokens for u in usage.by_model.values()),
+                completion_tokens=sum(u.completion_tokens for u in usage.by_model.values()),
+                latency_ms=latency_ms,
+                cache_hit=False,
+            ),
+            name="log_usage",
+        )
     return cost
 
 
@@ -560,10 +564,13 @@ async def query(
         from atlas.api import auth as _auth
         api_key_id = getattr(request.state, "api_key_id", None)
         if api_key_id is not None:
-            asyncio.create_task(_auth.log_usage(
-                api_key_id=api_key_id, namespace=body.namespace,
-                prompt_tokens=0, completion_tokens=0, latency_ms=0, cache_hit=True,
-            ))
+            spawn(
+                _auth.log_usage(
+                    api_key_id=api_key_id, namespace=body.namespace,
+                    prompt_tokens=0, completion_tokens=0, latency_ms=0, cache_hit=True,
+                ),
+                name="log_usage_cache_hit",
+            )
         return response
 
     # Cache hits are free, so the cap is checked only once we know we will
@@ -610,17 +617,18 @@ async def query(
     await _charge(usage, app_state.spend, api_key_id=api_key_id,
                   namespace=body.namespace, latency_ms=timings.total_ms)
 
-    # Fire-and-forget: cache (never block the response)
-    asyncio.create_task(cache.set(cache_key, response.model_dump()))
-    if api_key_id is not None:
-        asyncio.create_task(_auth.log_usage(
-            api_key_id=api_key_id,
-            namespace=body.namespace,
-            prompt_tokens=response.token_usage.prompt_tokens,
-            completion_tokens=response.token_usage.completion_tokens,
-            latency_ms=timings.total_ms,
-            cache_hit=False,
-        ))
+    # Fire-and-forget: cache (never block the response). The per-key usage
+    # record used to be written here too, a second time — `_charge` above
+    # already writes it. The duplicate survived the 2026-10-23
+    # consolidation and did two things: it doubled every authenticated
+    # query in the counters BUDGET.md reads, and it referenced `_auth`,
+    # which is only imported inside the cache-hit branch above, so an
+    # authenticated cache miss raised UnboundLocalError — that is every
+    # real production query on this path. Neither showed up in the suite
+    # because the route fixture disables auth, so `api_key_id` is None and
+    # the whole block was dead in tests. Pinned now by a test that sets the
+    # key id on the request scope.
+    spawn(cache.set(cache_key, response.model_dump()), name="cache_set")
 
     # Tokens and cost are logged here, not only returned in the body and
     # summed into counters, because a sum cannot be turned back into a

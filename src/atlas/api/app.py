@@ -36,6 +36,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from atlas import __version__
+from atlas.api.background import drain
 from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
@@ -162,6 +163,16 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         warm_task.cancel()
 
     # Shutdown
+    #
+    # Before closing anything the un-awaited writes still need: the per-key
+    # usage records and the cache writes `/query` deliberately keeps off the
+    # response path. Dropping those is how a scale-in during a burst
+    # under-counts exactly the traffic worth counting, and BUDGET.md's
+    # `cost / query` is read off those counters. Bounded, because Cloud Run
+    # gives ten seconds between SIGTERM and SIGKILL and the redis close is
+    # still to come.
+    await drain()
+
     if redis_client is not None:
         await redis_client.aclose()  # type: ignore[attr-defined]
     logger.info("atlas_shutdown")
