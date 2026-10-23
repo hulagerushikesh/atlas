@@ -168,11 +168,70 @@ def _build_response(
     )
 
 
+async def _charge(
+    usage: UsageMeter,
+    spend: SpendMeter | None,
+    *,
+    api_key_id: str | None,
+    namespace: str,
+    latency_ms: float,
+) -> float:
+    """Record one request's spend everywhere it has to be recorded.
+
+    Four sinks, and until 2026-10-23 only the first of them was reached from
+    the streaming path:
+
+      * `spend` — the daily cap, which decides whether the next request is
+        served at all
+      * `COST_USD` / `TOKEN_USAGE` — the Prometheus counters `/metrics`
+        exposes
+      * `log_usage` — the per-key Firestore counters, which are what
+        `cost / query` in BUDGET.md is computed from
+
+    A streamed query therefore charged the cap correctly and then vanished
+    from every figure derived from the other three. Nothing looked wrong,
+    because the one sink that would have made money go missing was the one
+    that worked; the symptom was a cost-per-query mean quietly computed over
+    the non-streaming subset. There was exactly one streamed query in the
+    first 90 days, so the error was invisible — and the console is the
+    streaming client, so it would not have stayed that way.
+
+    They live in one function now because keeping four sinks in step across
+    two call paths by hand is what failed; a second caller that forgets one
+    of them has to forget all four.
+    """
+    if not usage:
+        return 0.0
+    cost = estimate_usage_cost(usage.by_model)
+    for model, entry in usage.by_model.items():
+        TOKEN_USAGE.labels(model=model, type="prompt").inc(entry.prompt_tokens)
+        if entry.completion_tokens:
+            TOKEN_USAGE.labels(model=model, type="completion").inc(entry.completion_tokens)
+    COST_USD.inc(cost)
+    if spend is not None:
+        await spend.add(cost)
+    if api_key_id is not None:
+        from atlas.api import auth as _auth  # noqa: PLC0415 — circular at module scope
+
+        asyncio.create_task(_auth.log_usage(
+            api_key_id=api_key_id,
+            namespace=namespace,
+            prompt_tokens=sum(u.prompt_tokens for u in usage.by_model.values()),
+            completion_tokens=sum(u.completion_tokens for u in usage.by_model.values()),
+            latency_ms=latency_ms,
+            cache_hit=False,
+        ))
+    return cost
+
+
 async def _stream_query(
     query: str,
     pipeline: RAGPipeline,
     spend: SpendMeter | None = None,
     chat_model: str = "unknown",
+    *,
+    api_key_id: str | None = None,
+    namespace: str = "default",
 ) -> AsyncIterator[str]:
     """Stream the answer, and charge the daily cap for the whole request.
 
@@ -212,6 +271,7 @@ async def _stream_query(
     event to, and swallowing them would stop the disconnect propagating.
     """
     usage = UsageMeter()
+    t_total = time.perf_counter()
     # Which stage was in flight when it broke. Read back off the events being
     # forwarded rather than passed down as a mutable argument: every stage
     # already announces itself with a `status: "start"`, so the wrapper knows
@@ -247,11 +307,36 @@ async def _stream_query(
             payload["request_id"] = request_id
         yield f"data: {json.dumps(payload)}\n\n"
         yield "data: [DONE]\n\n"
-        if spend is not None and usage:
-            await spend.add(estimate_usage_cost(usage.by_model))
+        total_ms = (time.perf_counter() - t_total) * 1000
+        cost = await _charge(usage, spend, api_key_id=api_key_id,
+                             namespace=namespace, latency_ms=total_ms)
+        logger.info(
+            "query_complete",
+            stream=True,
+            failed=True,
+            stage=stage,
+            total_ms=total_ms,
+            prompt_tokens=sum(u.prompt_tokens for u in usage.by_model.values()),
+            completion_tokens=sum(u.completion_tokens for u in usage.by_model.values()),
+            cost_usd=cost,
+        )
         return
-    if spend is not None and usage:
-        await spend.add(estimate_usage_cost(usage.by_model))
+    total_ms = (time.perf_counter() - t_total) * 1000
+    cost = await _charge(usage, spend, api_key_id=api_key_id,
+                         namespace=namespace, latency_ms=total_ms)
+    # Same event name as the non-streaming path, with `stream` to tell them
+    # apart. One name is the point: a p95 of cost / query mined from these
+    # lines has to cover every query, and the last time these two paths
+    # reported differently the difference went unnoticed for 90 days.
+    logger.info(
+        "query_complete",
+        stream=True,
+        failed=False,
+        total_ms=total_ms,
+        prompt_tokens=sum(u.prompt_tokens for u in usage.by_model.values()),
+        completion_tokens=sum(u.completion_tokens for u in usage.by_model.values()),
+        cost_usd=cost,
+    )
 
 
 async def _stream_events(
@@ -455,7 +540,11 @@ async def query(
         await _enforce_budget(app_state.spend)
         log.info("query_stream_start")
         return StreamingResponse(
-            _stream_query(body.query, pipeline, app_state.spend, app_state.chat_model),
+            _stream_query(
+                body.query, pipeline, app_state.spend, app_state.chat_model,
+                api_key_id=getattr(request.state, "api_key_id", None),
+                namespace=body.namespace,
+            ),
             media_type="text/event-stream",
             headers={"X-Faithfulness": "skipped-streaming",
                      "X-Namespace": body.namespace},
@@ -494,7 +583,16 @@ async def query(
             # Charged anyway: a pipeline that failed at the faithfulness check
             # has already paid for everything before it, and a cap that only
             # counts successes is a cap a failing deployment can walk through.
-            await app_state.spend.add(estimate_usage_cost(usage.by_model))
+            # Through `_charge` for the same reason the streaming path is:
+            # this used to reach the cap alone, so a failing deployment's
+            # spend was real but absent from `/metrics` and from the per-key
+            # counters `cost / query` is derived from.
+            await _charge(
+                usage, app_state.spend,
+                api_key_id=getattr(request.state, "api_key_id", None),
+                namespace=body.namespace,
+                latency_ms=(time.perf_counter() - t_total) * 1000,
+            )
             raise HTTPException(
                 status_code=500, detail=_public_error(_request_id())
             ) from exc
@@ -504,20 +602,16 @@ async def query(
 
     response = _build_response(result, timings, usage)
 
-    # Emit Prometheus metrics. Per model, and split the way the `type` label
-    # has always said it was: it was being passed "total", which no dashboard
-    # could separate from a sum over the other two.
-    for model, entry in usage.by_model.items():
-        TOKEN_USAGE.labels(model=model, type="prompt").inc(entry.prompt_tokens)
-        if entry.completion_tokens:
-            TOKEN_USAGE.labels(model=model, type="completion").inc(entry.completion_tokens)
-    COST_USD.inc(response.token_usage.estimated_cost_usd)
-    await app_state.spend.add(response.token_usage.estimated_cost_usd)
-
-    # Fire-and-forget: cache + usage log (never block the response)
-    from atlas.api import auth as _auth
-    asyncio.create_task(cache.set(cache_key, response.model_dump()))
+    # Cap, Prometheus counters and the per-key usage log, all through the one
+    # function the streaming path also calls. The `type` label is split
+    # prompt/completion in there: it was once passed "total", which no
+    # dashboard could separate from a sum over the other two.
     api_key_id = getattr(request.state, "api_key_id", None)
+    await _charge(usage, app_state.spend, api_key_id=api_key_id,
+                  namespace=body.namespace, latency_ms=timings.total_ms)
+
+    # Fire-and-forget: cache (never block the response)
+    asyncio.create_task(cache.set(cache_key, response.model_dump()))
     if api_key_id is not None:
         asyncio.create_task(_auth.log_usage(
             api_key_id=api_key_id,
@@ -537,6 +631,7 @@ async def query(
     # recoverable later without paying for the queries again.
     log.info(
         "query_complete",
+        stream=False,
         classification=result.classification,
         chunks=len(result.retrieved_chunks),
         faithful=result.is_faithful,
