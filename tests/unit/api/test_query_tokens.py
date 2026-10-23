@@ -9,12 +9,15 @@ twice the spend it was configured for. These tests pin the whole request.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 import structlog.testing
 from fastapi.testclient import TestClient
 
+from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.cost import estimate_usage_cost
 from atlas.usage import ModelUsage, UsageMeter
 
@@ -357,3 +360,172 @@ class TestTheCompletionLogCarriesTheCostOfTheQuery:
             client.post("/query", json={"query": "q"})
 
         assert self._complete(logs)["cost_usd"] > 0
+
+
+class TestAStreamedQueryIsVisibleToEveryUsageSink:
+    """Until 2026-10-23 a streamed query reached the daily cap and nothing else.
+
+    `COST_USD`, `TOKEN_USAGE` and `log_usage` were incremented on the
+    non-streaming path only. The cap being correct is why this never showed
+    up as money going missing; what it produced instead was a `cost / query`
+    mean silently computed over the non-streaming subset, and `/metrics`
+    under-reporting spend by however much of the traffic streamed. One
+    streamed query existed in the first 90 days, so the error was invisible
+    — and the console is the streaming client, so it would not have stayed
+    invisible.
+    """
+
+    @staticmethod
+    def _stream(client: TestClient) -> None:
+        state = client.app.state.atlas
+        pipeline = state.registry.get("default").pipeline
+        provider = UsageMeter()
+        original = pipeline._router.classify
+
+        async def classify(query: str) -> str:
+            provider.record("gpt-4o-mini", prompt_tokens=90_000, completion_tokens=10)
+            return await original(query)
+
+        pipeline._router.classify = classify
+        pipeline._grader.grade = AsyncMock(return_value=(True, 0.9, "q"))
+        state.spend.add = AsyncMock()
+
+        with client.stream("POST", "/query", json={"query": "q", "stream": True}) as resp:
+            list(resp.iter_lines())
+
+    def test_it_increments_the_cost_counter_metrics_exposes(
+        self, client: TestClient
+    ) -> None:
+        before = COST_USD._value.get()
+        self._stream(client)
+        assert COST_USD._value.get() > before
+
+    def test_it_increments_the_token_counter_metrics_exposes(
+        self, client: TestClient
+    ) -> None:
+        before = TOKEN_USAGE.labels(model="gpt-4o-mini", type="prompt")._value.get()
+        self._stream(client)
+        after = TOKEN_USAGE.labels(model="gpt-4o-mini", type="prompt")._value.get()
+        assert after - before >= 90_000
+
+    def test_it_routes_its_spend_through_the_one_function_that_feeds_all_four(
+        self, client: TestClient, monkeypatch: object
+    ) -> None:
+        # The per-key sink cannot be reached through the route here: auth is
+        # disabled in this fixture, so `request.state.api_key_id` is never
+        # set and `_charge` correctly skips `log_usage`. What the route is
+        # responsible for is calling `_charge` at all, and handing it the
+        # key id and namespace — that is what is asserted here. That
+        # `_charge` then writes the per-key record is pinned directly below,
+        # in TestChargeWritesThePerKeyRecord.
+        from atlas.api.routes import query as query_route
+
+        calls: list[dict[str, object]] = []
+        original = query_route._charge
+
+        async def spy(usage: object, spend: object, **kwargs: object) -> float:
+            calls.append(kwargs)
+            return await original(usage, spend, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(query_route, "_charge", spy)  # type: ignore[attr-defined]
+        self._stream(client)
+
+        assert len(calls) == 1, calls
+        assert calls[0]["namespace"] == "default"
+        assert "api_key_id" in calls[0]
+
+    def test_it_logs_query_complete_under_the_same_event_name(
+        self, client: TestClient
+    ) -> None:
+        # One event name across both paths, because a p95 of cost / query
+        # mined from these lines has to cover every query. `stream` tells
+        # them apart without splitting the population.
+        with structlog.testing.capture_logs() as logs:
+            self._stream(client)
+
+        done = [e for e in logs if e.get("event") == "query_complete"]
+        assert len(done) == 1, [e.get("event") for e in logs]
+        assert done[0]["stream"] is True
+        assert done[0]["failed"] is False
+        assert int(done[0]["prompt_tokens"]) >= 90_000  # type: ignore[arg-type]
+        assert float(done[0]["cost_usd"]) > 0  # type: ignore[arg-type]
+
+
+class TestChargeWritesThePerKeyRecord:
+    """`_charge` is the only writer of the counters BUDGET.md reads.
+
+    No test on either path had ever asserted that the route writes a per-key
+    usage record — the fixture disables auth, so `api_key_id` is None and the
+    write is skipped. `cost / query` is computed from exactly these records,
+    so the sink that produces them is pinned here directly instead.
+    """
+
+    @staticmethod
+    def _meter() -> UsageMeter:
+        meter = UsageMeter()
+        meter.record("gpt-4o-mini", prompt_tokens=1000, completion_tokens=100)
+        meter.record("embed-1", kind="embedding", prompt_tokens=12)
+        return meter
+
+    @pytest.mark.asyncio
+    async def test_it_writes_one_record_with_the_tokens_the_request_spent(
+        self, monkeypatch: object
+    ) -> None:
+        from atlas.api import auth as _auth
+        from atlas.api.routes import query as query_route
+
+        recorded: list[dict[str, object]] = []
+
+        async def fake_log_usage(**kwargs: object) -> None:
+            recorded.append(kwargs)
+
+        monkeypatch.setattr(_auth, "log_usage", fake_log_usage)  # type: ignore[attr-defined]
+        await query_route._charge(
+            self._meter(), None, api_key_id="k1", namespace="docs", latency_ms=42.0
+        )
+        await asyncio.sleep(0)  # the write is fire-and-forget
+
+        assert len(recorded) == 1, recorded
+        assert recorded[0]["api_key_id"] == "k1"
+        assert recorded[0]["namespace"] == "docs"
+        # 1000 chat prompt + 12 embedding; embeddings are flattened into
+        # prompt_tokens, exactly as the response schema does it.
+        assert recorded[0]["prompt_tokens"] == 1012
+        assert recorded[0]["completion_tokens"] == 100
+        assert recorded[0]["cache_hit"] is False
+
+    @pytest.mark.asyncio
+    async def test_it_writes_nothing_when_there_is_no_key_to_attribute_it_to(
+        self, monkeypatch: object
+    ) -> None:
+        from atlas.api import auth as _auth
+        from atlas.api.routes import query as query_route
+
+        recorded: list[object] = []
+
+        async def fake_log_usage(**kwargs: object) -> None:
+            recorded.append(kwargs)
+
+        monkeypatch.setattr(_auth, "log_usage", fake_log_usage)  # type: ignore[attr-defined]
+        await query_route._charge(
+            self._meter(), None, api_key_id=None, namespace="default", latency_ms=1.0
+        )
+        await asyncio.sleep(0)
+
+        assert recorded == []
+
+    @pytest.mark.asyncio
+    async def test_a_request_that_spent_nothing_charges_nothing(self) -> None:
+        # A cache hit reaches neither call site, but an out-of-scope refusal
+        # that never called a model does. Incrementing a cost counter by zero
+        # is harmless; writing a usage record for it would inflate the query
+        # count that cost / query divides by.
+        spend = AsyncMock()
+        from atlas.api.routes import query as query_route
+
+        cost = await query_route._charge(
+            UsageMeter(), spend, api_key_id="k1", namespace="default", latency_ms=1.0
+        )
+
+        assert cost == 0.0
+        spend.add.assert_not_awaited()

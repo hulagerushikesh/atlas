@@ -2601,3 +2601,39 @@ Format: date — decision — alternatives — reason.
   expensive end of the distribution is a repeatable region, not one odd
   draw, which is the part the n=1 figure could not establish. Counters now
   read n=35, mean **$0.0022882 ≈ ₹0.201**, headroom +119%.
+
+- **2026-10-23** — **The four places a request's spend is recorded now live
+  in one function, `_charge`.** *Alt:* add the three missing calls to the
+  streaming path and leave both paths with their own copy. *Why not:* two
+  hand-maintained copies of a four-sink list is exactly what produced the
+  bug — the streaming path charged the daily cap and incremented none of
+  `COST_USD`, `TOKEN_USAGE` or `log_usage`, so a streamed query was capped
+  correctly and then absent from `/metrics` and from the per-key counters
+  `cost / query` is computed from. A third caller that forgets one sink now
+  has to forget all four.
+
+  **Why it hid for 90 days:** the one sink that worked was the only one
+  whose failure would have shown as money going missing. The rest fail
+  silently and in the flattering direction — a smaller `/metrics` total and
+  a `cost / query` mean quietly taken over the non-streaming subset. Exactly
+  one streamed query existed in that window, so the n=35 figure is over 35
+  of 36 and the error is immaterial; the console is the streaming client, so
+  it would not have stayed immaterial.
+
+  The same gap existed on the **non-streaming failure path**, which also
+  reached `spend.add` alone: a failing deployment's spend was real, capped,
+  and invisible to every other figure. Fixed in the same change.
+
+  Streaming now also logs `query_complete` — the same event name as the
+  standard path, with `stream` and `failed` fields — because a p95 of
+  `cost / query` mined from those lines has to cover every query, and
+  splitting the event name would rebuild the same blind spot in the logs
+  that the counters just had.
+
+  Four mutations were checked against the new tests, and **the first of them
+  is the pre-fix code restored exactly**; all four fail. 766 → 773 tests.
+
+  Found while writing them: **no test on either path had ever asserted that
+  the route writes a per-key usage record.** The fixture disables auth, so
+  `api_key_id` is None and the write is skipped — the sink BUDGET's headline
+  number is computed from was entirely uncovered. It is pinned directly now.

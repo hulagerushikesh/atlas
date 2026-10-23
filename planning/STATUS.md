@@ -132,7 +132,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **766 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **773 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00025-bnj**, image `87caf12`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -428,6 +428,29 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-23 (streaming usage accounting; **₹0**) — a streamed `/query`
+  charged the daily cap and incremented **none** of `COST_USD`,
+  `TOKEN_USAGE` or `log_usage`. It hid for 90 days because the one sink that
+  worked is the only one whose failure looks like money going missing; the
+  rest fail quietly and flatteringly, as a smaller `/metrics` total and a
+  `cost / query` mean taken over the non-streaming subset only. The same gap
+  was on the **non-streaming failure path**, so a failing deployment's spend
+  was real, capped and invisible everywhere else.
+
+  All four sinks now live in one function, `_charge`, called by all three
+  sites. Adding the missing calls to each path separately would have left
+  two hand-maintained copies of the list that caused this. Streaming also
+  logs `query_complete` under the **same event name** as the standard path,
+  with `stream` and `failed` fields — a different name would rebuild the
+  same blind spot in the logs.
+
+  Four mutations checked, **the first being the pre-fix code restored
+  exactly**; all four fail the new tests. Found on the way: no test had ever
+  asserted the route writes a per-key usage record — the fixture disables
+  auth, so the sink BUDGET's `cost / query` is computed from was entirely
+  uncovered. Pinned directly now. 766 → **773 tests**, 93.70%. Not yet
+  deployed: live is still `atlas-api-00025-bnj`. See DECISIONS 2026-10-23.
 
 - 2026-10-22 (`cost / query`, n=1 → n=34; **₹0**) — BUDGET's plan for this
   said to recompute from the next eval run, and that plan was wrong: an eval
