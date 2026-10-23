@@ -2774,3 +2774,53 @@ Format: date — decision — alternatives — reason.
   aged out by the last. A key older than the retained log is printed as not
   reconcilable, because counting its queries as lost would report retention
   as data loss.
+
+- **2026-10-23** — Rule 6 ships having measured **zero**, and the reason it
+  was tried was wrong. One eval pass, ₹6.05, `changelog-dates_20261023-200627`
+  against `router-scope_20261019-202434`.
+
+  The filing predicted that dating a changelog claim would move `fq-002`'s
+  stale Python floor from *contradicted* to *missing* — the exact distinction
+  `answer_correctness` was built to draw. The text changed as designed:
+
+  | | `fq-002` answer |
+  |---|---|
+  | before | FastAPI requires Python 3.8 or above [2]. |
+  | after | **As of 0.104.0 (2023-10-18),** FastAPI requires Python 3.8 or above [2]. |
+
+  The verdict did not move at all: `0.0`, `1 contradicted`, **byte-identical
+  reasoning** in both runs. The judge still reads a dated claim about 3.8 as
+  contradicting "FastAPI currently requires Python 3.10 or later". The
+  measurable half of the rationale is simply false, and the metric cannot be
+  made to see this change.
+
+  **The +0.1227 on `answer_correctness` is not this change, and claiming it
+  would be the error the comparator exists to prevent.** Four rows moved:
+  fq-016 (0.0 → 1.0, the router refused an out-of-scope question it answered
+  last time), fq-012 (0.0 → 0.75, the known routing flake), fq-010 and fq-014
+  (grader-level fact matching). **Not one of them is a changelog row.** The
+  comparator called it a tie on its own grounds — 4 of 16 paired rows differ,
+  so the smallest p the Wilcoxon test could return is 0.125 — and it was
+  right for a second reason it could not know.
+
+  Kept anyway, on the half nothing in `eval_data` scores: the deployed site
+  stops stating a three-year-old fact in the present tense. That is a real
+  defect for a reader and invisible to every metric here, which is worth
+  recording as a limit of the suite rather than an argument against it.
+  Faithfulness stayed **1.0** — the risk that a date read off a chunk header
+  would be audited as an unsupported claim did not materialise. Eval run cost
+  +0.8%, cost per query +1.5%, both inside allowance.
+
+  **The p95 budget breach is not attributable to this change and is not
+  accepted as one.** The comparator reports warm p95 14,556 ms → 48,590 ms,
+  over the 20,000 ms ceiling, driven by retrieval p95 40,782 ms. Retrieval
+  runs before generation and `_SYSTEM_PROMPT` is read only by
+  `AnswerGenerator`, so a system-prompt edit cannot reach it. The per-sample
+  numbers say the same thing: the first nine samples retrieved in 1.1–3.9 s,
+  matching baseline, and the last six degraded monotonically to 40.8 s. Five
+  of fifteen samples over 10 s, against zero in the four most recent runs
+  before this one. That is the embedding or Qdrant endpoint slowing under the
+  back half of a concurrency-4 run, not a property of the build. Re-measuring
+  it costs another ₹6 and buys nothing the causality does not already give,
+  so the ceiling stands unchanged and the next run that happens for another
+  reason settles it.
