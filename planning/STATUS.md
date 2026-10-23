@@ -132,7 +132,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **773 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **787 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00025-bnj**, image `87caf12`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -451,6 +451,35 @@ daily spend cap, console markdown.
   auth, so the sink BUDGET's `cost / query` is computed from was entirely
   uncovered. Pinned directly now. 766 → **773 tests**, 93.70%. Not yet
   deployed: live is still `atlas-api-00025-bnj`. See DECISIONS 2026-10-23.
+
+- 2026-10-23 (background writes drained at shutdown; **two fatal bugs in
+  `ed9dbd0` caught before it was pushed**; ₹0) — the last open accounting
+  item was that `log_usage` is fire-and-forget, so an instance torn down
+  mid-write drops the record, and Cloud Run scale-in follows a burst, so the
+  records most likely to be dropped are from the busiest minute. Now
+  `atlas.api.background` owns the three un-awaited writes on `/query`:
+  `spawn()` holds a strong reference until the task ends and logs its
+  exception under the caller's name, `drain()` runs first in the lifespan's
+  shutdown with a 5s budget and reports what it could not wait for. No
+  Firestore round trip was added to any response.
+
+  Writing it found **two fatal defects in yesterday's `ed9dbd0`**, in the
+  same nine lines. The consolidation replaced the standard path's inline
+  sink block but left a second `log_usage` call below it, which (a)
+  referenced `_auth`, imported only inside the cache-hit branch above, so
+  every authenticated cache miss raised `UnboundLocalError` — that is every
+  real production query on this path — and (b) counted every authenticated
+  query twice in the counters BUDGET reads. 773 tests passed over both,
+  because the route fixture has no `APIKeyMiddleware` and the block was
+  dead in tests. That is the exact gap yesterday's entry *named*; naming it
+  and pinning `_charge` directly left the route's own post-`_charge` code
+  still unreached. Unpushed and undeployed when found, so nothing was ever
+  served from it.
+
+  Five mutations checked, **A being `ed9dbd0`'s nine lines restored
+  verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
+  `background.py` at 100%. Not yet deployed: live is still
+  `atlas-api-00025-bnj`. See DECISIONS 2026-10-23.
 
 - 2026-10-22 (`cost / query`, n=1 → n=34; **₹0**) — BUDGET's plan for this
   said to recompute from the next eval run, and that plan was wrong: an eval

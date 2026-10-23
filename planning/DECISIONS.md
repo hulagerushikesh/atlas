@@ -2637,3 +2637,52 @@ Format: date — decision — alternatives — reason.
   the route writes a per-key usage record.** The fixture disables auth, so
   `api_key_id` is None and the write is skipped — the sink BUDGET's headline
   number is computed from was entirely uncovered. It is pinned directly now.
+
+- **2026-10-23** — Un-awaited writes go through `atlas.api.background`, and
+  the lifespan drains them. *Alt:* await `log_usage` inline; leave it
+  fire-and-forget and accept the loss. *Why:* awaiting puts a Firestore
+  round trip in front of every response for a record the caller does not
+  need. Accepting the loss stopped being acceptable on 2026-10-22, when
+  BUDGET's `cost / query` started being computed from those counters — and
+  the loss is not uniform: Cloud Run scale-in follows a burst, so the
+  records most likely to be dropped are from the busiest minute, and an
+  under-count there reads as the service being cheaper than it is.
+
+  `spawn()` also fixes a second, quieter hole. `asyncio.create_task` leaves
+  only a weak reference, so a collection between creation and completion
+  can drop the task — the behaviour `app.py` already worked around by hand
+  for the reranker warm task, and nothing else did. And an un-awaited task
+  that raises has its traceback printed at collection time, to stderr,
+  detached from the request; `spawn` logs it under the caller's name, so a
+  Firestore write failing every time reads as a rate rather than as noise.
+
+  `drain()` is bounded at 5s. Cloud Run allows ten seconds between SIGTERM
+  and SIGKILL and the redis close comes after, so a drain that outlives the
+  grace is not a longer drain — it is the same loss plus a hang. What it
+  could not wait for is returned and logged as a count, because that is the
+  only evidence the budget is set too low.
+
+- **2026-10-23** — Two fatal bugs in `ed9dbd0`, caught before the commit was
+  pushed or deployed. The consolidation into `_charge` replaced the standard
+  path's inline four-sink block, but left the nine lines below it that
+  called `log_usage` a second time. Both defects live there:
+
+  | defect | effect |
+  |---|---|
+  | `_auth` referenced, but imported only inside the cache-hit branch above | `UnboundLocalError` on every authenticated cache miss — i.e. every real production query on the standard path |
+  | `log_usage` called again after `_charge` already called it | every authenticated query counted twice in the counters BUDGET reads |
+
+  773 tests passed over both. The reason is the one named in the entry
+  above this pair: the route fixture has no `APIKeyMiddleware`, so
+  `request.state.api_key_id` is never set and the entire block was dead in
+  tests. Yesterday's entry recorded that gap and pinned `_charge` directly
+  instead of through the route — which left the route's *own* post-`_charge`
+  code still unreached. Naming a blind spot is not the same as covering it,
+  and the commit that named this one shipped into it.
+
+  Fixed by deleting the duplicate. Covered by a pure-ASGI test middleware
+  that writes `api_key_id` into `scope["state"]`, which is what
+  `Request.state` reads — `BaseHTTPMiddleware` cannot be used, it
+  re-dispatches in its own task and breaks the streaming route. Five
+  mutations checked; **A is `ed9dbd0`'s nine lines restored verbatim** and
+  fails four tests. 773 → 787 tests, 93.76%, `background.py` at 100%.

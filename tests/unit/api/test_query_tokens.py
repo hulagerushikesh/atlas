@@ -529,3 +529,94 @@ class TestChargeWritesThePerKeyRecord:
 
         assert cost == 0.0
         spend.add.assert_not_awaited()
+
+
+class _AttributeTo:
+    """Pure-ASGI middleware that sets what the auth middleware would set.
+
+    `conftest`'s app has no `APIKeyMiddleware`, so `request.state.api_key_id`
+    is never set and every branch guarded on it is dead in the route tests.
+    That is the gap `ed9dbd0` shipped into: it left a second `log_usage`
+    call beside the one `_charge` makes, referencing an `_auth` name bound
+    only inside the cache-hit branch, and 773 tests passed over it because
+    none of them ever reached the branch.
+
+    `BaseHTTPMiddleware` cannot be used for this — it re-dispatches the
+    request in its own task and breaks the streaming route. Writing into
+    `scope["state"]` is what `Request.state` reads, so this is the same
+    attribution the real middleware performs, with none of the machinery.
+    """
+
+    def __init__(self, app: object, key_id: str = "k-test") -> None:
+        self.app, self.key_id = app, key_id
+
+    async def __call__(self, scope: dict, receive: object, send: object) -> None:
+        if scope["type"] == "http":
+            scope.setdefault("state", {})["api_key_id"] = self.key_id
+        await self.app(scope, receive, send)  # type: ignore[operator]
+
+
+class TestAnAttributedQueryIsCountedOnceAndDoesNotCrash:
+    """The per-key counters are what BUDGET.md's `cost / query` is computed
+    from, so "counted" has to mean counted exactly once."""
+
+    @staticmethod
+    def _records(client: TestClient, monkeypatch: object, **body: object) -> list[dict]:
+        from atlas.api import auth as _auth
+
+        calls: list[dict] = []
+
+        async def spy(**kw: object) -> None:
+            calls.append(kw)
+
+        monkeypatch.setattr(_auth, "log_usage", spy)  # type: ignore[attr-defined]
+        client.app.add_middleware(_AttributeTo)
+        state = client.app.state.atlas
+        state.spend.add = AsyncMock()
+
+        # `_charge` returns before any sink when the request spent nothing,
+        # and the mock pipeline spends nothing, so the query has to be made
+        # to cost something before the per-key write is on the path at all.
+        # The standard path calls `pipeline.run`, not the stages, so the
+        # spend has to be recorded there — recording into a fresh meter is
+        # enough, because `record` also writes to whatever `usage_scope` is
+        # active, which is the request's.
+        pipeline = state.registry.get("default").pipeline
+        original_run = pipeline.run
+
+        async def run(*args: object, **kw: object) -> object:
+            UsageMeter().record("gpt-4o-mini", prompt_tokens=1200, completion_tokens=40)
+            return await original_run(*args, **kw)
+
+        pipeline.run = run
+        payload = {"query": "What is Atlas?"}
+        payload.update(body)  # type: ignore[arg-type]
+        resp = client.post("/query", json=payload)
+        assert resp.status_code == 200, resp.text
+        return calls
+
+    def test_the_standard_path_does_not_raise_for_an_authenticated_caller(
+        self, client: TestClient, monkeypatch: object
+    ) -> None:
+        # Verbatim the bug in ed9dbd0: UnboundLocalError on `_auth`, on
+        # every authenticated cache miss — which is every real query on
+        # this path. Unpushed and undeployed when it was found.
+        self._records(client, monkeypatch)
+
+    def test_it_writes_exactly_one_per_key_record(
+        self, client: TestClient, monkeypatch: object
+    ) -> None:
+        calls = self._records(client, monkeypatch)
+        assert len(calls) == 1, calls
+        assert calls[0]["api_key_id"] == "k-test"
+        assert calls[0]["cache_hit"] is False
+
+    def test_the_record_carries_the_tokens_the_response_reported(
+        self, client: TestClient, monkeypatch: object
+    ) -> None:
+        # A double write was invisible in the totals precisely because both
+        # copies were plausible; pinning the figure to the response body is
+        # what makes a second one detectable.
+        calls = self._records(client, monkeypatch)
+        assert calls[0]["prompt_tokens"] == 1200
+        assert calls[0]["completion_tokens"] == 40
