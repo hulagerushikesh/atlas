@@ -132,7 +132,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **787 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **787 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39945279558` on `b8b02f6`, 786 + 1 skip, 93.78%), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00026-zcx**, image `0d139c3`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -479,6 +479,26 @@ daily spend cap, console markdown.
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
   `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-23 (background-write loss measured; **₹0**) — the loss is
+  **zero**. `scripts/reconcile_usage.py` (new) reconciles the per-key
+  Firestore counters against Cloud Run's own request log: 38 successful
+  `POST /query`, minus the one streamed query that predates streaming
+  charging a per-key record, = **37 expected**, and Firestore holds **37**.
+  `usage_log_failed` 0, `background_task_failed` 0, drains observed 0. The
+  drain still never executes and now does not need to; neither
+  always-allocated CPU nor a synchronous write gets bought.
+
+  The plan this came from was wrong twice, and that is the part worth
+  keeping. **`query_complete` only carries tokens and cost from
+  2026-10-22** — 33 of the 35 retained lines have neither, so the
+  per-query cost distribution starts accumulating on that date, not at
+  launch. And **application stdout is the lossier source**: one of 39
+  successful requests produced no application log line at all and another
+  lost its `request_complete`, ~2.5%, all inside one twelve-way concurrent
+  burst — while the fire-and-forget Firestore write under suspicion lost
+  nothing. The denominator had to become the infrastructure's request log.
+  See BACKLOG and DECISIONS 2026-10-23.
 
 - 2026-10-23 (deploy + production verification; **₹0.23**) — build
   `399cb629` SUCCESS 2m45s → **`atlas-api-00026-zcx`**, image `0d139c3`.

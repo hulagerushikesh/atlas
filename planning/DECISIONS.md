@@ -2726,3 +2726,51 @@ Format: date — decision — alternatives — reason.
   `spawn()`'s other two effects are unaffected and unconditional: the
   strong reference against mid-write collection, and the failure logging.
   An unexecuted drain costs nothing, so nothing is withdrawn.
+
+- **2026-10-23** — The un-awaited writes lose nothing, and the instrument
+  that was supposed to prove it is the lossier one. `scripts/reconcile_usage.py`
+  reconciles the per-key Firestore counters against production, for Rs.0:
+
+  | source | count |
+  |---|---|
+  | Cloud Run `POST /query` → 200, since the live key was created | 38 |
+  | of those, streamed before 2026-10-23 (charged the cap only) | −1 |
+  | expected `usage.total_queries` | **37** |
+  | actual `usage.total_queries` | **37** |
+  | `usage_log_failed` / `background_task_failed` / drains observed | 0 / 0 / 0 |
+
+  **Loss is zero over the whole reconcilable history.** The drain still
+  never executes; after this it does not have to. Neither always-allocated
+  CPU nor a synchronous Firestore write gets bought.
+
+  The previous entry proposed measuring this from `query_complete` lines.
+  That plan was wrong twice, and the corrections are the durable part:
+
+  * **The log line did not carry what the plan assumed.** Tokens and cost
+    were added to `query_complete` on 2026-10-22. **33 of the 35 retained
+    lines have neither field.** The per-query cost distribution those lines
+    make recoverable starts accumulating on that date, not at launch —
+    worth knowing before BUDGET.md is asked for a p95.
+  * **Application stdout drops lines; the un-awaited Firestore write did
+    not.** One of 39 successful requests produced no application log at
+    all, and a second lost its `request_complete`, both during one
+    twelve-way concurrent burst — ~2.5%. The fire-and-forget write that
+    this whole investigation suspected lost 0 of 37. So the denominator is
+    Cloud Run's **request** log, written by the infrastructure, which an
+    application that drops a line or dies mid-write cannot affect.
+
+  Two corrections keep history out of the loss figure. A key created and
+  exercised locally against production Firestore before the first revision
+  booted has counts with no requests behind them, so a negative difference
+  is reported as not-loss rather than netted off. And there has been
+  exactly one streamed query in production, 2026-10-07 — findable only
+  through `query_stream_start`, because streaming shares the URL and method
+  of every other query and the middleware closes a streamed request in
+  43 ms while its body writes for ten seconds.
+
+  Retention bounds the claim: the log bucket keeps 30 days, the counters
+  are lifetime, and the boundary moved mid-measurement — a 2026-09-23
+  request that was inside the window when the first count was taken had
+  aged out by the last. A key older than the retained log is printed as not
+  reconcilable, because counting its queries as lost would report retention
+  as data loss.

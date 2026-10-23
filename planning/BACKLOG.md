@@ -955,8 +955,58 @@ Newest at the bottom of each section.
   both fatal, caught before the commit was pushed or deployed. See
   DECISIONS 2026-10-23.
 
-- **The shutdown drain cannot be shown to run in production, and probably
-  does not.** `drain()` is correct, tested and free, but in 30 days of
+- ~~**The shutdown drain cannot be shown to run in production, and probably
+  does not.**~~ **Measured 2026-10-23, Rs.0 — the loss is zero.** Option (c)
+  ran as `scripts/reconcile_usage.py`, and the answer is that nothing has
+  been lost: **37 of 37** queries attributable to the live key have a
+  Firestore record.
+
+      served (Cloud Run POST /query -> 200)   38
+      - streamed before 2026-10-23             1   (no per-key record by design)
+      = expected                              37
+      firestore usage.total_queries           37   difference +0
+
+  `usage_log_failed` 0, `background_task_failed` 0, drains observed 0. The
+  drain still never runs, and after this it does not need to: at this
+  traffic the un-awaited write finishes long before the instance is scaled
+  in. (a) always-allocated CPU and (b) a synchronous Firestore round trip
+  both stay unbought. Re-run the script if traffic ever becomes bursty
+  enough to make the question live again.
+
+  **The method changed on contact, and that is the finding worth keeping.**
+  This item proposed reconciling `query_complete` log lines against the
+  counters. Both halves of that were wrong:
+
+  * `query_complete` only started carrying tokens and cost on 2026-10-22.
+    **33 of the 35 retained lines have neither field**, so the p95 those
+    lines were going to make recoverable begins accumulating from that date,
+    not from launch.
+  * Application stdout is the **lossier** of the two sources. Of 39
+    successful requests, one produced no application log line at all and one
+    more lost its `request_complete` — about 2.5%, all of it during a single
+    twelve-way concurrent burst — while the Firestore counters, written by
+    the un-awaited task this whole item was worried about, lost nothing. The
+    denominator had to become Cloud Run's own **request** log, which the
+    infrastructure writes and the application cannot drop.
+
+  Two corrections separate history from loss, both encoded in the script: a
+  key created and exercised locally against production Firestore before the
+  first revision booted (`demo`, 2 queries, outside the request log), and
+  streamed queries before 2026-10-23, which charged the cap and nothing
+  else. There has been exactly **one** streamed query in production, on
+  2026-10-07; it is visible only as `query_stream_start`, because streaming
+  and non-streaming share one URL and the middleware closes a streamed
+  request in 43 ms while the body writes for ten seconds.
+
+  Log retention is 30 days and the counters are lifetime, so a key older
+  than the retained log is reported as not reconcilable rather than as loss.
+  The boundary moved during this very session — a 2026-09-23 request that
+  was in the window at the start of the measurement had aged out by the end.
+
+  The original filing, for the record:
+
+- **(filed 2026-10-23) The shutdown drain cannot be shown to run in
+  production, and probably does not.** `drain()` is correct, tested and free, but in 30 days of
   Cloud Logging **no Atlas instance has ever logged `atlas_shutdown`** —
   nor uvicorn's "Shutting down" / "Application shutdown complete" /
   "Finished server process". The lifespan shutdown path has never been
