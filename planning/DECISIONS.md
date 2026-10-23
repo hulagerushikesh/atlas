@@ -2824,3 +2824,52 @@ Format: date — decision — alternatives — reason.
   it costs another ₹6 and buys nothing the causality does not already give,
   so the ceiling stands unchanged and the next run that happens for another
   reason settles it.
+
+- **2026-10-24** — **A key can be revoked. `is_active` had been a field with
+  a reader and no writer since the key store was built.** *Alt:* leave it,
+  and revoke by editing Firestore; or drop the field. *Why:* both key stores
+  read `is_active` in `lookup_key` and refuse an inactive key, both have
+  carried the column or the document field since the beginning, and nothing
+  in the codebase could set it to false. The only revocation available for a
+  leaked production key was opening the Firestore console and editing a
+  document by hand.
+
+  The test suite did not catch this and could not have, as it was written.
+  `test_inactive_key_rejected` sets `_client.docs[key_id]["is_active"] =
+  False` itself and then asserts the lookup refuses — so the branch was
+  covered, passing, and unreachable in production. This is the second time
+  that shape has cost something here (see the disabled-fixture entry): a
+  test that supplies the state under test proves the reader works and says
+  nothing about whether anything writes it.
+
+  Shipped: `list_keys` and `set_key_active` on the `KeyStore` protocol and
+  on both backends; `GET /keys` and `PATCH /keys/{key_id}` behind
+  `X-Admin-Secret`; `scripts/manage_keys.py list|revoke|restore`.
+  Revocation is reversible on purpose — the alternative to a restore is the
+  hand-edit this entry exists to remove.
+
+  **Proven, not asserted.** The HTTP test mints a key, queries with it,
+  revokes it over the API and gets 401 "Invalid or inactive API key", then
+  restores it and gets 200. Mutation check: change the SQLite UPDATE to
+  write `is_active = is_active` and three tests fail across both layers.
+  18 new tests, 790 → 808, coverage 93.76% → 94.04%, ₹0 — no model call is
+  involved anywhere in this.
+
+  **Two smaller things were wrong and are fixed in the same commit.**
+  `scripts/create_key.py` never called `configure_store`, so it always wrote
+  to the module-level default — a local `data/atlas.db` — and with
+  `AUTH_STORE=firestore` in the environment it would print a key that
+  production could never authenticate. Both scripts now configure from
+  settings and print the backend before acting, because these commands
+  change live auth when the production `.env` is loaded. And the fake
+  Firestore client in the tests ignored `limit(n)` and sliced `[:1]`
+  regardless, which was indistinguishable from the real thing while `init()`
+  was the only caller and would have reported one key however many existed.
+
+  **`PATCH /keys/{key_id}` required widening the middleware's public prefix
+  list to `/keys/`.** `/keys` itself was already public — the first key
+  could not otherwise be created — and the admin secret, not a Bearer token,
+  is the guard on all of them. The risk this adds is that a future route
+  under `/keys/` would be open to anyone unless it checks the header too,
+  which is now said in a comment at the allowlist and pinned by a test that
+  a Bearer holder gets 403 from the revoke route.

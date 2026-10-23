@@ -50,6 +50,28 @@ class ApiKey:
     rate_limit_rpm: int
 
 
+@dataclass
+class KeyRecord:
+    """A key as an operator sees it: metadata plus enough usage to judge it.
+
+    Deliberately carries no hash. The SHA-256 of the raw key is the Firestore
+    document id and a SQLite column, and it is the one value that lets someone
+    holding a leaked log recognise a stolen key — so a listing that exists to
+    be read over someone's shoulder does not include it. `id` is that hash on
+    Firestore, which is unavoidable (it is the document id, and revoking needs
+    it), and a row id on SQLite.
+    """
+
+    id: KeyId
+    name: str
+    email: str
+    is_active: bool
+    rate_limit_rpm: int
+    created_at: float | None
+    total_queries: int
+    last_query_at: float | None
+
+
 def hash_key(raw_key: str) -> str:
     return hashlib.sha256(raw_key.encode()).hexdigest()
 
@@ -91,6 +113,12 @@ class KeyStore(Protocol):
     ) -> None: ...
 
     async def get_usage_stats(self, api_key_id: KeyId) -> dict[str, Any]: ...
+
+    async def list_keys(self) -> list[KeyRecord]: ...
+
+    async def set_key_active(
+        self, api_key_id: KeyId, is_active: bool
+    ) -> KeyRecord | None: ...
 
 
 # ── SQLite ────────────────────────────────────────────────────────────────────
@@ -170,6 +198,64 @@ class SQLiteKeyStore:
             rate_limit_rpm=row["rate_limit_rpm"],
         )
 
+    async def _records(self, api_key_id: KeyId | None = None) -> list[KeyRecord]:
+        where = ""
+        params: tuple[int, ...] = ()
+        if api_key_id is not None:
+            try:
+                where, params = "WHERE k.id = ?", (int(api_key_id),)
+            except (TypeError, ValueError):
+                # A Firestore-shaped id against the SQLite store is not an
+                # error, it is a miss: the caller asked about a key this
+                # backend has never held.
+                return []
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                f"""SELECT k.id, k.name, k.email, k.is_active, k.rate_limit_rpm,
+                           k.created_at,
+                           COUNT(u.id)       AS total_queries,
+                           MAX(u.created_at) AS last_query_at
+                    FROM api_keys k
+                    LEFT JOIN usage_log u ON u.api_key_id = k.id
+                    {where}
+                    GROUP BY k.id
+                    ORDER BY k.created_at DESC""",  # noqa: S608 - `where` is a literal
+                params,
+            )
+            rows = await cursor.fetchall()
+        return [
+            KeyRecord(
+                id=r["id"],
+                name=r["name"],
+                email=r["email"],
+                is_active=bool(r["is_active"]),
+                rate_limit_rpm=r["rate_limit_rpm"],
+                created_at=r["created_at"],
+                total_queries=r["total_queries"],
+                last_query_at=r["last_query_at"],
+            )
+            for r in rows
+        ]
+
+    async def list_keys(self) -> list[KeyRecord]:
+        return await self._records()
+
+    async def set_key_active(
+        self, api_key_id: KeyId, is_active: bool
+    ) -> KeyRecord | None:
+        records = await self._records(api_key_id)
+        if not records:
+            return None
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "UPDATE api_keys SET is_active = ? WHERE id = ?",
+                (int(is_active), int(api_key_id)),
+            )
+            await db.commit()
+        logger.info("api_key_active_set", key_id=api_key_id, is_active=is_active)
+        return (await self._records(api_key_id))[0]
+
     async def log_usage(
         self,
         api_key_id: KeyId,
@@ -233,6 +319,20 @@ class SQLiteKeyStore:
 
 
 # ── Firestore ─────────────────────────────────────────────────────────────────
+
+def _record_from_doc(doc_id: str, data: dict[str, Any]) -> KeyRecord:
+    usage = data.get("usage", {})
+    return KeyRecord(
+        id=doc_id,
+        name=data.get("name", ""),
+        email=data.get("email", ""),
+        is_active=bool(data.get("is_active", False)),
+        rate_limit_rpm=int(data.get("rate_limit_rpm", 60)),
+        created_at=data.get("created_at"),
+        total_queries=int(usage.get("total_queries", 0)),
+        last_query_at=usage.get("last_query_at"),
+    )
+
 
 class FirestoreKeyStore:
     """
@@ -299,6 +399,25 @@ class FirestoreKeyStore:
             is_active=True,
             rate_limit_rpm=int(data.get("rate_limit_rpm", 60)),
         )
+
+    async def list_keys(self) -> list[KeyRecord]:
+        snaps = await self._keys().get()
+        records = [_record_from_doc(s.id, s.to_dict() or {}) for s in snaps]
+        records.sort(key=lambda r: r.created_at or 0.0, reverse=True)
+        return records
+
+    async def set_key_active(
+        self, api_key_id: KeyId, is_active: bool
+    ) -> KeyRecord | None:
+        doc = self._keys().document(str(api_key_id))
+        snap = await doc.get()
+        if not snap.exists:
+            return None
+        await doc.update({"is_active": is_active})
+        logger.info(
+            "api_key_active_set", key_id=str(api_key_id)[:8], is_active=is_active
+        )
+        return _record_from_doc(snap.id, {**(snap.to_dict() or {}), "is_active": is_active})
 
     async def log_usage(
         self,
