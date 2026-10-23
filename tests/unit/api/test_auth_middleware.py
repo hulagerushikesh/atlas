@@ -118,3 +118,88 @@ class TestTheKeepWarmCanReachWhatItWasWrittenFor:
     def test_and_a_private_route_still_is_not(self, auth_client: TestClient) -> None:
         # The allowlist widened by one path, not by one path and a door.
         assert auth_client.get("/private").status_code == 401
+
+
+class TestKeyLifecycleOverHTTP:
+    """Revocation end to end: the admin routes, then a 401 on the revoked key.
+
+    The store-level tests in `test_keystore.py` prove `set_key_active` writes
+    the field. This proves the thing that matters operationally — that an
+    operator with the admin secret, and nothing else, can stop a leaked key
+    from answering.
+    """
+
+    _ADMIN = {"X-Admin-Secret": "s3cret"}
+
+    def test_listing_needs_the_admin_secret(self, auth_client: TestClient) -> None:
+        assert auth_client.get("/keys").status_code == 403
+
+    def test_revoking_needs_it_too(self, auth_client: TestClient) -> None:
+        _mint(auth_client)
+        response = auth_client.patch("/keys/1", json={"is_active": False})
+        assert response.status_code == 403
+        # And the key still works, i.e. the 403 was a refusal, not a slow write.
+        assert auth_client.get("/usage", headers={
+            "Authorization": f"Bearer {_mint(auth_client)}"}).status_code == 200
+
+    def test_listing_shows_the_keys_without_any_key_material(
+        self, auth_client: TestClient
+    ) -> None:
+        raw = _mint(auth_client)
+        body = auth_client.get("/keys", headers=self._ADMIN).json()
+        assert [k["name"] for k in body["keys"]] == ["t"]
+        assert body["keys"][0]["is_active"] is True
+        assert raw not in str(body)
+        assert auth.hash_key(raw) not in str(body)
+
+    def test_usage_counters_reach_the_listing(self, auth_client: TestClient) -> None:
+        raw = _mint(auth_client)
+        headers = {"Authorization": f"Bearer {raw}"}
+        assert auth_client.get("/usage", headers=headers).status_code == 200
+        asyncio.run(auth.log_usage(1, "default", 10, 2, 50.0, cache_hit=False))
+        record = auth_client.get("/keys", headers=self._ADMIN).json()["keys"][0]
+        assert record["total_queries"] == 1 and record["last_query_at"] is not None
+
+    def test_revoked_key_is_401_on_the_next_request(self, auth_client: TestClient) -> None:
+        raw = _mint(auth_client)
+        headers = {"Authorization": f"Bearer {raw}"}
+        assert auth_client.get("/usage", headers=headers).status_code == 200
+
+        key_id = auth_client.get("/keys", headers=self._ADMIN).json()["keys"][0]["key_id"]
+        patched = auth_client.patch(
+            f"/keys/{key_id}", headers=self._ADMIN, json={"is_active": False}
+        )
+        assert patched.status_code == 200, patched.text
+        assert patched.json()["is_active"] is False
+
+        refused = auth_client.get("/usage", headers=headers)
+        assert refused.status_code == 401
+        assert refused.json()["error"] == "Invalid or inactive API key"
+
+    def test_restore_puts_it_back(self, auth_client: TestClient) -> None:
+        raw = _mint(auth_client)
+        headers = {"Authorization": f"Bearer {raw}"}
+        key_id = auth_client.get("/keys", headers=self._ADMIN).json()["keys"][0]["key_id"]
+        auth_client.patch(f"/keys/{key_id}", headers=self._ADMIN, json={"is_active": False})
+        assert auth_client.get("/usage", headers=headers).status_code == 401
+
+        auth_client.patch(f"/keys/{key_id}", headers=self._ADMIN, json={"is_active": True})
+        assert auth_client.get("/usage", headers=headers).status_code == 200
+
+    def test_unknown_key_id_is_404(self, auth_client: TestClient) -> None:
+        response = auth_client.patch(
+            "/keys/9999", headers=self._ADMIN, json={"is_active": False}
+        )
+        assert response.status_code == 404
+
+    def test_the_patch_route_is_not_open_to_a_bearer_holder(
+        self, auth_client: TestClient
+    ) -> None:
+        # "/keys/" is on the middleware's public prefix list so the admin
+        # secret can reach it; that must not mean any key holder can revoke
+        # any other key.
+        raw = _mint(auth_client)
+        response = auth_client.patch(
+            "/keys/1", headers={"Authorization": f"Bearer {raw}"}, json={"is_active": False}
+        )
+        assert response.status_code == 403

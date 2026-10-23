@@ -212,7 +212,7 @@ alert at ₹200/mo in the console as a backstop.
 | `QDRANT_API_KEY` | Yes (cloud) | Leave blank for local |
 | `REDIS_URL` | No | Set to `""` on Cloud Run: empty means deliberately absent, so `/health` reports `ok (disabled)` instead of `degraded`. In-process cache, rate limiter and spend counter take over |
 | `AUTH_ENABLED` | Recommended | `true` in production |
-| `ADMIN_SECRET` | When auth on | Random secret for `POST /keys` |
+| `ADMIN_SECRET` | When auth on | Random secret for the key-lifecycle routes (`POST`/`GET /keys`, `PATCH /keys/{id}`) |
 | `AUTH_STORE` | No | `sqlite` (default) or `firestore` (Cloud Run) |
 | `BUDGET_STORE` | No | `auto` (Redis if present, else in-process) or `firestore`. Cloud Run needs `firestore`: an in-process counter dies with the instance, so scale-to-zero would reset the daily cap on every cold start |
 | `BUDGET_DAILY_USD` | Recommended | Daily spend cap; `0` disables |

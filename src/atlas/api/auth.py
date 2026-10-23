@@ -27,6 +27,7 @@ from typing import Any
 from atlas.api.keystore import (
     ApiKey,
     KeyId,
+    KeyRecord,
     KeyStore,
     SQLiteKeyStore,
     build_key_store,
@@ -35,9 +36,9 @@ from atlas.api.keystore import (
 )
 
 __all__ = [
-    "ApiKey", "KeyId", "generate_key", "hash_key", "configure_store", "get_store",
-    "init_db", "create_key", "lookup_key", "log_usage", "get_usage_stats",
-    "check_rate_limit",
+    "ApiKey", "KeyId", "KeyRecord", "generate_key", "hash_key", "configure_store",
+    "get_store", "init_db", "create_key", "lookup_key", "log_usage",
+    "get_usage_stats", "list_keys", "set_key_active", "check_rate_limit",
 ]
 
 _store: KeyStore = SQLiteKeyStore()
@@ -84,6 +85,20 @@ async def log_usage(
 
 async def get_usage_stats(api_key_id: KeyId) -> dict[str, Any]:
     return await _store.get_usage_stats(api_key_id)
+
+
+async def list_keys() -> list[KeyRecord]:
+    return await _store.list_keys()
+
+
+async def set_key_active(api_key_id: KeyId, is_active: bool) -> KeyRecord | None:
+    """Revoke (False) or restore (True) a key. None when the store has no such key.
+
+    Revoking takes effect on the next request: `lookup_key` returns None for an
+    inactive key, so the middleware answers 401. There is no cache in front of
+    it to invalidate.
+    """
+    return await _store.set_key_active(api_key_id, is_active)
 
 
 # ── In-memory rate limiter (per-process fallback) ─────────────────────────────

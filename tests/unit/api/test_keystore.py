@@ -89,14 +89,21 @@ class _Doc:
 
 
 class _Query:
-    def __init__(self, store: dict[str, dict[str, Any]]) -> None:
-        self._store = store
+    def __init__(self, store: dict[str, dict[str, Any]], limit: int | None = None) -> None:
+        self._store, self._limit = store, limit
 
     def limit(self, n: int) -> _Query:
-        return self
+        # Used to ignore n and `get()` used to slice [:1] regardless, which was
+        # indistinguishable from the real thing while `init()` was the only
+        # caller. `list_keys()` calls `get()` with no limit, so the fake now has
+        # to tell the two apart or it would report one key however many exist.
+        return _Query(self._store, n)
 
     async def get(self) -> list[_Snap]:
-        return [_Snap(k, v) for k, v in list(self._store.items())[:1]]
+        items = list(self._store.items())
+        if self._limit is not None:
+            items = items[: self._limit]
+        return [_Snap(k, v) for k, v in items]
 
 
 class _Collection(_Query):
@@ -194,3 +201,99 @@ class TestFacade:
 
     def test_firestore_backend_builds_without_client(self) -> None:
         assert isinstance(build_key_store("firestore"), FirestoreKeyStore)
+
+
+# ── Key lifecycle ─────────────────────────────────────────────────────────────
+
+class TestSQLiteKeyLifecycle:
+    """`is_active` had no writer until these methods existed.
+
+    Both stores read the field in `lookup_key` and both tests below used to set
+    it by hand, so the branch was covered and unreachable: a leaked key could
+    only be revoked by editing the store. See DECISIONS 2026-10-24.
+    """
+
+    async def test_list_is_newest_first_and_carries_usage(
+        self, sqlite_store: SQLiteKeyStore
+    ) -> None:
+        _, first = await sqlite_store.create_key("first")
+        _, second = await sqlite_store.create_key("second")
+        await sqlite_store.log_usage(second, "default", 10, 2, 50.0, False)
+
+        records = await sqlite_store.list_keys()
+        assert [r.id for r in records] == [second, first]
+        assert records[0].total_queries == 1 and records[0].last_query_at is not None
+        assert records[1].total_queries == 0 and records[1].last_query_at is None
+        assert all(r.is_active for r in records)
+
+    async def test_revoke_makes_the_key_stop_resolving(
+        self, sqlite_store: SQLiteKeyStore
+    ) -> None:
+        raw, key_id = await sqlite_store.create_key("doomed")
+        assert await sqlite_store.lookup_key(raw) is not None
+
+        record = await sqlite_store.set_key_active(key_id, False)
+        assert record is not None and record.is_active is False
+        assert await sqlite_store.lookup_key(raw) is None
+
+    async def test_restore_brings_it_back(self, sqlite_store: SQLiteKeyStore) -> None:
+        raw, key_id = await sqlite_store.create_key("pardoned")
+        await sqlite_store.set_key_active(key_id, False)
+        record = await sqlite_store.set_key_active(key_id, True)
+        assert record is not None and record.is_active is True
+        assert await sqlite_store.lookup_key(raw) is not None
+
+    async def test_unknown_id_is_none_not_an_error(
+        self, sqlite_store: SQLiteKeyStore
+    ) -> None:
+        assert await sqlite_store.set_key_active(9999, False) is None
+
+    async def test_a_firestore_shaped_id_is_a_miss_not_a_crash(
+        self, sqlite_store: SQLiteKeyStore
+    ) -> None:
+        # The route takes the id as a string and does not know which backend is
+        # mounted; a 64-char hash against SQLite must 404, not 500.
+        assert await sqlite_store.set_key_active("a" * 64, False) is None
+
+
+class TestFirestoreKeyLifecycle:
+    async def test_list_returns_every_key(self, firestore_store: FirestoreKeyStore) -> None:
+        await firestore_store.create_key("one")
+        await firestore_store.create_key("two")
+        records = await firestore_store.list_keys()
+        assert sorted(r.name for r in records) == ["one", "two"]
+        assert all(r.is_active and r.total_queries == 0 for r in records)
+
+    async def test_list_carries_the_usage_counters(
+        self, firestore_store: FirestoreKeyStore
+    ) -> None:
+        _, key_id = await firestore_store.create_key("busy")
+        await firestore_store.log_usage(key_id, "default", 10, 2, 50.0, False)
+        record = next(r for r in await firestore_store.list_keys() if r.id == key_id)
+        assert record.total_queries == 1 and record.last_query_at is not None
+
+    async def test_revoke_makes_the_key_stop_resolving(
+        self, firestore_store: FirestoreKeyStore
+    ) -> None:
+        raw, key_id = await firestore_store.create_key("doomed")
+        assert await firestore_store.lookup_key(raw) is not None
+
+        record = await firestore_store.set_key_active(key_id, False)
+        assert record is not None and record.is_active is False
+        assert await firestore_store.lookup_key(raw) is None
+        assert await firestore_store.set_key_active(key_id, True) is not None
+        assert await firestore_store.lookup_key(raw) is not None
+
+    async def test_unknown_id_is_none(self, firestore_store: FirestoreKeyStore) -> None:
+        assert await firestore_store.set_key_active("deadbeef", False) is None
+
+    async def test_the_record_never_carries_a_hash(
+        self, firestore_store: FirestoreKeyStore
+    ) -> None:
+        # `id` is the hash on this backend and has to be, because PATCH needs
+        # it. Nothing else in the record may be one.
+        raw, key_id = await firestore_store.create_key("quiet")
+        record = (await firestore_store.list_keys())[0]
+        fields = {k: v for k, v in vars(record).items() if k != "id"}
+        assert hash_key(raw) not in str(fields)
+        assert raw not in str(fields)

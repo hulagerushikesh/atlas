@@ -34,7 +34,10 @@ from atlas.api import auth as auth_db
 _PUBLIC_PATHS = {
     "/health", "/warm", "/docs", "/redoc", "/openapi.json", "/metrics", "/", "/keys",
 }
-_PUBLIC_PREFIXES = ("/app", "/out", "/namespaces")
+# "/keys/" covers the per-key admin routes (listing is on "/keys" itself).
+# Every route under it checks X-Admin-Secret, which is the guard — a new route
+# added here without that check would be open to anyone.
+_PUBLIC_PREFIXES = ("/app", "/out", "/namespaces", "/keys/")
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):

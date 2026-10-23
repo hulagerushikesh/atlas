@@ -1,17 +1,20 @@
-# Status — 2026-10-21 (v0.1.0, all four milestones done, 16 of 17, CI green)
+# Status — 2026-10-24 (v0.1.0, 17 of 17, M5 open at 1 of 3, CI green)
 
-**16 of the 17 ROADMAP exit criteria are ticked (≈94%), and all four
-milestones are marked done as of 2026-10-14.** That fraction is the project's
-progress number; count it from `planning/ROADMAP.md` rather than quoting it
-from anywhere else. The one criterion still open is M1's resume-bullets line,
-which is yours.
+**All 17 of the M1–M4 exit criteria are ticked** — the last, M1's
+resume-bullets line, on 2026-10-22 — and all four milestones are marked done
+as of 2026-10-14. **M5 was opened 2026-10-24 and is at 1 of 3.** Count the
+fraction from `planning/ROADMAP.md` rather than quoting it from anywhere
+else; the denominator moved from 17 to 20 when M5 opened.
 
-**There is no M5, on purpose.** Opening one is a decision, not a backlog
-item. The pool to pick from is *Parked* at the bottom of ROADMAP.md, the
-unbuilt M4 scope items listed there (key management UI, usage page per key,
-dataset upload for per-corpus eval, layout-aware PDF, evidence export), and
-[BACKLOG.md](BACKLOG.md). Until one is opened, what's next is *Blocked on
-you* below.
+**M5 — "Operable by whoever is on call" — opened 2026-10-24**, picked
+from the unbuilt M4 scope items rather than from *Parked*, because the
+parked list is research directions and this is the gap a live service with
+real keys actually had. Three criteria: revocation (**done**), per-key usage
+and revoke in the console, evidence export as JSON. Dataset upload for
+per-corpus eval and layout-aware PDF are explicitly out — neither is an
+operations gap and each is a milestone on its own. It is a decision, not a
+backlog item, so rename or reject it freely; nothing below depends on the
+name.
 
 How to explain the project to someone else — what gap it addresses, in prose
 rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
@@ -132,7 +135,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **790 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39945279558` on `b8b02f6`, 786 + 1 skip, 93.78%), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **808 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40012051888` on `a3245d0`, 789 + 1 skip, 0 non-success steps), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00026-zcx**, image `0d139c3`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -479,6 +482,28 @@ daily spend cap, console markdown.
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
   `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-24 (**M5 opened**; key revocation shipped; **₹0**) — a leaked key
+  could not be revoked. `is_active` was in both key stores, `lookup_key`
+  honoured it, and **nothing in the codebase could write it** — the only
+  revocation was hand-editing the Firestore document. The suite covered the
+  branch and could not have caught this: the two tests that exercise it set
+  the field themselves.
+
+  Shipped `list_keys` / `set_key_active` on the protocol and both backends,
+  `GET /keys` + `PATCH /keys/{key_id}` behind `X-Admin-Secret`, and
+  `scripts/manage_keys.py list|revoke|restore`. Proven over HTTP end to end
+  — mint, query, revoke, **401**, restore, 200 — and mutation-checked:
+  neuter the SQLite UPDATE and three tests fail across both layers. The CLI
+  was also run for real against the local store. 790 → **808 tests**,
+  93.76% → **94.04%**.
+
+  Two things found on the way and fixed in the same commit:
+  `scripts/create_key.py` never called `configure_store`, so with
+  `AUTH_STORE=firestore` it would have printed a key written to a local
+  SQLite file that production could never authenticate; and the fake
+  Firestore client in the tests ignored `limit(n)`. Both scripts now print
+  which backend they are about to change. See DECISIONS 2026-10-24.
 
 - 2026-10-23 (changelog dating in the generator; **₹6.05**) — rule 6 added
   to `_SYSTEM_PROMPT`, measured, **moves no metric**, shipped anyway. The

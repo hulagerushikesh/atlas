@@ -19,9 +19,30 @@ import sys
 sys.path.insert(0, "src")
 
 
+def _configure() -> str:
+    """Point the facade at the store AUTH_STORE names, and say which one.
+
+    Without this the module-level default wins and every script writes to a
+    local `data/atlas.db` — so with AUTH_STORE=firestore in the environment,
+    `create_key.py` used to print a key that production could never
+    authenticate. Printing the backend is the other half: these commands
+    change live auth when the production .env is loaded.
+    """
+    from atlas.api.auth import configure_store
+    from atlas.config import get_settings
+
+    settings = get_settings()
+    configure_store(
+        settings.auth_store,
+        firestore_project=settings.auth_firestore_project or None,
+    )
+    return settings.auth_store
+
+
 async def main(args: argparse.Namespace) -> int:
     from atlas.api.auth import create_key, init_db
 
+    backend = _configure()
     await init_db()
     raw_key, key_id = await create_key(
         name=args.name,
@@ -31,6 +52,7 @@ async def main(args: argparse.Namespace) -> int:
 
     print("─" * 55)
     print(f"  Key created  (id: {key_id})")
+    print(f"  Store        : {backend}")
     print(f"  Name         : {args.name}")
     if args.email:
         print(f"  Email        : {args.email}")

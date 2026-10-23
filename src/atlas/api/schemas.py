@@ -239,6 +239,25 @@ class KeyCreateResponse(BaseModel):
     rate_limit_rpm: int
 
 
+class KeyRecordResponse(BaseModel):
+    key_id: int | str
+    name: str
+    email: str
+    is_active: bool
+    rate_limit_rpm: int
+    created_at: float | None
+    total_queries: int
+    last_query_at: float | None
+
+
+class KeyListResponse(BaseModel):
+    keys: list[KeyRecordResponse]
+
+
+class KeyActiveRequest(BaseModel):
+    is_active: bool = Field(..., description="False revokes the key; True restores it")
+
+
 class NamespaceUsage(BaseModel):
     namespace: str
     queries: int

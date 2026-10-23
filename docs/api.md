@@ -356,6 +356,48 @@ atlas_requests_total{method="POST",path="/query",status="200"} 142.0
 
 ---
 
+### Key lifecycle — `POST /keys`, `GET /keys`, `PATCH /keys/{key_id}`
+
+All three are guarded by `X-Admin-Secret`, not by a Bearer key, and are the
+only routes the auth middleware lets through unauthenticated — otherwise the
+first key could never be created. An unset `ADMIN_SECRET` closes them rather
+than opening them.
+
+```bash
+# create — the raw key is shown once and never stored
+curl -X POST  $ATLAS/keys -H "X-Admin-Secret: $ADMIN_SECRET" \
+     -H 'content-type: application/json' -d '{"name": "my-app", "rate_limit_rpm": 60}'
+
+# list — newest first, with usage counters, no key material
+curl         $ATLAS/keys -H "X-Admin-Secret: $ADMIN_SECRET"
+
+# revoke (and restore with true)
+curl -X PATCH $ATLAS/keys/$KEY_ID -H "X-Admin-Secret: $ADMIN_SECRET" \
+     -H 'content-type: application/json' -d '{"is_active": false}'
+```
+
+```json
+{"keys": [{
+  "key_id": "9f2c…", "name": "my-app", "email": "", "is_active": true,
+  "rate_limit_rpm": 60, "created_at": 1792617600.0,
+  "total_queries": 37, "last_query_at": 1792784276.6
+}]}
+```
+
+`key_id` is a row id on SQLite and the SHA-256 of the raw key on Firestore,
+where it is the document id. No other field is key material: the listing is
+meant to be readable over someone's shoulder.
+
+Revocation is immediate — the middleware resolves the key on every request and
+nothing caches the result, so the next call gets **401 "Invalid or inactive API
+key"** — and reversible, because the alternative to a restore is editing the
+production key store by hand.
+
+`scripts/manage_keys.py list|revoke|restore` does the same against whichever
+store `AUTH_STORE` names, and prints the backend before it acts.
+
+---
+
 ## Two-Level Cache
 
 [`cache.py`](../src/atlas/api/cache.py)

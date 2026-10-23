@@ -211,6 +211,39 @@ to an answer, and a suite that defends the whole thing. Those are met and
 measured. The unbuilt scope items are features, not gaps in that claim, and
 they are the strongest candidates for an M5.
 
+## M5 — Operable by whoever is on call  🟡 opened 2026-10-24
+
+**Goal:** The person running Atlas can see what the keys are doing and stop
+one, without a terminal and without editing the key store by hand. M4 asked
+whether a second person could *use* it; this asks whether a second person
+could *operate* it.
+
+Picked from the unbuilt-M4-scope list above rather than from *Parked*: the
+parked items are research directions and this is the gap that a live service
+with real keys actually has.
+
+Exit criteria:
+- [x] A key can be revoked, and the revoke is shown to produce a 401 —
+      **done 2026-10-24, ₹0.** `is_active` existed in both key stores and
+      `lookup_key` honoured it, and **nothing in the codebase could write
+      it**: the only revocation was editing Firestore by hand, and the two
+      tests that covered the branch set the field themselves. Now
+      `list_keys` / `set_key_active` on the `KeyStore` protocol and both
+      backends, `GET /keys` and `PATCH /keys/{key_id}` behind
+      `X-Admin-Secret`, and `scripts/manage_keys.py list|revoke|restore`.
+      Proven end to end over HTTP — mint, query, revoke, 401, restore, 200 —
+      and the writer is mutation-checked: stop the UPDATE and three tests
+      fail across both layers. See DECISIONS 2026-10-24.
+- [ ] Per-key usage is visible without SSH or a script — the console shows
+      the listing and the counters, and can revoke from there
+- [ ] A query's evidence can be exported as JSON from the console — the last
+      M4 scope item that is about the product rather than about operating it,
+      kept here because it is the other thing that needs the console touched
+
+Out of scope on purpose: dataset upload for per-corpus eval and layout-aware
+PDF parsing, both on the M4 scope list. Neither is an operations gap, and
+each is a milestone's worth of work on its own.
+
 ## Parked (not scheduled)
 
 GraphRAG / RAPTOR; multimodal (ColPali); MCP tool exposure (that is
