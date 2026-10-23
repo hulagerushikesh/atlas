@@ -2686,3 +2686,43 @@ Format: date — decision — alternatives — reason.
   re-dispatches in its own task and breaks the streaming route. Five
   mutations checked; **A is `ed9dbd0`'s nine lines restored verbatim** and
   fails four tests. 773 → 787 tests, 93.76%, `background.py` at 100%.
+
+- **2026-10-23** — Production verification of `0d139c3` (rev
+  `atlas-api-00026-zcx`, image `0d139c3`; one query, **₹0.23**). The
+  deployed image contains `ed9dbd0`'s `UnboundLocalError`, so the fix had
+  to be exercised rather than assumed — and only an *authenticated* query
+  reaches that branch, which is exactly why the suite missed it. One
+  authenticated cache miss: **HTTP 200**, 12.24s.
+
+  Four independent sources agreed:
+
+  | source | prompt | completion | cost |
+  |---|---|---|---|
+  | response body | 6,340 | 720 | $0.0026636 |
+  | `query_complete` log (`stream=False`) | 6,340 | 720 | 0.0026636 |
+  | Firestore per-key delta | +6,340 | +720 | — |
+  | daily spend delta | — | — | $0.002664 |
+
+  `total_queries` went **36 → 37**, not 38: the double-count is gone where
+  it would have shown. The `stream` field is live on the log line — the
+  2026-10-22 entry predates it and has the field empty.
+
+- **2026-10-23** — The shutdown drain cannot be shown to run in
+  production. **No `atlas_shutdown` exists in 30 days of Cloud Logging**,
+  and neither does any uvicorn shutdown line. The service has no
+  `cpu-throttling: 'false'` annotation, so CPU is request-scoped and
+  SIGTERM handling — which happens outside a request — is throttled to
+  near-zero before SIGKILL. Same configuration fact `app.py` already
+  records for the reranker warm task, different symptom.
+
+  Recorded rather than fixed, because every fix has a price that should
+  not be paid before the loss is measured: always-allocated CPU is a
+  standing bill, and a synchronous write is the round trip the design
+  exists to avoid. The measurement is free — `query_complete` is written
+  inline on the response path and carries every query's tokens, so
+  reconciling those log lines against Firestore `total_queries` quantifies
+  the loss directly. See BACKLOG.
+
+  `spawn()`'s other two effects are unaffected and unconditional: the
+  strong reference against mid-write collection, and the failure logging.
+  An unexecuted drain costs nothing, so nothing is withdrawn.

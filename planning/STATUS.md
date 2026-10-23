@@ -134,7 +134,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **787 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39548535057` on `d0828d8`, 713 + 1 skip), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00025-bnj**, image `87caf12`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00026-zcx**, image `0d139c3`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -478,8 +478,32 @@ daily spend cap, console markdown.
 
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
-  `background.py` at 100%. Not yet deployed: live is still
-  `atlas-api-00025-bnj`. See DECISIONS 2026-10-23.
+  `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-23 (deploy + production verification; **₹0.23**) — build
+  `399cb629` SUCCESS 2m45s → **`atlas-api-00026-zcx`**, image `0d139c3`.
+  Startup clean: one `reranker_loaded_lazily`, `/warm` probe 200 after 4
+  attempts, boot profile 0.62s + 10.79s. The deployed image carries
+  `ed9dbd0`'s `UnboundLocalError`, so the fix was exercised rather than
+  assumed — one authenticated cache miss, **HTTP 200**, 12.24s. Four
+  sources agreed on 6,340 / 720 / $0.0026636: response body,
+  `query_complete` log (`stream=False`), Firestore per-key delta, daily
+  spend. `total_queries` **36 → 37**, not 38 — the double-count is gone
+  where it would have shown. Counters now 39 total / 3 cache hits.
+
+  **Found, not fixed:** `drain()` cannot be shown to run in production.
+  **No `atlas_shutdown` exists in 30 days of Cloud Logging**, nor any
+  uvicorn shutdown line — the lifespan shutdown has never been observed to
+  execute. The service has no `cpu-throttling: 'false'` annotation, so CPU
+  is request-scoped and SIGTERM work is throttled to near-zero before
+  SIGKILL; the same configuration fact `app.py` already records for the
+  reranker warm task. `spawn()`'s strong reference and failure logging are
+  unaffected and unconditional, and an unexecuted drain costs nothing, so
+  nothing is withdrawn. Every fix has a price — always-allocated CPU is a
+  standing bill, a synchronous write is the round trip the design avoids —
+  so the next step is the free measurement: reconcile `query_complete` log
+  lines against Firestore `total_queries` and quantify the loss. See
+  BACKLOG and DECISIONS 2026-10-23.
 
 - 2026-10-22 (`cost / query`, n=1 → n=34; **₹0**) — BUDGET's plan for this
   said to recompute from the next eval run, and that plan was wrong: an eval

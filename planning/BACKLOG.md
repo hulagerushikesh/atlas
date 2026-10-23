@@ -955,6 +955,42 @@ Newest at the bottom of each section.
   both fatal, caught before the commit was pushed or deployed. See
   DECISIONS 2026-10-23.
 
+- **The shutdown drain cannot be shown to run in production, and probably
+  does not.** `drain()` is correct, tested and free, but in 30 days of
+  Cloud Logging **no Atlas instance has ever logged `atlas_shutdown`** —
+  nor uvicorn's "Shutting down" / "Application shutdown complete" /
+  "Finished server process". The lifespan shutdown path has never been
+  observed to execute at all.
+
+  Most likely cause: the service has no `run.googleapis.com/cpu-throttling:
+  'false'` annotation, so CPU is request-scoped. SIGTERM handling happens
+  outside any request, so the container is throttled to near-zero CPU and
+  cannot make progress before SIGKILL. This is the same configuration fact
+  already documented in `app.py` for the reranker warm task — "this thread
+  only advances while the instance happens to be serving something" — with
+  a different symptom.
+
+  What this does *not* invalidate: `spawn()`'s other two effects are
+  unconditional and hold either way — the strong reference that stops a
+  task being collected mid-write, and the failure logging. Only the
+  shutdown flush is in question, and an unexecuted drain costs nothing.
+
+  Three ways out, none free of a trade:
+  *(a)* CPU always-allocated (`--no-cpu-throttling`) — bills for the
+  instance's whole lifetime, not just requests, and `atlas-keepwarm` pings
+  every ten minutes, so this is a standing cost increase. Needs a Rs.
+  estimate before it is even proposed.
+  *(b)* Write the per-key record synchronously — one Firestore round trip
+  on every response, the cost the whole design was avoiding.
+  *(c)* Accept the loss and quantify it instead: `query_complete` in Cloud
+  Logging already carries every query's tokens and cost, written inline on
+  the response path. Reconciling that line count against Firestore
+  `total_queries` measures the loss directly, for Rs.0, and if it is small
+  the counters stay trustworthy without changing anything.
+
+  (c) first — it is the only one that produces a number, and the other two
+  are only worth pricing once the number is known.
+
 ## Nice to have
 
 - `make demo` — seed a tiny corpus and open the console.
