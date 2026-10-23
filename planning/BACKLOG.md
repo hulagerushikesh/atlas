@@ -544,15 +544,26 @@ Newest at the bottom of each section.
   capability — as of now `fq-002` is the only row that does, which is an
   argument for leaving it scored 0.000 and honest.
 
-- **Should the generator date a claim it takes from a changelog?** Now
-  possible, since the release heading reaches the chunk text. One line in
-  the generator prompt would turn "FastAPI requires Python 3.8 or above"
-  into "as of 0.104.0 (2023-10-18), ...". It would not raise `fq-002`'s
-  correctness — the reference says 3.10 — but it would move the judge's
-  verdict on that fact from *contradicted* to *missing*, which is the exact
-  distinction the metric was built to draw, and it stops the deployed site
-  stating a stale fact in the present tense. Costs one eval pass (~Rs.6) to
-  measure, and should not ship unmeasured.
+- ~~**Should the generator date a claim it takes from a changelog?**~~
+  **Measured and shipped 2026-10-23, Rs.6.05 — it moves no metric, and the
+  reason for trying it was wrong.** Rule 6 is in `_SYSTEM_PROMPT`. The text
+  changed exactly as designed — `fq-002` now answers "**As of 0.104.0
+  (2023-10-18),** FastAPI requires Python 3.8 or above [2]." — but the
+  predicted *contradicted* → *missing* move did not happen: `0.0`,
+  `1 contradicted`, **byte-identical judge reasoning** in both runs.
+
+  The run's +0.1227 on `answer_correctness` belongs to four rows (fq-010,
+  fq-012, fq-014, fq-016), **none of them changelog rows** — fq-016 is the
+  router refusing where it answered last time, fq-012 the known routing
+  flake. The comparator called a tie (4 of 16 paired rows differ, minimum
+  reachable p = 0.125) and was right twice over.
+
+  Kept on the half the suite does not score: the deployed site stops stating
+  a three-year-old fact in the present tense. Faithfulness unmoved at 1.0,
+  cost per query +1.5%. The p95 breach the comparator reported is an
+  endpoint slowdown in the back half of the run, not the change — retrieval
+  runs before generation and cannot see a system prompt. See DECISIONS
+  2026-10-23.
 
 - ~~**`fq-012` retrieves the wrong pages and then answers them
   faithfully.**~~ **Diagnosed 2026-09-29, Rs.0 — it is a routing failure.**

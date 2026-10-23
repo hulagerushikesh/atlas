@@ -132,7 +132,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **787 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39945279558` on `b8b02f6`, 786 + 1 skip, 93.78%), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **790 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `39945279558` on `b8b02f6`, 786 + 1 skip, 93.78%), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00026-zcx**, image `0d139c3`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -479,6 +479,26 @@ daily spend cap, console markdown.
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
   `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-23 (changelog dating in the generator; **₹6.05**) — rule 6 added
+  to `_SYSTEM_PROMPT`, measured, **moves no metric**, shipped anyway. The
+  text changed as designed: `fq-002` now answers "**As of 0.104.0
+  (2023-10-18),** FastAPI requires Python 3.8 or above [2]." The reason for
+  trying it did not survive contact — the predicted *contradicted* →
+  *missing* move never happened, the judge returning `0.0`, `1 contradicted`
+  and **byte-identical reasoning** in both runs.
+
+  The run's +0.1227 `answer_correctness` is **not** this change: the four
+  rows that moved are fq-010, fq-012, fq-014 and fq-016, none of them
+  changelog rows, and the comparator already called a tie on its own grounds
+  (4 of 16 differ, minimum reachable p = 0.125). Kept on the half nothing in
+  `eval_data` scores — the deployed site no longer states a three-year-old
+  fact in the present tense. Faithfulness 1.0 unchanged, cost/query +1.5%.
+  The comparator's p95 breach (14,556 → 48,590 ms) is an endpoint slowdown
+  over the back half of the run — first nine samples at baseline speed, last
+  six degrading to 40.8 s — and retrieval runs before generation, so a
+  system prompt cannot reach it. 787 → **790 tests**. See BACKLOG and
+  DECISIONS 2026-10-23.
 
 - 2026-10-23 (background-write loss measured; **₹0**) — the loss is
   **zero**. `scripts/reconcile_usage.py` (new) reconciles the per-key

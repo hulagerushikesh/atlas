@@ -132,3 +132,43 @@ class TestThePipelineHasTwoNonAnswersAndBothMustBeRecognised:
         from atlas.orchestration import pipeline
 
         assert pipeline.OUT_OF_SCOPE_MSG is OUT_OF_SCOPE_MSG
+
+
+class TestTheReleaseDatingRuleReachesTheModel:
+    """Rule 6 is the only part of the prompt a downstream artefact depends on.
+
+    `apply_context_headers` goes out of its way to keep a release heading on
+    the chunk that states a Python floor — a version-like heading survives a
+    same-level sibling precisely so `## 0.104.0 (2023-10-18)` is not dropped
+    from that chunk's trail. That work buys nothing unless the generator is
+    told what the date in the header is for, and nothing else in the suite
+    would fail if the rule were deleted: the answers would simply go back to
+    stating 2023 facts in the present tense, which is what `fq-002` scored
+    *contradicted* for. Pinned here so the two halves cannot drift apart.
+    """
+
+    def test_the_prompt_tells_the_model_to_date_a_release_claim(self) -> None:
+        from atlas.orchestration.generator import _SYSTEM_PROMPT
+
+        assert "release" in _SYSTEM_PROMPT.lower()
+        assert "as of 0.104.0 (2023-10-18)" in _SYSTEM_PROMPT
+
+    def test_it_does_not_ask_for_a_date_on_undated_passages(self) -> None:
+        # Dating everything is the failure mode the rule has to avoid: most
+        # of the corpus is tutorial prose with no release in its heading
+        # trail, and a fabricated date there is a new unsupported claim for
+        # the faithfulness checker to catch.
+        from atlas.orchestration.generator import _SYSTEM_PROMPT
+
+        assert "do not invent a date" in _SYSTEM_PROMPT.lower()
+
+    def test_both_call_paths_send_the_same_system_prompt(self) -> None:
+        # `generate` and `stream` build their messages separately; a rule
+        # added to one and not the other is a console that dates its answers
+        # and an API that does not, or the reverse.
+        import inspect
+
+        from atlas.orchestration import generator as gen
+
+        source = inspect.getsource(gen.AnswerGenerator)
+        assert source.count("content=_SYSTEM_PROMPT") == 2

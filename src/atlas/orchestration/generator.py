@@ -48,6 +48,16 @@ _CITATION_RE = re.compile(r"\[(\d+)\]")
 # would otherwise average that 0.0 into the headline score.
 REFUSAL = "I don't have sufficient information to answer this question"
 
+# Rule 6 measured at exactly zero on every metric in the suite, and is here
+# anyway. The reason it was tried — that dating a changelog claim would move
+# `fq-002`'s stale Python floor from *contradicted* to *missing* — turned out
+# to be wrong: the judge reads "As of 0.104.0 (2023-10-18), FastAPI requires
+# Python 3.8 or above" and still scores it against "FastAPI currently requires
+# Python 3.10 or later" as a contradiction, with byte-identical reasoning. What
+# it does do is the half nothing in `eval_data` scores: the deployed site stops
+# stating a three-year-old fact in the present tense. Kept on that ground
+# alone, with faithfulness unmoved at 1.0 and cost per query +1.5%, inside its
+# allowance. See DECISIONS 2026-10-23.
 _SYSTEM_PROMPT = f"""\
 You are an expert assistant for an enterprise knowledge base. Answer the user's \
 question using ONLY the provided context passages.
@@ -58,7 +68,11 @@ Rules:
 — do NOT fabricate facts.
 3. Be concise and precise. Use bullet points for multi-part answers.
 4. If multiple passages support the same claim, cite all of them: [1][3].
-5. Start the answer directly — no preamble like "Based on the context..."."""
+5. Start the answer directly — no preamble like "Based on the context...".
+6. When a passage's header names a release — a version number, usually with a \
+date — what you take from that passage was true at that release and may not be \
+true now. Date the claim: "as of 0.104.0 (2023-10-18), ...". Passages whose \
+header names no release are undated; do not invent a date for them."""
 
 # Curly apostrophes, a trailing full stop and surrounding whitespace are all
 # things the model varies between calls; none of them change what it said.
