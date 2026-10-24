@@ -2873,3 +2873,29 @@ Format: date — decision — alternatives — reason.
   under `/keys/` would be open to anyone unless it checks the header too,
   which is now said in a comment at the allowlist and pinned by a test that
   a Bearer holder gets 403 from the revoke route.
+
+- **2026-10-24** — **The key listing is a dialog, and the admin secret never
+  touches `localStorage`.** *Alt:* a fifth pane in the console; or storing
+  the secret the way the API key is stored, so it survives a reload. *Why:*
+  DESIGN §5 fixes the console at four places — corpus, answer, evidence,
+  survey — and reviewing keys is an occasional administrative act, not a
+  working surface. Settings is a dialog for the same reason. On the secret:
+  the console already persists an API key, and the two are not the same
+  risk. An API key can spend this Atlas's budget against its own rate
+  limit; the admin secret can revoke every key there is, including the one
+  the operator is using. Keeping it in memory for the tab costs a retype
+  per session and takes it out of reach of anything that can read
+  `localStorage`.
+
+  **Verified in a browser against a local server, which is where the two
+  real defects were.** The build compiled and the types checked and neither
+  of these would have surfaced: at 375px the Revoke button was pushed off
+  the right edge behind an inner scroll — the one control the surface
+  exists for — and the dialog reused `failureFrom`, whose 403 copy is
+  written for the query path, so a refused admin secret told the reader
+  "the sheet requires an API key and none was accepted" and sent them to
+  Settings. Fixed by dropping `rpm` and `last query` below `sm`, where they
+  are context rather than the decision, and by giving the dialog its own
+  403 and 404 wording. The server ran on an isolated environment — SQLite
+  keys, Qdrant pointed at a localhost with nothing on it, a dummy model key
+  — so nothing touched the production stores and no model was called.

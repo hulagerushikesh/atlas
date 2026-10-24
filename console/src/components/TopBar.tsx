@@ -1,4 +1,4 @@
-import { Command, Map, Settings2, SunMoon, TriangleAlert } from "lucide-react"
+import { Command, KeyRound, Map, Settings2, SunMoon, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -73,6 +73,15 @@ export function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>Theme: {theme || "system"}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon-sm" className="press" aria-label="API keys" onClick={() => set({ accessOpen: true })}>
+              <KeyRound className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>API keys — who can query this Atlas</TooltipContent>
         </Tooltip>
 
         <Tooltip>

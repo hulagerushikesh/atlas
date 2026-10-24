@@ -97,6 +97,12 @@ interface AtlasState {
   evidenceOpen: boolean
   keyOpen: boolean
   settingsOpen: boolean
+  // The API-key listing. `keyOpen` above is the colour legend, which DESIGN
+  // calls "the key" — different thing, hence the different name.
+  accessOpen: boolean
+  // Held for this tab and never written to localStorage: it is the one
+  // credential that can revoke every key, where an API key can only spend.
+  adminSecret: string
   paletteOpen: boolean
   flashChunk: string | null
   theme: "" | "light" | "dark"
@@ -135,6 +141,8 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   evidenceOpen: false,
   keyOpen: false,
   settingsOpen: false,
+  accessOpen: false,
+  adminSecret: "",
   paletteOpen: false,
   flashChunk: null,
   theme: (ls.get("atlas_theme") as "" | "light" | "dark") || "",
