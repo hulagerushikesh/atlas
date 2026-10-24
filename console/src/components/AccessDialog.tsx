@@ -98,7 +98,14 @@ export function AccessDialog() {
           <p className="label normal-case tracking-normal">Reading keys…</p>
         ) : keys.length === 0 ? (
           <p className="label normal-case tracking-normal">
-            No keys yet. Create one with <code className="rounded-sm border bg-well px-1">make key</code>.
+            {/*
+              Was `make key`, which is wrong twice: the target is
+              `create-key`, and it writes to the local SQLite store, which a
+              deployed server reading Firestore never looks at. This dialog is
+              mostly opened against production, so it names the route that
+              works wherever the server happens to be.
+            */}
+            No keys yet. Create one with <code className="rounded-sm border bg-well px-1">POST /keys</code>, using this same secret.
           </p>
         ) : (
           <div className="max-h-[60vh] overflow-auto">
