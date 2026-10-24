@@ -262,8 +262,10 @@ PDF parsing, both on the M4 scope list. Neither is an operations gap, and
 each is a milestone's worth of work on its own.
 
 All three criteria met the same day, at ₹0 — none of this milestone needed a
-model call. **None of it is live until a deploy**: production is still
-`atlas-api-00026-zcx`, which has neither the revoke route nor this console.
+model call. **Deployed the same day** as `atlas-api-00027-4rp` (image
+`83638af`, Cloud Build `d92813dc` SUCCESS 2m51s), the first revision to carry
+the revoke route, the key dialog and the export; `atlas-api-00028-tsk` rolled
+after it off a docs-only commit and runs the same code.
 
 ## Parked (not scheduled)
 

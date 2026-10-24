@@ -1,4 +1,4 @@
-# Status — 2026-10-24 (v0.1.0, 20 of 20, M5 closed, CI green)
+# Status — 2026-10-24 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
 
 **All 20 exit criteria are ticked** — the 17 of M1–M4, the last of those
 (M1's resume-bullets line) on 2026-10-22, and M5's three on 2026-10-24.
@@ -15,10 +15,14 @@ to end, per-key usage and revoke in the console, and a run exported as
 are explicitly out — neither is an operations gap and each is a milestone on
 its own.
 
-**None of M5 is live.** Production is `atlas-api-00026-zcx`, which predates
-all of it: no `PATCH /keys/{key_id}`, no key dialog, no export. The gap
-between `main` and production is now a whole milestone, which is the next
-thing worth closing.
+**M5 is live.** Deployed 2026-10-24: `atlas-api-00027-4rp` (image `83638af`)
+was the first revision to carry `PATCH /keys/{key_id}`, the key dialog and
+the run export; `atlas-api-00028-tsk` (image `a923354`) rolled minutes later
+and is current. Verified against the live service at ₹0: `/health` ok with
+Qdrant at 731 ms, `/keys` and `PATCH /keys/1` both 403 without the admin
+secret, `/query` 401 without a key, `/app` serving `console-DfTREPwH.js` —
+the bundle with the export button in it. The milestone-wide gap between
+`main` and production is closed.
 
 How to explain the project to someone else — what gap it addresses, in prose
 rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
@@ -141,7 +145,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **808 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40091664915` on `83638af`, 808 + 1 skip, 0 non-success steps, 2m47s), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00026-zcx**, image `0d139c3`, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00028-tsk**, image `a923354`, deployed 2026-10-24; `00027-4rp`/`83638af` an hour earlier was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -486,6 +490,52 @@ daily spend cap, console markdown.
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
   `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-24 (**M5 deployed; a guided tour for first-time users**; **₹0**) —
+  Atlas has had every exit criterion ticked and zero users, and those two
+  facts are not in tension: nothing in the repo told someone who had never
+  seen it what to do in the first ten minutes. The README explains the
+  architecture to a reader who has already decided to care.
+
+  [`docs/try-atlas.md`](../docs/try-atlas.md) is the other document. Get a
+  key, ask a question, then the part that is actually the point: what each
+  verdict badge means, why the evidence pane keeps the passages the reranker
+  rejected, and the five questions worth asking because they make it fail
+  honestly. Limits stated up front rather than in a footer — one corpus,
+  60 rpm, a daily cap, a ~12 s cold start, **0.71 answer correctness on
+  sixteen questions**, and no users yet. A tour that oversells gets one
+  visit. [PITCH.md](PITCH.md) gained the matching spoken version: asking a
+  friend for ten minutes is a different job from impressing an interviewer,
+  and it is lost by leading with architecture.
+
+  Writing the tour found a defect in the thing it was describing. The key
+  dialog's empty state said *"Create one with `make key`"* — no such target,
+  it is `create-key`, and even spelled right it writes to the local SQLite
+  store that a deployed server reading Firestore never looks at. One
+  instruction, wrong in both of the ways available to it, on a dialog that is
+  opened against production far more often than against a laptop. It now
+  names `POST /keys`.
+
+  **Deployed**, closing a gap that had been a whole milestone wide. Cloud
+  Build `d92813dc` SUCCESS 2m51s → `atlas-api-00027-4rp`, image `83638af`;
+  the index verifier passed both namespaces first (4020 dense = 4020 sparse,
+  0 id or hash disagreements, headers on both sides). Live checks, all free:
+  `/health` ok with Qdrant at 732 ms and `spent_today_usd` 0.0, `/keys` and
+  `PATCH /keys/1` 403 without the admin secret, `/query` 401 without a key,
+  `/app` serving `console-DfTREPwH.js`. CI `40091664915` green on `83638af`
+  beforehand, 808 + 1 skip, including the committed-bundle check that the
+  dialog fix made load-bearing.
+
+  A second deploy followed (build `5d35ec6b` 2m7s → **`atlas-api-00028-tsk`**,
+  image `a923354`), and it is worth recording what it was: `a923354` differs
+  from `83638af` by one line of `planning/STATUS.md`, and the Dockerfile
+  copies `src/` and `data/index/` only. The image is therefore byte-identical
+  in everything that runs, and the deploy was a no-op dressed as a rollout —
+  2 minutes of the 120/day Cloud Build allowance for a new revision id. Not a
+  problem, but the deploy script has no way to notice that nothing it bakes
+  has changed, so the only thing standing between a docs commit and a
+  pointless rebuild is remembering. `SKIP_BUILD=1 IMAGE_TAG=<tag>` is the
+  existing escape hatch when a revision is wanted without one.
 
 - 2026-10-24 (**M5 closed**; a run exports as JSON; **₹0**) — the last M5
   criterion. A download in the evidence header and in ⌘K writes an
