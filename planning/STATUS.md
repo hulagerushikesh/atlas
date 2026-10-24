@@ -1,8 +1,8 @@
-# Status — 2026-10-24 (v0.1.0, 17 of 17, M5 open at 1 of 3, CI green)
+# Status — 2026-10-24 (v0.1.0, 17 of 17, M5 open at 2 of 3, CI green)
 
 **All 17 of the M1–M4 exit criteria are ticked** — the last, M1's
 resume-bullets line, on 2026-10-22 — and all four milestones are marked done
-as of 2026-10-14. **M5 was opened 2026-10-24 and is at 1 of 3.** Count the
+as of 2026-10-14. **M5 was opened 2026-10-24 and is at 2 of 3.** Count the
 fraction from `planning/ROADMAP.md` rather than quoting it from anywhere
 else; the denominator moved from 17 to 20 when M5 opened.
 
@@ -10,7 +10,7 @@ else; the denominator moved from 17 to 20 when M5 opened.
 from the unbuilt M4 scope items rather than from *Parked*, because the
 parked list is research directions and this is the gap a live service with
 real keys actually had. Three criteria: revocation (**done**), per-key usage
-and revoke in the console, evidence export as JSON. Dataset upload for
+and revoke in the console (**done**), evidence export as JSON. Dataset upload for
 per-corpus eval and layout-aware PDF are explicitly out — neither is an
 operations gap and each is a milestone on its own. It is a decision, not a
 backlog item, so rename or reject it freely; nothing below depends on the
@@ -482,6 +482,24 @@ daily spend cap, console markdown.
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
   `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-24 (**the console can revoke**; **₹0**) — `AccessDialog`: the key
+  listing, the usage counters and a revoke/restore switch, opened from the
+  header or ⌘K. A dialog rather than a fifth pane, because DESIGN §5 fixes
+  the console at four places and this is an occasional administrative act.
+  The admin secret is held for the tab and **never written to
+  localStorage**, where the API key lives: an API key can spend this
+  Atlas's budget, the admin secret can revoke every key there is.
+
+  **Verified in a browser, not asserted from a build that compiled.** A
+  local server on an isolated env — SQLite keys, Qdrant pointed at a
+  localhost that is not running, a dummy model key, so no production store
+  and no model call — then unlock, revoke, restore, a deliberately wrong
+  secret, light and dark, and 375px. Two defects the compile could not
+  show, both fixed before commit: at phone width the Revoke button was
+  pushed off the right edge behind an inner scroll, and the dialog borrowed
+  `failureFrom`, so a refused admin secret read "the sheet requires an API
+  key". DESIGN §6 carries the component's row.
 
 - 2026-10-24 (**M5 opened**; key revocation shipped; **₹0**) — a leaked key
   could not be revoked. `is_active` was in both key stores, `lookup_key`

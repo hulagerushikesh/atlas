@@ -327,6 +327,27 @@ Check `make health`, or switch sheets while it recovers.
 Mono 13. `--bad-soft` fill, 3px left border `--bad`, `--r-0`. Never "Something
 went wrong."
 
+### API keys dialog
+
+The key listing and the revoke switch. A dialog, not a fifth pane: §5 fixes
+the console at four places and this is an occasional administrative act, the
+same reason Settings is a dialog.
+
+- Locked until the admin secret is typed. The secret is held for the tab and
+  never written to `localStorage`, where the API key lives — an API key can
+  spend this Atlas's budget, the admin secret can revoke every key there is.
+- One row per key: name, state, rpm, queries, last query, action. Mono 13px,
+  tabular figures. `rpm` and `last query` drop below `sm` so the action stays
+  on screen; they are context, not the decision.
+- State badge borrows the strength badge's shape — mono 11px uppercase,
+  `--x-soft` fill, 1px `--x` border, `--r-1` — `--good` for active,
+  `--bad` for revoked. A revoked row sits at 60% opacity, like a rejected
+  evidence card.
+- No key material is shown. `key_id` is a hash on Firestore and appears only
+  in the name's tooltip, because revoking needs it.
+- Errors are named for what happened here: a 403 is "Admin secret not
+  accepted", not the query path's "the sheet requires an API key".
+
 ### Empty states
 
 - Corpus empty: "No sources on this sheet." + the exact `make ingest` line.

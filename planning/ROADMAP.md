@@ -234,8 +234,13 @@ Exit criteria:
       Proven end to end over HTTP — mint, query, revoke, 401, restore, 200 —
       and the writer is mutation-checked: stop the UPDATE and three tests
       fail across both layers. See DECISIONS 2026-10-24.
-- [ ] Per-key usage is visible without SSH or a script — the console shows
-      the listing and the counters, and can revoke from there
+- [x] Per-key usage is visible without SSH or a script — the console shows
+      the listing and the counters, and can revoke from there —
+      **done 2026-10-24, ₹0.** `AccessDialog`, opened from the header or
+      ⌘K: name, state, rpm, queries, last query, and a revoke/restore
+      switch per key. Verified in a browser against a local server — unlock,
+      revoke, restore, wrong secret, light and dark, 375px — not asserted
+      from a build that compiled. DESIGN §6 carries its row.
 - [ ] A query's evidence can be exported as JSON from the console — the last
       M4 scope item that is about the product rather than about operating it,
       kept here because it is the other thing that needs the console touched

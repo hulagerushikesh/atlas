@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Layers, Map, Moon, PanelLeft, Route, Settings2, Sun, SunMoon, TableProperties } from "lucide-react"
+import { KeyRound, Layers, Map, Moon, PanelLeft, Route, Settings2, Sun, SunMoon, TableProperties } from "lucide-react"
 import {
   Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut,
 } from "@/components/ui/command"
@@ -53,6 +53,7 @@ export function CommandMenu({ onToggleCorpus }: { onToggleCorpus: () => void }) 
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Atlas">
+          <CommandItem onSelect={run(() => set({ accessOpen: true }))}><KeyRound className="size-4" /> API keys</CommandItem>
           <CommandItem onSelect={run(() => set({ settingsOpen: true }))}><Settings2 className="size-4" /> Settings</CommandItem>
         </CommandGroup>
       </CommandList>

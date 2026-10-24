@@ -189,6 +189,36 @@ export async function postUpload(files: File[], namespace: string): Promise<Uplo
   }
 }
 
+/* ── Key lifecycle ─────────────────────────────────────────────────────────
+ * Guarded by X-Admin-Secret, not by the Bearer key the rest of this client
+ * sends. The secret is passed in by the caller on every call and never
+ * reaches `store` — it is the credential that can revoke every key, so it
+ * lives in memory for the tab and nowhere else.
+ */
+
+export interface KeyRecord {
+  key_id: number | string
+  name: string
+  email: string
+  is_active: boolean
+  rate_limit_rpm: number
+  created_at: number | null
+  total_queries: number
+  last_query_at: number | null
+}
+
+export const getKeys = (secret: string) =>
+  api("/keys", { headers: { "X-Admin-Secret": secret } }, 5000)
+    .then((r) => r.json())
+    .then((j) => j.keys as KeyRecord[])
+
+export const setKeyActive = (keyId: number | string, isActive: boolean, secret: string) =>
+  api(`/keys/${encodeURIComponent(String(keyId))}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", "X-Admin-Secret": secret },
+    body: JSON.stringify({ is_active: isActive }),
+  }, 5000).then((r) => r.json() as Promise<KeyRecord>)
+
 export const postQuery = (query: string, namespace: string, top_k: number) =>
   api("/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, namespace, top_k, stream: false }) })
     .then((r) => r.json() as Promise<QueryResponse>)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { AccessDialog } from "@/components/AccessDialog"
 import { AnswerPane } from "@/components/AnswerPane"
 import { CommandMenu } from "@/components/CommandMenu"
 import { CorpusPane } from "@/components/CorpusPane"
@@ -44,6 +45,7 @@ export default function App() {
       </div>
       <CommandMenu onToggleCorpus={toggleCorpus} />
       <SettingsDialog />
+      <AccessDialog />
       <Toaster position="bottom-left" toastOptions={{ className: "font-mono text-[13px]" }} />
     </TooltipProvider>
   )
