@@ -211,7 +211,7 @@ to an answer, and a suite that defends the whole thing. Those are met and
 measured. The unbuilt scope items are features, not gaps in that claim, and
 they are the strongest candidates for an M5.
 
-## M5 — Operable by whoever is on call  🟡 opened 2026-10-24
+## M5 — Operable by whoever is on call  ✅ done 2026-10-24
 
 **Goal:** The person running Atlas can see what the keys are doing and stop
 one, without a terminal and without editing the key store by hand. M4 asked
@@ -241,13 +241,29 @@ Exit criteria:
       switch per key. Verified in a browser against a local server — unlock,
       revoke, restore, wrong secret, light and dark, 375px — not asserted
       from a build that compiled. DESIGN §6 carries its row.
-- [ ] A query's evidence can be exported as JSON from the console — the last
-      M4 scope item that is about the product rather than about operating it,
-      kept here because it is the other thing that needs the console touched
+- [x] A query's evidence can be exported as JSON from the console —
+      **done 2026-10-24, ₹0.** A download in the evidence header and in ⌘K,
+      writing an `atlas.run.v1` file: the question, the answer, the verdict,
+      every retrieved passage with its scores and whether the reranker kept
+      it, the stage timings and the token usage. No endpoint — everything in
+      it is already in the browser, so the export cannot re-run the query or
+      spend anything. Documented in `docs/api.md`.
+
+      Two things the file had to get right and did not at first. A **failed**
+      run exported as an empty evidence list and an "Unchecked" verdict,
+      indistinguishable from a run that searched and found nothing; `phase`
+      and `failure` now say which happened. And on a phone the export was
+      **unreachable** on exactly those runs: the evidence drawer opened only
+      from the strength badge or ⌘K, and a failed run has no badge. The
+      header now carries an evidence toggle below `xl`.
 
 Out of scope on purpose: dataset upload for per-corpus eval and layout-aware
 PDF parsing, both on the M4 scope list. Neither is an operations gap, and
 each is a milestone's worth of work on its own.
+
+All three criteria met the same day, at ₹0 — none of this milestone needed a
+model call. **None of it is live until a deploy**: production is still
+`atlas-api-00026-zcx`, which has neither the revoke route nor this console.
 
 ## Parked (not scheduled)
 

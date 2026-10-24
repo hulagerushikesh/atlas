@@ -61,11 +61,19 @@ export function failureFrom(e: unknown): Failure {
 
 export type RunPhase = "idle" | "running" | "done" | "refused" | "failed"
 
-interface RunState {
+export interface RunState {
   phase: RunPhase
   question: string
+  // The sheet this run searched, captured when it started. Not read off the
+  // top-level `sheet` at export time: switching sheets after a run would
+  // then relabel the answer with a corpus it never touched.
+  sheet: string
   answer: string          // raw text; may still be streaming
   streaming: boolean
+  // Whether this run used the streaming path, which `streaming` cannot say
+  // once the run has finished -- it goes false either way. The export needs
+  // it to explain why faithfulness and token counts are absent.
+  streamed: boolean
   stages: Record<StageName, Stage>
   evidence: Evidence[]
   citations: Citation[]
@@ -118,7 +126,7 @@ interface AtlasState {
 }
 
 const idleRun = (): RunState => ({
-  phase: "idle", question: "", answer: "", streaming: false, stages: freshStages(), evidence: [],
+  phase: "idle", question: "", sheet: "", answer: "", streaming: false, streamed: false, stages: freshStages(), evidence: [],
   citations: [], numberToChunk: {}, strength: null, claims: [], failure: null, startedAt: 0,
   totalMs: null, tokens: null, cached: false,
 })
@@ -203,7 +211,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
 
   ask: async (q, { top_k, stream }) => {
     const sheet = get().sheet
-    const run: RunState = { ...idleRun(), phase: "running", question: q, streaming: stream, startedAt: performance.now() }
+    const run: RunState = { ...idleRun(), phase: "running", question: q, sheet, streaming: stream, streamed: stream, startedAt: performance.now() }
     set({ run, evidenceOpen: false })
 
     const patch = (p: Partial<RunState>) => set((s) => ({ run: { ...s.run, ...p } }))

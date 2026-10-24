@@ -1,4 +1,4 @@
-import { Command, KeyRound, Map, Settings2, SunMoon, TriangleAlert } from "lucide-react"
+import { Command, KeyRound, Layers, Map, Settings2, SunMoon, TriangleAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -14,7 +14,7 @@ const HEALTH: Record<string, { dot: string; label: string }> = {
 }
 
 export function TopBar() {
-  const { sheet, totals, indexWarning, health, keyOpen, theme, set, setTheme } = useAtlas()
+  const { sheet, totals, indexWarning, health, keyOpen, evidenceOpen, theme, set, setTheme } = useAtlas()
   const h = HEALTH[health] ?? HEALTH.checking
   const cycleTheme = () => setTheme(theme === "" ? "dark" : theme === "dark" ? "light" : "")
 
@@ -55,6 +55,23 @@ export function TopBar() {
             </Button>
           </TooltipTrigger>
           <TooltipContent>Command palette</TooltipContent>
+        </Tooltip>
+
+        {/*
+          Below xl the evidence pane is a drawer, and until now the only ways
+          in were tapping the strength badge or the ⌘K palette — the first is
+          a button that does not look like one, and the second needs a
+          keyboard. A failed run has no badge at all, so on a phone its
+          references, and the export button that sits with them, could not be
+          reached. Hidden at xl, where the pane is already docked.
+        */}
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant={evidenceOpen ? "secondary" : "ghost"} size="icon-sm" className="press xl:hidden" aria-pressed={evidenceOpen} aria-label="Evidence" onClick={() => set({ evidenceOpen: !evidenceOpen })}>
+              <Layers className="size-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Evidence — the references behind the answer</TooltipContent>
         </Tooltip>
 
         <Tooltip>

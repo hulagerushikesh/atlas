@@ -208,7 +208,11 @@ Four places. Three are always present; the fourth collapses.
 
 Responsive:
 
-- `< 1100px`: Evidence becomes a drawer over Answer, toggled from the strength badge.
+- `< 1100px`: Evidence becomes a drawer over Answer, toggled from a header
+  button, the strength badge, or ⌘K. The header button is the one that always
+  works: the badge is a button that does not look like one and a failed run
+  has none, and ⌘K needs a keyboard — so without it a phone could not reach
+  the references of a run that failed, nor the export that sits with them.
 - `< 760px`: Corpus becomes a sheet picker in the header; single column;
   Survey collapses to figures only.
 
@@ -347,6 +351,26 @@ same reason Settings is a dialog.
   in the name's tooltip, because revoking needs it.
 - Errors are named for what happened here: a 403 is "Admin secret not
   accepted", not the query path's "the sheet requires an API key".
+
+### Run export
+
+A download icon in the evidence pane header, and "Export this run as JSON" in
+⌘K. Both call one function, so both report the same outcome — writing the
+toast at each call site is how one surface ends up claiming something the
+other does not.
+
+- Lives with the evidence, not in the top bar: the top bar holds app-level
+  controls (health, palette, legend, theme, keys, settings) and this acts on
+  one run.
+- Offered on any finished run, a refusal and a failure included. Those export
+  an empty evidence list on purpose — the record says Atlas was asked and
+  retrieved nothing, and `phase` says which of the two happened. A button
+  that only appeared on the happy path would make the awkward runs the ones
+  you cannot keep.
+- Disabled, not hidden, before the first run; the tooltip says "Export — run
+  a query first" rather than leaving a dead control unexplained.
+- Toast titled "Run exported", filename in the description. As a title the
+  filename wraps mid-token and the break lands inside the timestamp.
 
 ### Empty states
 
