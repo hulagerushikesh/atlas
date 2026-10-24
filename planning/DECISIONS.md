@@ -2899,3 +2899,36 @@ Format: date — decision — alternatives — reason.
   403 and 404 wording. The server ran on an isolated environment — SQLite
   keys, Qdrant pointed at a localhost with nothing on it, a dummy model key
   — so nothing touched the production stores and no model was called.
+
+- **2026-10-24** — A run exports from the browser as `atlas.run.v1`, with
+  **no endpoint**, and the file carries the whole run rather than the
+  evidence array. *Alt:* a `GET /query/{id}/export` route; or exporting
+  just `evidence`. *Why:* everything in the file is already in the store,
+  so a client-side export cannot re-run the query, cannot spend a token and
+  works when the server is the thing that just failed — a server route
+  would have to persist runs, which Atlas does not do, or re-ask, which
+  costs money and would not return the same run. On the shape: a list of
+  passages with nothing attached cannot be audited, because nothing in it
+  says what was asked, which passages the generator was actually given, or
+  what it wrote from them. Rejected passages are kept with `selected:
+  false` for the same reason — what Atlas considered and cut is half of
+  what makes a retrieval run reviewable.
+
+  **`phase` and `failure` are in the file because the first version lied.**
+  A failed run exported an empty `evidence` and an "Unchecked" verdict,
+  which is exactly what a run that searched and found nothing exports. The
+  reader could not tell a crash from an empty result. Same class of
+  problem as the streaming path's absent faithfulness verdict, which is why
+  `mode` is there too: these nulls are absences, and the file now says
+  which kind.
+
+- **2026-10-24** — The evidence drawer gets its own header button below
+  `xl`. *Alt:* leave the strength badge and ⌘K as the only ways in; or put
+  the export button in the top bar where it is always reachable. *Why:* the
+  export made an existing gap load-bearing. On a phone the drawer opened
+  only from the strength badge — a button that does not look like one — or
+  from ⌘K, which needs a keyboard; and a **failed** run renders no badge at
+  all, so its references, and the export that sits with them, could not be
+  reached. Putting export in the top bar would have hidden that rather than
+  fixed it, and the top bar holds app-level controls (health, palette,
+  legend, theme, keys, settings) while an export acts on one run.

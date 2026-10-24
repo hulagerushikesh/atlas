@@ -1,20 +1,24 @@
-# Status — 2026-10-24 (v0.1.0, 17 of 17, M5 open at 2 of 3, CI green)
+# Status — 2026-10-24 (v0.1.0, 20 of 20, M5 closed, CI green)
 
-**All 17 of the M1–M4 exit criteria are ticked** — the last, M1's
-resume-bullets line, on 2026-10-22 — and all four milestones are marked done
-as of 2026-10-14. **M5 was opened 2026-10-24 and is at 2 of 3.** Count the
-fraction from `planning/ROADMAP.md` rather than quoting it from anywhere
-else; the denominator moved from 17 to 20 when M5 opened.
+**All 20 exit criteria are ticked** — the 17 of M1–M4, the last of those
+(M1's resume-bullets line) on 2026-10-22, and M5's three on 2026-10-24.
+Count the fraction from `planning/ROADMAP.md` rather than quoting it from
+anywhere else; the denominator moved from 17 to 20 when M5 opened and will
+move again when a milestone is next opened.
 
-**M5 — "Operable by whoever is on call" — opened 2026-10-24**, picked
-from the unbuilt M4 scope items rather than from *Parked*, because the
-parked list is research directions and this is the gap a live service with
-real keys actually had. Three criteria: revocation (**done**), per-key usage
-and revoke in the console (**done**), evidence export as JSON. Dataset upload for
-per-corpus eval and layout-aware PDF are explicitly out — neither is an
-operations gap and each is a milestone on its own. It is a decision, not a
-backlog item, so rename or reject it freely; nothing below depends on the
-name.
+**M5 — "Operable by whoever is on call" — opened and closed 2026-10-24,
+₹0.** Picked from the unbuilt M4 scope items rather than from *Parked*,
+because the parked list is research directions and this is the gap a live
+service with real keys actually had. All three criteria met: revocation end
+to end, per-key usage and revoke in the console, and a run exported as
+`atlas.run.v1` JSON. Dataset upload for per-corpus eval and layout-aware PDF
+are explicitly out — neither is an operations gap and each is a milestone on
+its own.
+
+**None of M5 is live.** Production is `atlas-api-00026-zcx`, which predates
+all of it: no `PATCH /keys/{key_id}`, no key dialog, no export. The gap
+between `main` and production is now a whole milestone, which is the next
+thing worth closing.
 
 How to explain the project to someone else — what gap it addresses, in prose
 rather than bullets — is [PITCH.md](PITCH.md). Its numbers are a snapshot and
@@ -482,6 +486,32 @@ daily spend cap, console markdown.
   Five mutations checked, **A being `ed9dbd0`'s nine lines restored
   verbatim**; all five fail the new tests. 773 → **787 tests**, 93.76%,
   `background.py` at 100%. See DECISIONS 2026-10-23.
+
+- 2026-10-24 (**M5 closed**; a run exports as JSON; **₹0**) — the last M5
+  criterion. A download in the evidence header and in ⌘K writes an
+  `atlas.run.v1` file: the question, the answer, the verdict, every
+  retrieved passage with its scores and whether the reranker kept it, the
+  stage timings and the token usage. **No endpoint** — it is all already in
+  the browser, so the export cannot re-run the query or spend anything,
+  which is the whole reason it beats "ask it again and copy the response".
+  Documented in `docs/api.md`; one function behind both call sites, so the
+  two surfaces cannot report different outcomes.
+
+  **Two defects found in the browser, neither visible to the compiler.**
+  A **failed** run exported an empty evidence list and an "Unchecked"
+  verdict — indistinguishable from a run that searched and found nothing,
+  so the file was wrong about what happened; `phase` and `failure` now say
+  which. And on a phone the export was unreachable on exactly those runs:
+  the evidence drawer opened only from the strength badge or ⌘K, and a
+  **failed run has no badge**. The header now carries an evidence toggle
+  below `xl`, which fixes a gap that predates the export.
+
+  Verified against a throwaway stub of the API serving canned JSON, so a
+  full run with evidence could be produced **without a model call and
+  without touching any production store**. Exported payload read back byte
+  for byte on the happy path, the failed path and the ⌘K path; the file was
+  confirmed on disk, parsed, and deleted. Python untouched: 808 tests,
+  94.04%. See DECISIONS 2026-10-24.
 
 - 2026-10-24 (**the console can revoke**; **₹0**) — `AccessDialog`: the key
   listing, the usage counters and a revoke/restore switch, opened from the

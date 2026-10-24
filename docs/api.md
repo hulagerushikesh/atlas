@@ -517,6 +517,51 @@ Key schema decisions:
 
 ---
 
+## Run export — `atlas.run.v1`
+
+The console can write a finished run to a JSON file
+([`console/src/lib/export.ts`](../console/src/lib/export.ts)). There is no
+endpoint for this: everything in the file is already in the browser, so the
+export costs nothing and cannot re-run the query. A second export of the same
+run differs only in `exported_at`.
+
+```jsonc
+{
+  "schema": "atlas.run.v1",
+  "exported_at": "2026-10-24T11:24:03.214Z",
+  "sheet": "fastapi",
+  "question": "How does dependency caching work?",
+  "phase": "done",              // done | refused | failed
+  "failure": null,              // {what, why} when phase is "failed"
+  "mode": "full",               // "stream" skips faithfulness and token counts
+  "answer": "Dependencies are declared with `Depends()` … [1]",
+  "verdict": { "label": "Supported", "kind": "good", "note": "0.93" },
+  "unsupported_claims": [],
+  "citations": [ { "number": 1, "chunk_id": "…", "source": "…", "page_number": null } ],
+  "evidence":  [ { "chunk_id": "…", "scores": {…}, "selected": true,  "citation": 1 },
+                 { "chunk_id": "…", "scores": {…}, "selected": false, "citation": null } ],
+  "stages":    [ { "name": "routing", "status": "done", "ms": 120, "detail": "simple" } ],
+  "total_ms": 3680,
+  "token_usage": { "prompt_tokens": 1842, "completion_tokens": 96, "total_tokens": 1938,
+                   "estimated_cost_usd": 0.0031 },
+  "cached": false
+}
+```
+
+Two things the shape is deliberate about:
+
+- **Every retrieved passage is included, not only the cited ones.**
+  `selected: false` means the reranker cut it and the generator never saw it.
+  Dropping those would hide what Atlas considered and rejected, which is half
+  of what makes a retrieval run reviewable.
+- **`phase` and `mode` say why a field is empty.** A failed run and a run that
+  retrieved nothing both export an empty `evidence`; a streamed run has no
+  faithfulness verdict and no token counts. Without those two fields the nulls
+  are ambiguous, and the file would read as a successful run that found
+  nothing.
+
+---
+
 ## Running Locally
 
 ```bash

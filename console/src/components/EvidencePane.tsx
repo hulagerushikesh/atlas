@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { Layers, X } from "lucide-react"
+import { Download, Layers, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Evidence } from "@/lib/api"
+import { exportRun } from "@/lib/export"
 import { fmt, fmtScore, useAtlas } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -104,14 +106,43 @@ function Header() {
   const { run, evidenceOpen, set } = useAtlas()
   const n = run.evidence.length
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between border-b px-4">
-      <span className="label inline-flex items-center gap-2"><Layers className="size-3.5" />Evidence · {n} ref{n === 1 ? "" : "s"}</span>
-      {evidenceOpen && (
-        <Button variant="ghost" size="icon-sm" className="press xl:hidden" onClick={() => set({ evidenceOpen: false })} aria-label="Close evidence">
-          <X className="size-4" />
-        </Button>
-      )}
+    <div className="flex h-10 shrink-0 items-center justify-between gap-1 border-b px-4">
+      <span className="label inline-flex min-w-0 items-center gap-2"><Layers className="size-3.5" />Evidence · {n} ref{n === 1 ? "" : "s"}</span>
+      <div className="flex shrink-0 items-center">
+        <ExportButton />
+        {evidenceOpen && (
+          <Button variant="ghost" size="icon-sm" className="press xl:hidden" onClick={() => set({ evidenceOpen: false })} aria-label="Close evidence">
+            <X className="size-4" />
+          </Button>
+        )}
+      </div>
     </div>
+  )
+}
+
+/**
+ * Offered on any finished run, including a refusal and a failure. Those two
+ * export an empty evidence list, which is the point: the record says Atlas
+ * was asked and retrieved nothing, and the stages say how far it got. A
+ * button that only appeared on the happy path would make the awkward runs
+ * the ones you cannot keep.
+ */
+export function ExportButton() {
+  const run = useAtlas((s) => s.run)
+  const ready = run.phase !== "idle" && run.phase !== "running"
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost" size="icon-sm" className="press" disabled={!ready}
+          aria-label="Export this run as JSON"
+          onClick={() => exportRun(run)}
+        >
+          <Download className="size-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{ready ? "Export this run as JSON" : "Export — run a query first"}</TooltipContent>
+    </Tooltip>
   )
 }
 
