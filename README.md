@@ -9,6 +9,10 @@ clean architecture, type safety, full observability, and reproducible evaluation
 [/docs](https://atlas.hulage.in/docs). Cloud Run with scale-to-zero, so the
 first request after an idle spell waits ~15 s for the container.
 
+**New here?** [`docs/try-atlas.md`](docs/try-atlas.md) is a ten-minute guided
+tour for someone who has never seen the project — what to ask, what to look
+at, and what the verdict badge actually means.
+
 ---
 
 ## Architecture
