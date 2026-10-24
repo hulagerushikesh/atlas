@@ -133,6 +133,41 @@ are at 100%.
 
 ---
 
+## Asking an engineer friend to try it
+
+A different job from the pitch above. That one is for someone deciding
+whether to be impressed. This one is for someone deciding whether to spend
+ten minutes, which is a smaller ask and a harder sell — they owe you nothing
+and a demo link is a chore.
+
+Three rules. **Lead with the ask, not the architecture**: say what you want
+before you say what it is, so they can decide while they are still reading.
+**Name the flaw yourself** — "no users, that's why I'm asking" buys more
+credibility than any number. **Ask one question, not five**; five questions
+get zero answers.
+
+Spoken:
+
+> "I built a thing that answers questions about a documentation set — but
+> that part is boring, everyone's built one. The bit I care about is that it
+> tells you when not to trust it: it scores whether the retrieved context was
+> even sufficient before it writes anything, then checks every sentence of
+> the answer against the passages it was given, and shows you the passages it
+> *rejected* too. Ten minutes, six questions? The thing I actually need to
+> know is whether the evidence panel is useful or whether you ignored it —
+> I've spent the most on it and I have no users, so I genuinely don't know."
+
+Written, with the link — same shape, shorter. Send
+[`docs/try-atlas.md`](../docs/try-atlas.md) rather than explaining in the
+message; it is the tour, and it states the limits up front so they are not
+discovered as disappointments.
+
+The question to actually ask, once they have used it: **where in your own
+work does someone have to answer "is this answer grounded?" today.** Not
+"what did you think". The first is a market signal; the second is politeness.
+
+---
+
 ## What not to claim
 
 Stay on the right side of these when the follow-ups come.
