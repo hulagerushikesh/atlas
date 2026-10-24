@@ -264,8 +264,9 @@ each is a milestone's worth of work on its own.
 All three criteria met the same day, at ₹0 — none of this milestone needed a
 model call. **Deployed the same day** as `atlas-api-00027-4rp` (image
 `83638af`, Cloud Build `d92813dc` SUCCESS 2m51s), the first revision to carry
-the revoke route, the key dialog and the export; `atlas-api-00028-tsk` rolled
-after it off a docs-only commit and runs the same code.
+the revoke route, the key dialog and the export; `00028-tsk` rolled after it off a
+docs-only commit, and `atlas-api-00029-rgj` — current — put `83638af` back
+with `SKIP_BUILD=1`, sharing `00027-4rp`'s digest exactly.
 
 ## Parked (not scheduled)
 
