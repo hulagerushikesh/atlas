@@ -26,18 +26,45 @@ const freshStages = (): Record<StageName, Stage> =>
 /* ── Strength ──────────────────────────────────────────────────────────── */
 
 export type StrengthKind = "good" | "warn" | "bad" | "none"
-export interface Strength { label: string; kind: StrengthKind; note?: string }
+// `pending` marks a verdict that is still being computed, so the badge can
+// pulse rather than assert. It is not a kind: the colour of a verdict that
+// does not exist yet would be a claim about it.
+export interface Strength { label: string; kind: StrengthKind; note?: string; pending?: boolean }
 
-export function strengthFrom(j: QueryResponse): Strength {
-  const s = j.faithfulness_score
-  if (j.classification === "out_of_scope") return { label: "Out of scope", kind: "none" }
-  if (!j.evidence?.some((e) => e.selected)) return { label: "Unsupported", kind: "bad", note: "no references" }
+/**
+ * The one place a verdict becomes a badge.
+ *
+ * Both paths route through it — the non-streaming response via
+ * `strengthFrom`, and the streaming `verdict` event directly — because the
+ * badge is the project's whole claim and two copies of these thresholds
+ * would eventually disagree about what "Supported" means.
+ */
+export function strengthOf(v: {
+  classification?: string
+  hasSelectedEvidence: boolean
+  score: number | null
+  isFaithful: boolean | null
+  graderRetries: number
+}): Strength {
+  const s = v.score
+  if (v.classification === "out_of_scope") return { label: "Out of scope", kind: "none" }
+  if (!v.hasSelectedEvidence) return { label: "Unsupported", kind: "bad", note: "no references" }
   if (s == null) return { label: "Unchecked", kind: "none" }
   const n = s.toFixed(2)
-  if (j.is_faithful && s >= 0.8 && !j.grader_retries) return { label: "Supported", kind: "good", note: n }
-  if (j.is_faithful && (s >= 0.5 || j.grader_retries)) return { label: "Mixed", kind: "warn", note: n }
+  if (v.isFaithful && s >= 0.8 && !v.graderRetries) return { label: "Supported", kind: "good", note: n }
+  if (v.isFaithful && (s >= 0.5 || v.graderRetries)) return { label: "Mixed", kind: "warn", note: n }
   if (s >= 0.3) return { label: "Weak", kind: "warn", note: n }
   return { label: "Unsupported", kind: "bad", note: n }
+}
+
+export function strengthFrom(j: QueryResponse): Strength {
+  return strengthOf({
+    classification: j.classification,
+    hasSelectedEvidence: Boolean(j.evidence?.some((e) => e.selected)),
+    score: j.faithfulness_score,
+    isFaithful: j.is_faithful,
+    graderRetries: j.grader_retries,
+  })
 }
 
 /* ── Errors ────────────────────────────────────────────────────────────── */
@@ -255,6 +282,10 @@ export const useAtlas = create<AtlasState>((set, get) => ({
       // meant, so track whether one arrived — otherwise the loop exits
       // normally, nothing calls finish(), and the run spins for ever.
       let ended = false
+      // Whether a `verdict` event is still coming after `done`. The loop does
+      // not stop at `done` -- the stream runs to `[DONE]` -- so the verdict
+      // is read by the same iteration that read the answer.
+      let pendingVerdict = false
       for await (const ev of streamQuery(q, sheet, top_k)) {
         if (ev.type === "stage") {
           if (ev.status === "start") {
@@ -290,12 +321,49 @@ export const useAtlas = create<AtlasState>((set, get) => ({
             return
           }
           stage("generation", "done", genStart ? Math.round(performance.now() - genStart) : undefined, "tokens not tracked on stream")
-          stage("faithfulness", "skipped", undefined, "skipped while streaming")
           const numberToChunk = Object.fromEntries(ev.citations.map((c) => [c.number, c.chunk_id]))
           const byChunk = Object.fromEntries(ev.citations.map((c) => [c.chunk_id, c.number]))
           const evidence = get().run.evidence.map((e) => ({ ...e, citation: byChunk[e.chunk_id] ?? null }))
-          finish({ phase: "done", streaming: false, answer, evidence, citations: ev.citations, numberToChunk, strength: { label: "Unchecked", kind: "none", note: "streamed" } })
+          // The answer is complete and readable here; the verdict is not.
+          // Showing the answer now and the badge when it arrives is the
+          // whole point -- the reader stops waiting on a check they are not
+          // reading. A server that sends no verdict leaves this at
+          // "Unchecked", which is what it used to say all along.
+          pendingVerdict = ev.verdict_pending === true
+          if (pendingVerdict) stage("faithfulness", "running")
+          else stage("faithfulness", "skipped", undefined, "skipped while streaming")
+          finish({
+            phase: "done", streaming: false, answer, evidence, citations: ev.citations, numberToChunk,
+            strength: pendingVerdict
+              ? { label: "Checking", kind: "none", pending: true }
+              : { label: "Unchecked", kind: "none", note: "streamed" },
+          })
+        } else if (ev.type === "verdict") {
+          // Arrives after `done`, so the run is already finished and on
+          // screen; this only replaces the badge. `totalMs` is re-stamped to
+          // include the check, because the stage strip shows the check and a
+          // total that excluded it would not add up.
+          stage("faithfulness", "done", ev.ms, ev.score != null ? `score ${ev.score.toFixed(2)}` : "no verdict")
+          const evidence = get().run.evidence
+          patch({
+            strength: strengthOf({
+              hasSelectedEvidence: evidence.some((e) => e.selected),
+              score: ev.score,
+              isFaithful: ev.is_faithful,
+              graderRetries: 0,
+            }),
+            claims: ev.unsupported_claims,
+            totalMs: Math.round(performance.now() - run.startedAt),
+          })
         }
+      }
+      // The stream ended with the badge still pulsing: `done` promised a
+      // verdict and the connection closed before it came. Leaving it on
+      // "Checking" would be a spinner that never resolves, so it falls back
+      // to the honest reading -- nothing checked this answer.
+      if (pendingVerdict && get().run.strength?.pending) {
+        stage("faithfulness", "skipped", undefined, "no verdict received")
+        patch({ strength: { label: "Unchecked", kind: "none", note: "no verdict" } })
       }
       if (!ended) {
         // The body closed without either ending. The server now always sends

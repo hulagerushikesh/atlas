@@ -264,7 +264,11 @@ class TestStreamingFailures:
             events = self._events(resp)
 
         assert events[-1]["type"] == "[DONE]"
-        assert events[-2]["type"] == "done"
+        # `done` is no longer the penultimate event -- the faithfulness
+        # verdict is sent after it, once the answer is already on screen.
+        # What this test is about is that a success ends with an ending at
+        # all, so it asserts the sentinel closes a stream that announced one.
+        assert "done" in [e["type"] for e in events]
 
     def test_a_failed_stream_is_charged_for_what_it_already_spent(
         self, client: TestClient
