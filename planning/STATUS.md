@@ -147,7 +147,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **808 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40091664915` on `83638af`, 808 + 1 skip, 0 non-success steps, 2m47s), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00029-rgj**, image `83638af`, deployed 2026-10-24; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00030-ddz**, image `83638af`, deployed 2026-10-25 to clear an uploaded PDF from the per-instance sparse index — same image as `00029-rgj`; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -478,6 +478,52 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-25 (first real user; two defects and a null result; **₹6.33, all
+  the user's own spend**) — the owner used Atlas as a user for the first
+  time rather than as its author, and three things fell out of it that
+  authoring had not surfaced.
+
+  **A null result worth more than a win.** `make eval` on the 16-row set
+  returned AC **0.7992** against the baseline's 0.7105 — a 12.5% gain, and
+  not a result. It clears the 0.08 rerun floor and loses the paired Wilcoxon
+  at **p=0.6094**, seven of sixteen rows moving in both directions;
+  `compare()` calls the whole run a tie. **0.7105 / 1.0000 stand.** Two
+  numbers came free: retrieval is bit-identical across 22 days (context
+  recall equal on all 15 scored rows, *with* 54 chunks of uploaded PDF
+  sitting in `default` — contamination measured at zero, not assumed), and
+  cost per query stops being n=1 at **$0.00281 ≈ ₹0.25** over 16 samples,
+  retiring the "weakest number in the budget" note. Latency improved inside
+  budget: p50 10,053 → **8,855 ms**, p95 17,072 → **15,290 ms**.
+
+  **Two defects, both filed in BACKLOG.** A PDF uploaded through the console
+  into `default` is refused at the router before retrieval, because
+  `ROUTER_DOMAIN` describes that namespace as FastAPI documentation — the
+  2026-10-13 fix with a hole exactly where the console writes. And console
+  uploads live on one instance's disk, so they are neither durable nor
+  consistent across instances.
+
+  **PII in production, removed.** Two wifi bills, 54 chunks, were in
+  `atlas_default`. Deleted by point id — 4,074 → 4,020, 157 → 155 sources,
+  matching `atlas_headers` exactly. Delete-by-filter was refused first
+  (`400: Index required but not found for "source"`); delete-by-id avoided
+  adding a payload index to production for a one-off. The Qdrant delete alone
+  was **not sufficient** — `/namespaces/default/sources` still listed one
+  bill, because the sparse index stores `content`. Rev **`00030-ddz`**
+  (`SKIP_BUILD=1`, image `83638af`, ₹0) rolled fresh containers; the live
+  listing now returns 155 sources and no non-FastAPI entry.
+
+  **Cause of the latency found, not guessed.** Retrieval is 38% of the 8,855
+  ms p50, and it is not a model call: Cloud Run is in `asia-south1` and the
+  Qdrant cluster is in **`aws us-west-1`**. Every retrieval crosses the
+  Pacific, which is also the 728–753 ms that `/health` has always reported.
+  Co-locating is the single biggest available win (≈ −25% total), at the
+  price of a full re-embed (≈₹6.45) and a redeploy.
+
+  Also written: the "How is this different from Copilot?" section of
+  PITCH.md, which leads with the concession that on public documentation a
+  general assistant is as right and faster, because the verification argument
+  does not survive being put second.
 
 - 2026-10-23 (streaming usage accounting; **₹0**) — a streamed `/query`
   charged the daily cap and incremented **none** of `COST_USD`,
