@@ -359,19 +359,28 @@ async def _stream_events(
         {"type":"stage","name":"routing","status":"start"}
         {"type":"stage","name":"routing","status":"done","classification":"simple","ms":45}
         {"type":"delta","text":"token text"}
-        {"type":"done","classification":"simple","citations":[...],"is_faithful":null}
+        {"type":"done","classification":"simple","citations":[...],"is_faithful":null,"verdict_pending":true}
+        {"type":"verdict","is_faithful":true,"score":1.0,"unsupported_claims":[],"ms":2140}
         {"type":"error","error":"...","stage":"grading"}
 
-    Every stream ends with `data: [DONE]`, after a `done` event or an
-    `error` one. The `error` event is emitted by `_stream_query`, not here —
-    see its docstring for why an exception after the first byte cannot be a
-    500.
+    Every stream ends with `data: [DONE]`, after a `done` event — optionally
+    followed by a `verdict` — or an `error` one. The `error` event is emitted
+    by `_stream_query`, not here — see its docstring for why an exception
+    after the first byte cannot be a 500.
 
-    Faithfulness is skipped on the streaming path — we'd have to buffer the
-    full answer to check it, defeating the purpose of streaming. The `done`
-    event therefore carries `is_faithful: null`, which is the difference
-    between "unchecked" and "checked and passed"; a client that wants the
-    verdict must ask without `stream`.
+    The `done` event still carries `is_faithful: null`, because at the moment
+    it is sent nothing has been checked. The verdict follows it in a separate
+    `verdict` event, after the answer is already on the reader's screen —
+    which is the whole reason it can run here at all. The old objection was
+    that checking means buffering the full answer; by this point the answer
+    is buffered either way (`full_answer` builds it for the citation map),
+    and the reader is already reading. So the check costs a second LLM call
+    and no perceived latency, instead of being skipped.
+
+    `done` carries `verdict_pending` so a client knows whether to wait. A
+    client reading a server that predates the `verdict` event sees no field,
+    reads false, and behaves exactly as it did before; one reading a server
+    with the check disabled sees false and is told the truth.
     """
     def _evt(data: dict[str, Any]) -> str:
         return f"data: {json.dumps(data)}\n\n"
@@ -393,7 +402,8 @@ async def _stream_events(
                     "answer": "This question appears to be outside the scope "
                     "of the knowledge base. "
                               "Please ask a question related to the available documentation.",
-                    "citations": [], "is_faithful": None})
+                    "citations": [], "is_faithful": None,
+                    "verdict_pending": False})
         yield "data: [DONE]\n\n"
         return
 
@@ -465,8 +475,40 @@ async def _stream_events(
     # more honest than the API, and every other client was told a never-checked
     # answer had been verified. This is the one field the project's whole claim
     # rests on, so it must not assert what was not computed.
+    checking = pipeline._faithfulness.enabled
     yield _evt({"type": "done", "classification": classification,
-                "citations": citations, "is_faithful": None})
+                "citations": citations, "is_faithful": None,
+                "verdict_pending": checking})
+
+    # ── Stage 6: Check (after `done`, so the reader waits for none of it) ─────
+    if checking:
+        t0 = time.perf_counter()
+        try:
+            verdict = await counted(
+                usage, pipeline._faithfulness.check(full_answer, chunks)
+            )
+            payload: dict[str, Any] = {
+                "type": "verdict",
+                "is_faithful": verdict.is_faithful,
+                "score": verdict.score,
+                "unsupported_claims": verdict.unsupported_claims,
+            }
+        except (asyncio.CancelledError, GeneratorExit):
+            raise
+        except Exception as exc:
+            # The answer is delivered, cited and, as far as anything knows,
+            # fine. A judge that falls over must not retroactively turn a
+            # finished response into a failure card — the client's error
+            # branch replaces the answer with one. So this reports no
+            # verdict, which is exactly what "unchecked" has always meant,
+            # and the cause goes to the log where it can be triaged.
+            logger.warning("stream_faithfulness_failed", error=str(exc),
+                           error_type=type(exc).__name__)
+            payload = {"type": "verdict", "is_faithful": None, "score": None,
+                       "unsupported_claims": []}
+        payload["ms"] = round((time.perf_counter() - t0) * 1000)
+        yield _evt(payload)
+
     # The out-of-scope branch above has always sent this and the success path
     # never did, so a client could not tell "finished" from "socket closed"
     # on the one path that streams an answer. Now all three endings agree.
@@ -550,7 +592,15 @@ async def query(
                 namespace=body.namespace,
             ),
             media_type="text/event-stream",
-            headers={"X-Faithfulness": "skipped-streaming",
+            # Was "skipped-streaming", which stopped being true on
+            # 2026-10-25: the check now runs after the answer is streamed and
+            # its result arrives as a `verdict` event. "deferred" says where
+            # to look for it; "disabled" is the only case with no verdict
+            # coming, and a header that claimed otherwise would send a client
+            # looking for an event that is never sent.
+            headers={"X-Faithfulness": (
+                         "deferred" if pipeline._faithfulness.enabled else "disabled"
+                     ),
                      "X-Namespace": body.namespace},
         )
 

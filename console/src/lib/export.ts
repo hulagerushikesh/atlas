@@ -30,10 +30,10 @@ export interface RunExport {
   failure: { what: string; why: string } | null
   /**
    * "full" is the non-streaming /query, which checks faithfulness and counts
-   * tokens. "stream" is SSE, which does neither — so `verdict` reads
-   * "Unchecked" and `token_usage` is null on that path. Those nulls are
-   * absences, not zeroes, and the mode is recorded so a reader can tell
-   * which kind of null they are looking at.
+   * tokens. "stream" is SSE, which checks faithfulness too — the verdict
+   * arrives after the answer — but still counts no tokens, so `token_usage`
+   * is null on that path. That null is an absence, not a zero, and the mode
+   * is recorded so a reader can tell which kind of null they are looking at.
    */
   mode: "full" | "stream"
   answer: string

@@ -186,8 +186,9 @@ function StrengthBadge({ s }: { s: Strength }) {
       initial={{ opacity: 0, scale: 0.94, y: 4 }} animate={{ opacity: 1, scale: 1, y: 0 }}
       transition={{ duration: 0.22, ease: EASE }}
       onClick={() => set({ evidenceOpen: true })}
-      className={cn("press mt-5 inline-flex items-center gap-2 rounded-[3px] border px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.06em]", KIND[s.kind])}
+      className={cn("press mt-5 inline-flex items-center gap-2 rounded-[3px] border px-2 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.06em]", KIND[s.kind], s.pending && "animate-pulse-soft")}
       role="status"
+      aria-busy={s.pending || undefined}
     >
       {s.label}{s.note && <span className="opacity-80">· {s.note}</span>}
     </motion.button>

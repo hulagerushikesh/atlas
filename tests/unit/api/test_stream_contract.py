@@ -1,13 +1,20 @@
 """
 What the SSE `done` event is allowed to claim.
 
-The streaming path does not run the faithfulness check -- it would have to
-buffer the whole answer, which defeats streaming -- and the `done` event sent
-`"is_faithful": true` anyway, on both the success branch and the out-of-scope
-one. The console happened to render UNCHECKED because it keys off the absent
+The `done` event used to send `"is_faithful": true` on both the success
+branch and the out-of-scope one, while the streaming path ran no check at
+all. The console happened to render UNCHECKED because it keys off the absent
 score, so the UI was more honest than the API; every other client was told a
 never-checked answer had been verified. That field is the one the project's
-whole claim rests on.
+whole claim rests on, so `done` still reports null -- at the moment it is
+sent, nothing has been checked.
+
+What changed on 2026-10-25 is that something is checked afterwards. The
+check runs once the answer is fully streamed and arrives as a separate
+`verdict` event, so the reader waits for the answer and not for the audit.
+`done` carries `verdict_pending` to say whether one is coming. The tests
+below pin both halves: that `done` still claims nothing, and that the
+verdict actually follows it rather than being asserted into existence.
 
 Also here: the mid-delta failure. `_stream_query` catches an exception after
 the first byte and turns it into an `error` event, and that was tested at the
@@ -131,3 +138,96 @@ class TestAFailureAfterTheFirstDelta:
         events = _stream(client)
 
         assert "qdrant url" not in json.dumps(events)
+
+
+class TestTheVerdictArrivesAfterTheAnswer:
+    """
+    Stream-then-badge. The check was skipped here on the stated grounds that
+    it would mean buffering the answer -- but `full_answer` is already built
+    for the citation map, and by the time it exists the reader has the text
+    on screen. So the cost of checking is one LLM call and no perceived
+    latency, and the streaming path stopped being the dishonest one.
+    """
+
+    def test_a_verdict_event_follows_the_done_event(self, client: TestClient) -> None:
+        events = _stream(client)
+        kinds = [e["type"] for e in events]
+
+        assert "verdict" in kinds, "the check runs after `done`, so its result must be sent"
+        assert kinds.index("verdict") > kinds.index("done"), (
+            "a verdict before `done` would mean the reader waited for it"
+        )
+        assert kinds[-1] == "[DONE]", "the sentinel still terminates the stream"
+
+    def test_the_verdict_carries_the_score_the_checker_returned(
+        self, client: TestClient
+    ) -> None:
+        [verdict] = [e for e in _stream(client) if e["type"] == "verdict"]
+
+        assert verdict["is_faithful"] is True
+        assert verdict["score"] == 0.95
+        assert verdict["unsupported_claims"] == []
+        assert isinstance(verdict["ms"], int)
+
+    def test_done_announces_that_a_verdict_is_coming(self, client: TestClient) -> None:
+        # Without this the client cannot tell "checking" from "never checked",
+        # and a server that predates the verdict event would leave a spinner
+        # running for ever.
+        [done] = [e for e in _stream(client) if e["type"] == "done"]
+
+        assert done["verdict_pending"] is True
+
+    def test_a_disabled_checker_promises_nothing_and_sends_nothing(
+        self, client: TestClient
+    ) -> None:
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline._faithfulness.enabled = False
+
+        events = _stream(client)
+        [done] = [e for e in events if e["type"] == "done"]
+
+        assert done["verdict_pending"] is False
+        assert not [e for e in events if e["type"] == "verdict"]
+
+    def test_an_out_of_scope_refusal_promises_no_verdict(
+        self, client: TestClient
+    ) -> None:
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline._router.classify = AsyncMock(return_value="out_of_scope")
+
+        events = _stream(client)
+        [done] = [e for e in events if e["type"] == "done"]
+
+        assert done["verdict_pending"] is False
+        assert not [e for e in events if e["type"] == "verdict"]
+
+    def test_a_judge_that_falls_over_does_not_destroy_the_answer(
+        self, client: TestClient
+    ) -> None:
+        # The answer is already delivered and cited. Letting the judge's
+        # exception reach `_stream_query` would turn it into an `error`
+        # event, and the console replaces the whole answer with a failure
+        # card on one of those -- so a broken auditor would cost the user a
+        # perfectly good answer it had already read.
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline._faithfulness.check = AsyncMock(side_effect=RuntimeError("judge died"))
+
+        events = _stream(client)
+
+        assert "".join(e["text"] for e in events if e["type"] == "delta") == "Hello world"
+        assert not [e for e in events if e["type"] == "error"]
+        [verdict] = [e for e in events if e["type"] == "verdict"]
+        assert verdict["is_faithful"] is None, "no verdict was reached, which is not a failed one"
+        assert verdict["score"] is None
+        assert events[-1]["type"] == "[DONE]"
+
+    def test_the_check_reads_the_answer_that_was_streamed(
+        self, client: TestClient
+    ) -> None:
+        # Checking some other string would make every verdict above
+        # meaningless while keeping them green.
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        _stream(client)
+
+        answer = pipeline._faithfulness.check.await_args.args[0]
+        assert answer == "Hello world"

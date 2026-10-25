@@ -97,6 +97,18 @@ def client() -> TestClient:
 
     mock_pipeline._generator.stream = _gen_stream
 
+    # Same trap as `_grader` above, one stage later: the streaming path now
+    # awaits the faithfulness check after `done`, and an auto-mock's `check`
+    # returns a MagicMock that cannot be awaited. The route catches that and
+    # reports "no verdict", so every verdict assertion would pass against a
+    # check that never ran. `enabled` is explicit for the same reason -- an
+    # auto-mock attribute is truthy, which is the right answer by accident.
+    mock_pipeline._faithfulness = MagicMock()
+    mock_pipeline._faithfulness.enabled = True
+    mock_pipeline._faithfulness.check = AsyncMock(
+        return_value=FaithfulnessResult(score=0.95, is_faithful=True, summary="ok")
+    )
+
     mock_indexer = MagicMock()
 
     # Build a mock NamespaceRegistry that returns the mocked pipeline+indexer

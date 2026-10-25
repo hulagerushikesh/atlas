@@ -138,10 +138,13 @@ would make enabling the flag read as the vector store having slowed down.
 
 **Streaming response** (`stream: true`)
 
-Returns `text/event-stream` (Server-Sent Events). The faithfulness check is **skipped**
-on the streaming path because it requires the full answer before running — buffering
-defeats the purpose of streaming. A `X-Faithfulness: skipped-streaming` response header
-signals this to clients.
+Returns `text/event-stream` (Server-Sent Events). The faithfulness check **runs
+after the answer**, not instead of it: the answer streams to the client, and the
+verdict follows in a separate `verdict` event once the check finishes. The reader
+therefore waits for the answer and not for the audit. The `X-Faithfulness`
+response header says which to expect — `deferred` when a `verdict` event is
+coming, `disabled` when the checker is off and none will be sent. (It read
+`skipped-streaming` before 2026-10-25, when the check genuinely did not run here.)
 
 Every event is one `data:` line holding a JSON object with a `type`. Clients
 concatenate `delta.text` to rebuild the answer and can render each stage as it
@@ -155,8 +158,9 @@ lands.
 | `stage` | `{"type":"stage","name":"retrieval","status":"done","chunks":15,"ms":840,"evidence":[…]}` | evidence ships before generation, so the trail renders while tokens stream |
 | `stage` | `{"type":"stage","name":"grading","status":"done","score":0.82,"sufficient":true,"ms":390}` | grading finished |
 | `delta` | `{"type":"delta","text":"…"}` | one token span |
-| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":null}` | the answer is complete. `is_faithful` is **always `null` on this path** — streaming skips the faithfulness check, because the check needs the whole answer. Null means *unchecked*, not *failed*; ask without `stream` for a verdict |
-| `error` | `{"type":"error","error":"…","stage":"grading","request_id":"…"}` | the pipeline threw after streaming began |
+| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":null,"verdict_pending":true}` | the answer is complete. `is_faithful` is **always `null` here** — at the moment this is sent, nothing has been checked yet. Null means *unchecked*, not *failed*. `verdict_pending` says whether a `verdict` event follows; it is absent on servers older than 2026-10-25, which reads as false |
+| `verdict` | `{"type":"verdict","is_faithful":true,"score":1.0,"unsupported_claims":[],"ms":2140}` | the faithfulness check finished, after the answer. `is_faithful` and `score` are `null` when no verdict was reached — the answer was a refusal, or the judge itself failed — which is *unchecked*, not a failed check |
+| `error` | `{"type":"error","error":"…","stage":"grading","request_id":"…"}` | the pipeline threw after streaming began. A judge that throws does **not** produce one of these: the answer is already delivered, so the failure degrades to a null verdict instead of destroying it |
 
 ```
 data: {"type": "stage", "name": "routing", "status": "start"}
@@ -164,12 +168,13 @@ data: {"type": "stage", "name": "routing", "status": "done", "classification": "
 data: {"type": "delta", "text": "Employees"}
 data: {"type": "delta", "text": " receive"}
 ...
-data: {"type": "done", "classification": "simple", "citations": [...], "is_faithful": null}
+data: {"type": "done", "classification": "simple", "citations": [...], "is_faithful": null, "verdict_pending": true}
+data: {"type": "verdict", "is_faithful": true, "score": 1.0, "unsupported_claims": [], "ms": 2140}
 data: [DONE]
 ```
 
-**A stream always ends with `data: [DONE]`**, after a `done` event or an `error`
-one. That sentinel is the contract: a reader that stops on the body closing
+**A stream always ends with `data: [DONE]`**, after a `done` event — optionally
+followed by a `verdict` — or an `error` one. That sentinel is the contract: a reader that stops on the body closing
 instead cannot tell a finished answer from a dropped connection. Until
 2026-09-29 the success path did not send it and an exception sent nothing at
 all — the body simply ended mid-event, which every layer read as completion,
@@ -533,7 +538,7 @@ run differs only in `exported_at`.
   "question": "How does dependency caching work?",
   "phase": "done",              // done | refused | failed
   "failure": null,              // {what, why} when phase is "failed"
-  "mode": "full",               // "stream" skips faithfulness and token counts
+  "mode": "full",               // "stream" has a verdict too, but no token counts
   "answer": "Dependencies are declared with `Depends()` … [1]",
   "verdict": { "label": "Supported", "kind": "good", "note": "0.93" },
   "unsupported_claims": [],
@@ -555,8 +560,8 @@ Two things the shape is deliberate about:
   Dropping those would hide what Atlas considered and rejected, which is half
   of what makes a retrieval run reviewable.
 - **`phase` and `mode` say why a field is empty.** A failed run and a run that
-  retrieved nothing both export an empty `evidence`; a streamed run has no
-  faithfulness verdict and no token counts. Without those two fields the nulls
+  retrieved nothing both export an empty `evidence`; a streamed run carries a
+  faithfulness verdict but no token counts. Without those two fields the nulls
   are ambiguous, and the file would read as a successful run that found
   nothing.
 

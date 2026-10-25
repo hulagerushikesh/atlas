@@ -100,12 +100,21 @@ export type StreamEvent =
   | { type: "stage"; name: "retrieval"; status: "done"; chunks: number; ms: number; evidence: Evidence[] }
   | { type: "stage"; name: "grading"; status: "done"; score: number; sufficient: boolean; ms: number }
   | { type: "delta"; text: string }
-  // `is_faithful` is always null here: the streaming path skips the
-  // faithfulness check, so there is no verdict to report. It is typed
-  // nullable rather than omitted so that reading it cannot look like a
-  // pass -- the API used to send `true` on this path, which it had not
-  // checked. The store renders "Unchecked" off the absent score.
-  | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean | null; answer?: string }
+  // `is_faithful` is always null here: at the moment `done` is sent nothing
+  // has been checked yet. It is typed nullable rather than omitted so that
+  // reading it cannot look like a pass -- the API used to send `true` on
+  // this path, which it had not checked.
+  //
+  // `verdict_pending` says whether a `verdict` event is still coming, so the
+  // UI can show "checking" instead of guessing. Optional, because a server
+  // older than the verdict event does not send it: absent reads as false,
+  // and the client then behaves exactly as it did before.
+  | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean | null; answer?: string; verdict_pending?: boolean }
+  // The faithfulness verdict, sent after `done` because the check runs once
+  // the answer is already on screen. Nulls mean no verdict was reached --
+  // the answer was a refusal, or the judge itself failed -- which is not the
+  // same as a failed check, and renders "Unchecked" rather than a bad grade.
+  | { type: "verdict"; is_faithful: boolean | null; score: number | null; unsupported_claims: string[]; ms: number }
   // Sent when the pipeline throws after the first byte. The response is a 200
   // by then — the status line left before the pipeline had a chance to fail —
   // so this event is the only way the failure can reach the client at all.
