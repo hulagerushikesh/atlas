@@ -168,6 +168,79 @@ work does someone have to answer "is this answer grounded?" today.** Not
 
 ---
 
+## "How is this different from Copilot?"
+
+The first question every engineer asks. Answer it by conceding the obvious
+point first — the concession is what makes the rest believable.
+
+**On a public, well-documented subject, Copilot is as right as Atlas and
+faster.** FastAPI is in every model's training data. A pitch that claims
+better answers about FastAPI is dead on contact with the first follow-up.
+
+The difference is not the answer. It is that the answer can be audited —
+and that changes what the system is allowed to be used for.
+
+### What is on screen that Copilot cannot show
+
+| In Atlas | Copilot |
+| --- | --- |
+| 38 passages retrieved, 5 cited | nothing — the candidate set is invisible |
+| `ref 0 · chars 0–464` of a named file | no source, no offsets |
+| `dense 0.77 · bm25 19.0 · rrf 0.029 · rerank 2.85` | no ranking signal |
+| the 33 passages that were rejected | discards are not shown |
+| `5 stages · 8,761 ms · 5,821 tok · $0.0020` | one spinner |
+| a faithfulness verdict on the finished answer | no such step exists |
+
+### The five differences that matter
+
+1. **Provenance per claim, not per answer.** Each marker points at a
+   character range in a named file, not at "the documentation". The reader
+   can open it and check a single sentence.
+
+2. **The rejected evidence is kept.** When an answer is wrong you can tell
+   *why* — the passage was never retrieved, or it was retrieved and ignored.
+   Those have different fixes. Without the discard list you can only
+   re-prompt and hope.
+
+3. **A second model checks the first.** After generation a separate
+   faithfulness pass asks whether each claim is supported by the retrieved
+   text, and returns Supported / Mixed / Weak / Unsupported. It is measured,
+   not asserted: 1.0000 faithfulness and 0.7105 answer correctness on a
+   sixteen-question labelled set.
+
+4. **It can refuse.** A bounded corpus makes "out of scope" a real answer.
+   A system that cannot say *I do not have this* cannot be trusted when it
+   says *I do*.
+
+5. **Knowledge separation — the sharpest one.** A general assistant blends
+   what the model memorised in training with whatever context it was given,
+   and the reader cannot tell which produced the answer. Atlas forces the
+   answer out of retrieved passages and then verifies it against them, so
+   "the model knows this" and "this is in our documents" stay distinguishable.
+   On public docs that distinction is academic. On a private corpus the model
+   has memorised nothing about, it is the whole product.
+
+### The one-sentence version
+
+> Copilot answers the question. Atlas answers the question **and tells you
+> whether to believe the answer** — with the evidence, the scores, the
+> rejected passages, a measured faithfulness verdict, and the cost to the
+> paisa.
+
+### When it is actually the right tool
+
+Not for FastAPI. For when the answer must be defensible to a third party
+(audit, compliance, a support rep quoting policy); when the corpus is
+private and in no training set, so confabulation is the default failure;
+when being wrong is expensive rather than annoying; or when you must *prove*
+the answer came from the approved document.
+
+If none of those hold, say so and recommend Copilot. Conceding the cases
+where the tool is unnecessary is what makes the cases where it is necessary
+credible.
+
+---
+
 ## What not to claim
 
 Stay on the right side of these when the follow-ups come.
