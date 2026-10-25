@@ -80,6 +80,47 @@ Newest at the bottom of each section.
   field is always null there, and the non-streaming response is untouched
   (`QueryResponse.is_faithful: bool` is computed, and stays `bool`).
 
+- **A console upload into the namespace `ROUTER_DOMAIN` describes is refused
+  before retrieval.** Found 2026-10-25 by uploading a PDF through the console
+  and asking about it: `1 stage · 987 ms`, `Routed out of scope`, nothing
+  retrieved. The chain is `deploy_gcp.sh:118` setting
+  `ROUTER_DOMAIN=the FastAPI web framework documentation`, `domain_namespace`
+  defaulting to `default` (`config.py:103`), and `domain_for()` therefore
+  handing the router that sentence for the one namespace the console uploads
+  into. The router classified correctly against the description it was given;
+  the description was false the moment a non-FastAPI document landed there.
+
+  **This is the 2026-10-13 defect with a hole in its fix.** `domain_namespace`
+  was added precisely so an uploaded corpus would not be refused for not
+  being `ROUTER_DOMAIN`, and it works — for every namespace *except* the one
+  named, which is also the console's default target. The guard protects
+  everywhere the problem does not occur.
+
+  Workaround, no code: upload to a new sheet. `domain_for()` returns
+  `GENERIC_DOMAIN` for any other namespace and the router stays neutral.
+  Proposed fix: refuse the upload when the target namespace is
+  `domain_namespace`, naming the cause, rather than accepting it and failing
+  silently at query time three steps later.
+
+- **Console uploads are per-instance, so they are neither durable nor
+  consistent.** Found 2026-10-25 while clearing uploaded PDFs. The dense half
+  goes to Qdrant and persists; the sparse half goes to
+  `sparse_index_path(namespace)` on the container's own filesystem
+  (`namespaces.py:149`), which Cloud Run discards on recycle. With `max 2`
+  instances an upload lands on **one** of them, so whether a document is
+  keyword-retrievable depends on which instance serves the request.
+
+  Observed directly: two PDFs uploaded in one session, both present in
+  Qdrant, only one in the live container's source listing — the other
+  instance had already recycled.
+
+  Second consequence, worth stating because it bit this session: deleting a
+  document's points from Qdrant does **not** remove it, because
+  `BM25SparseIndex` stores `content` itself (`sparse.py:49`), not just term
+  statistics. A keyword hit can still return the full chunk text from the
+  surviving instance until it recycles. Clearing an uploaded document today
+  means deleting from Qdrant *and* rolling a revision.
+
 ## Debts
 
 - ~~**`/namespaces/{ns}/sources` can advertise documents the vector store does
