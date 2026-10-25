@@ -354,9 +354,46 @@ Per-sample latency from the same run, **nearest-rank** percentiles as
 | **total** | **10,053** | **17,072** |
 
 Production, one live query on `58e4e00` (2026-10-07): 7,986 tokens,
-**$0.0034677 ≈ ₹0.31**, warm `/query` 13.7 s. That cost figure is **n=1** and
-is the weakest number in the budget; firming it up is free on the next eval
-run that happens anyway.
+**$0.0034677 ≈ ₹0.31**, warm `/query` 13.7 s. That cost figure was **n=1** and
+the weakest number in the budget; **superseded on 2026-10-25** by $0.00281
+(≈₹0.25) over 16 samples — see the replication block below.
+
+### Replicated 2026-10-25 — the baseline held, and that is the result
+
+`eval_data/reports/fastapi-v1_20261025-124515`, same dataset fingerprint
+`80c1a625bc7b7533`, ₹6.08. Twenty-two days and the whole of M5 later, the
+comparator's verdict is **tie on every metric**:
+
+| Metric | 2026-10-03 | 2026-10-25 | Delta | Paired test |
+|---|---|---|---|---|
+| Context precision | 0.4667 | 0.4667 | +0.0000 | underpowered (4/15 differ) |
+| Context recall | 0.9378 | 0.9378 | +0.0000 | — (all 15 rows equal) |
+| Faithfulness | 1.0000 | 0.9939 | −0.0061 *(ns)* | underpowered (1/15 differ) |
+| Answer relevance | 0.8365 | 0.8347 | −0.0018 *(ns)* | p=0.8904 (15/15) |
+| Answer correctness | 0.7105 | 0.7992 | +0.0887 *(ns)* | **p=0.6094 (7/16)** |
+
+**Answer correctness is the row to read twice.** +0.0887 clears its 0.08
+rerun floor and still loses on the paired test — seven of sixteen rows moved,
+in both directions. Reported alone it looks like a 12.5% gain, and the two
+gates are the only reason it is not in the pitch deck. **0.7105 and 1.0000
+remain the numbers to quote.** This is the fifth instance of the recurring
+lesson, caught by machinery this time instead of by hand.
+
+Two findings that came free with the run:
+
+- **Retrieval is bit-identical across 22 days** — context recall equal on all
+  fifteen scored rows. The run executed against production Qdrant while 27
+  chunks of an uploaded PDF sat in `default`, and not one displaced a FastAPI
+  passage. Upload contamination of the eval: measured, zero.
+- **Cost per query is no longer n=1.** `$0.00281 ≈ ₹0.25`, pipeline calls only,
+  judges excluded — against the `$0.005` ceiling, from per-sample token
+  accounting over 16 samples. This retires the "weakest number in the budget"
+  note below. The one-live-query `₹0.31` figure from 2026-10-07 is superseded.
+
+Latency moved the right way and stayed inside budget: p50 10,053 → **8,855 ms**
+(−11.9%, ceiling 12,000), p95 17,072 → **15,290 ms** (−10.4%, ceiling 20,000),
+run cost $0.0709 → $0.0691 (−2.5%, ceiling $0.1000). None of these carry a
+significance test — the budget check is a ceiling, not a claim of improvement.
 
 ## M3 exit criteria
 
