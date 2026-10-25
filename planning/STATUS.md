@@ -479,6 +479,27 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-10-25 (stream-then-badge; **₹0**) — the streaming path now runs the
+  faithfulness check *after* the answer instead of skipping it. The stated
+  reason for skipping — that checking means buffering the whole answer —
+  was already false in the code: `full_answer` is assembled a few lines
+  earlier for the citation map, and by then every token is on screen. So
+  the check costs one LLM call and no perceived latency, and the reader
+  sees the answer at first token with the verdict landing after. A new
+  `verdict` SSE event carries it; `done` gained `verdict_pending` so a
+  client can show "checking" without guessing, and absent reads as false so
+  an older client is unaffected. A judge that throws degrades to a null
+  verdict rather than an `error` event, because the console replaces the
+  whole answer with a failure card on one of those and the answer is
+  already delivered. `X-Faithfulness` corrected from `skipped-streaming` to
+  `deferred` / `disabled`; docs/api.md and the export note carried the same
+  stale claim. Both paths now score the badge through one `strengthOf`.
+  815 tests, 94.03%; three mutants each killed by a different test; UI
+  sequence verified against a stub SSE server at ₹0 (answer 1.5 s, pulsing
+  "Checking" 2.2 s, "Supported · 0.93" 4.3 s) with both degradations
+  landing on "Unchecked". **Committed `ea1264e`, not deployed** — live
+  verification still owes one real query.
+
 - 2026-10-25 (first real user; two defects and a null result; **₹6.33, all
   the user's own spend**) — the owner used Atlas as a user for the first
   time rather than as its author, and three things fell out of it that
