@@ -44,6 +44,11 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     two can disagree, and this endpoint used to advertise whatever the sparse
     side held. The dense point count is now read alongside it (one cheap
     collection-info call) and any disagreement is reported rather than hidden.
+
+    `writable` rides on this response rather than on `/namespaces` because
+    the console refetches it per corpus, and because `/namespaces` only lists
+    corpora Qdrant already holds -- a corpus the user has just named exists
+    in the picker before it exists in Qdrant, and still needs an answer.
     """
     registry = get_registry(request)
     components = registry.get(namespace)
@@ -67,6 +72,7 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
             f"store, so some sources listed may return nothing."
         )
 
+    described = registry.settings.router.describes(namespace)
     return SourceListResponse(
         namespace=namespace,
         sources=sources,
@@ -75,4 +81,6 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
         dense_chunks=dense_chunks,
         consistent=consistent,
         warning=warning,
+        writable=not described,
+        description=registry.settings.router.domain if described else None,
     )

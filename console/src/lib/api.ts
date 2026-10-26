@@ -74,6 +74,13 @@ export interface SourceList {
   // vector store could not be read, which is not the same as zero.
   total_chunks: number; dense_chunks: number | null
   consistent: boolean | null; warning: string | null
+  // False for the corpus ROUTER_DOMAIN describes: the ingest endpoints
+  // refuse it, because a document that does not fit the description indexes
+  // fine and is then refused as out of scope at query time. `description` is
+  // the sentence being protected -- the reason, without which read-only
+  // reads as arbitrary. Optional so a console pointed at an older server
+  // defaults to writable and behaves as it did before.
+  writable?: boolean; description?: string | null
 }
 export interface Health { status: "ok" | "degraded" | "down"; version: string }
 export interface IngestResult {

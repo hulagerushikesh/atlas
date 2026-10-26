@@ -124,6 +124,11 @@ interface AtlasState {
   // Set when the keyword index and the vector store disagree on this sheet,
   // so the counts above are not quietly presented as searchable.
   indexWarning: string | null
+  // Null while unknown. The sentence the router is told about this sheet,
+  // set only when the sheet is the described corpus -- which is also the one
+  // the ingest endpoints refuse. The pane uses it to turn the drop zone off
+  // *and* to say why, which a 409 arriving after the file is chosen cannot.
+  readOnlyBecause: string | null
   health: Health["status"] | "unreachable" | "checking"
   // run
   run: RunState
@@ -170,6 +175,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   sourcesLoading: true,
   totals: null,
   indexWarning: null,
+  readOnlyBecause: null,
   health: "checking",
   run: idleRun(),
   surveyOpen: false,
@@ -224,10 +230,13 @@ export const useAtlas = create<AtlasState>((set, get) => ({
         sources: j.sources,
         totals: { sources: j.total_sources, chunks: j.total_chunks },
         indexWarning: j.warning ?? null,
+        // `writable !== false`, not `writable === true`: an older server
+        // omits the field, and an absent answer must mean "as before".
+        readOnlyBecause: j.writable === false ? (j.description ?? "a fixed corpus") : null,
         sourcesLoading: false,
       })
     } catch {
-      set({ sources: [], totals: null, indexWarning: null, sourcesLoading: false })
+      set({ sources: [], totals: null, indexWarning: null, readOnlyBecause: null, sourcesLoading: false })
     }
   },
 

@@ -222,6 +222,16 @@ class SourceListResponse(BaseModel):
     dense_chunks: int | None = None     # None = Qdrant unreachable, not zero
     consistent: bool | None = None      # None = unknown, not "fine"
     warning: str | None = None
+    # False for the one namespace ROUTER_DOMAIN describes, which the ingest
+    # endpoints refuse. Carried here because the console reloads this response
+    # on every corpus change, so it is the one place that already knows which
+    # corpus the user is looking at -- and a drop zone that is going to return
+    # 409 should be disabled before the file is chosen, not after.
+    writable: bool = True
+    # The sentence the router is told, when there is a specific one. Shown as
+    # the reason a corpus is read-only, because "read-only" without the claim
+    # it is protecting reads as an arbitrary restriction.
+    description: str | None = None
 
 
 # ── /keys + /usage ────────────────────────────────────────────────────────────

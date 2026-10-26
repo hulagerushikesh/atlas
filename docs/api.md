@@ -251,6 +251,7 @@ for a single-user API on your own machine.
 |--------|-----------|
 | 403 | `path` resolves outside `INGEST_ROOT` |
 | 404 | `path` does not exist on the filesystem |
+| 409 | `namespace` is the corpus `ROUTER_DOMAIN` describes — see *Described corpora are read-only* |
 | 429 | the daily spend cap is exhausted |
 | 500 | Indexing failed (partial results possible) |
 
@@ -307,9 +308,39 @@ reduced to its basename, so it cannot choose where the bytes land.
 
 | Status | Condition |
 |--------|-----------|
+| 409 | `namespace` is the corpus `ROUTER_DOMAIN` describes — see below. Checked before the budget and before any byte is read |
 | 422 | every uploaded file was refused; `detail.rejected` lists each one and why |
 | 429 | the daily spend cap is exhausted |
 | 500 | Indexing failed (the temp directory is still cleaned up) |
+
+#### Described corpora are read-only
+
+Both ingest endpoints refuse to write into the one namespace `ROUTER_DOMAIN`
+describes (`ROUTER_DOMAIN_NAMESPACE`, default `default`).
+
+The router is given one prose sentence per namespace and decides, *before*
+retrieval, whether a question belongs to the corpus that sentence describes.
+For a described namespace the sentence is a claim about the contents — "the
+FastAPI web framework documentation" — and a document that is not that makes
+it false. The old behaviour was not an error but a silence three steps later:
+the upload indexed cleanly, reported its chunks, and then every question
+about it returned `out_of_scope` in under a second with nothing retrieved.
+
+The 409 names the claim and the way out. Any other namespace is routed
+against the contentless default and accepts writes normally, which is what
+`ROUTER_DOMAIN_NAMESPACE` was added for; this closes the one namespace it
+could not cover, which was also the console's default target.
+
+The refusal is scoped to **a specific description**. Where `ROUTER_DOMAIN` is
+unset, every namespace including `default` is described by the contentless
+sentence, nothing can contradict it, and ingest behaves exactly as before —
+so a local checkout is unaffected.
+
+`scripts/ingest.py` drives the indexer directly and is not affected. That is
+how a described corpus is built in the first place.
+
+Clients discover this without a failed request:
+`GET /namespaces/{namespace}/sources` carries `writable` and `description`.
 
 ---
 

@@ -80,8 +80,29 @@ Newest at the bottom of each section.
   field is always null there, and the non-streaming response is untouched
   (`QueryResponse.is_faithful: bool` is computed, and stays `bool`).
 
-- **A console upload into the namespace `ROUTER_DOMAIN` describes is refused
-  before retrieval.** Found 2026-10-25 by uploading a PDF through the console
+- ~~**A console upload into the namespace `ROUTER_DOMAIN` describes is refused
+  before retrieval.**~~ **Fixed 2026-10-26.** Refused at the *write* instead,
+  where the cause can still be named: both ingest endpoints return **409** for
+  the described namespace, quoting the claim the router is given and saying
+  which corpus to use instead. The condition is `RouterConfig.describes()` —
+  the target is `domain_namespace` **and** `domain` is not `GENERIC_DOMAIN`.
+  Keying it on the namespace name alone would have refused `default` on every
+  checkout that never set `ROUTER_DOMAIN`, where the description claims
+  nothing and so cannot be contradicted; a mutant that drops that half is
+  killed by seven pre-existing tests. `scripts/ingest.py` bypasses the API and
+  is untouched, which is how the described corpus is built.
+
+  The console learns it without a failed request: `/namespaces/{ns}/sources`
+  now carries `writable` and `description`, the corpus pane turns the drop
+  zone and the server-path form off for a read-only sheet, and says which
+  sentence it is protecting. A 409 that only arrives after the file is chosen
+  is the same silence one step later.
+
+  8 tests; five mutants each killed (refuse on name alone, refuse everywhere,
+  guard dropped from `/ingest`, guard moved after indexing, `writable` pinned
+  true). Not fixed here: uploads are still per-instance — the entry below.
+
+  Original entry: Found 2026-10-25 by uploading a PDF through the console
   and asking about it: `1 stage · 987 ms`, `Routed out of scope`, nothing
   retrieved. The chain is `deploy_gcp.sh:118` setting
   `ROUTER_DOMAIN=the FastAPI web framework documentation`, `domain_namespace`
