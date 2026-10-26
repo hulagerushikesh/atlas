@@ -49,14 +49,22 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     the console refetches it per corpus, and because `/namespaces` only lists
     corpora Qdrant already holds -- a corpus the user has just named exists
     in the picker before it exists in Qdrant, and still needs an answer.
+
+    The dense count is read first and then handed to the reconciler, so this
+    endpoint brings the sparse half up to date for free -- it was paying for
+    that number anyway. That matters because the console refetches this after
+    every upload: it is the request most likely to be the first one an
+    instance sees for a corpus another instance just wrote.
     """
     registry = get_registry(request)
+    dense_chunks = await registry.dense_chunk_count(namespace)
+    await registry.reconcile_sparse(namespace, dense_chunks=dense_chunks)
+
     components = registry.get(namespace)
     rows = components.sparse_index.sources() if components.sparse_index else []
     sources = [SourceInfo(**row) for row in rows]
     total_chunks = sum(s.chunks for s in sources)
 
-    dense_chunks = await registry.dense_chunk_count(namespace)
     consistent = None if dense_chunks is None else dense_chunks == total_chunks
 
     warning: str | None = None

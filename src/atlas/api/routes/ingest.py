@@ -141,7 +141,12 @@ async def ingest(
             headers={"Retry-After": str(seconds_until_utc_midnight())},
         ) from exc
 
-    indexer = get_registry(request).get(body.namespace).indexer
+    registry = get_registry(request)
+    # Adopt whatever the vector store already holds before adding to it. The
+    # sparse index is written back to this container's disk in full, so
+    # indexing on top of a stale copy persists the gap instead of closing it.
+    await registry.reconcile_sparse(body.namespace)
+    indexer = registry.get(body.namespace).indexer
     logger.info("ingest_request", path=body.path, namespace=body.namespace, glob=body.glob)
     start = time.perf_counter()
 
@@ -286,7 +291,11 @@ async def ingest_upload(
                 },
             )
 
-        indexer = get_registry(request).get(namespace).indexer
+        registry = get_registry(request)
+        # Same reason as `/ingest`: write on top of the vector store's
+        # contents, not on top of one container's partial view of them.
+        await registry.reconcile_sparse(namespace)
+        indexer = registry.get(namespace).indexer
         logger.info("ingest_upload_request", namespace=namespace,
                     files=len(accepted), bytes=total)
         start = time.perf_counter()

@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
+from atlas.api.namespaces import SparseSync
 from atlas.config import GENERIC_DOMAIN, RouterConfig, Settings
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.retriever import RetrievedChunk
@@ -129,6 +130,17 @@ def client() -> TestClient:
     # Agrees with the sparse rows above (12 + 7) so the default fixture is a
     # consistent namespace; mismatch tests override it.
     mock_registry.dense_chunk_count = AsyncMock(return_value=19)
+    # Every route that reads or writes the corpus reconciles the sparse half
+    # against Qdrant first. `spec=` already makes this an AsyncMock, but the
+    # *return value* would be a bare mock, and a test that asserts on what a
+    # reconcile reported would then pass against one that never ran. Stated
+    # here as the no-op it is for a namespace that already agrees: 19 rows,
+    # matching `dense_chunk_count` above.
+    mock_registry.reconcile_sparse = AsyncMock(
+        return_value=SparseSync(
+            checked=True, rebuilt=False, sparse_chunks=19, dense_chunks=19
+        )
+    )
     # The ingest routes ask the registry whether a namespace is described
     # before writing to it, and the sources route reports the same answer.
     # On a bare `MagicMock` that question returns a truthy mock, which would

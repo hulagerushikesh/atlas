@@ -342,6 +342,39 @@ how a described corpus is built in the first place.
 Clients discover this without a failed request:
 `GET /namespaces/{namespace}/sources` carries `writable` and `description`.
 
+#### The keyword index is a cache of the vector store
+
+A namespace has two halves and they do not live together. The dense half is
+in Qdrant, shared by every instance. The sparse (BM25) half is a JSON file on
+the instance's own filesystem, which Cloud Run discards when it recycles the
+container — so an upload lands on whichever instance served the request, and
+nothing propagates it.
+
+**Qdrant is the source of truth.** Everything the keyword index holds is
+already in the point payload, so before a query retrieves, before an ingest
+writes, and whenever `GET /namespaces/{namespace}/sources` is read, the
+process compares its row count with the collection's point count and rebuilds
+the sparse half from Qdrant when they differ. Nothing in the API changes; the
+effects are that a document indexed anywhere becomes keyword-retrievable
+everywhere, and that deleting a document's points from Qdrant now removes its
+text as well — before this, `BM25SparseIndex` kept the chunk content and a
+keyword hit could still return it until the revision was rolled.
+
+Two limits worth stating:
+
+- **The test is a count**, because comparing ids costs the scroll the check
+  exists to avoid. An equal number of *different* chunks is not detected.
+- **An empty collection never empties a populated index.** Dense 0 against a
+  populated sparse half is reported through `consistent`/`warning` and acted
+  on nowhere: a baked index cannot be rebuilt from a collection that no
+  longer holds it, so a transient empty read must not cost a container its
+  corpus. Every other mismatch, including a delete of one document, rebuilds.
+
+`RETRIEVAL_SPARSE_SYNC_TTL_SECONDS` (default 60) bounds how stale a process's
+answer may be, and therefore the worst-case delay before every instance sees
+a new document. `0` re-checks on every request — correct, at one extra Qdrant
+round trip per query.
+
 ---
 
 ### `GET /health`

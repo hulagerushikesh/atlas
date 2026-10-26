@@ -123,8 +123,45 @@ Newest at the bottom of each section.
   `domain_namespace`, naming the cause, rather than accepting it and failing
   silently at query time three steps later.
 
-- **Console uploads are per-instance, so they are neither durable nor
-  consistent.** Found 2026-10-25 while clearing uploaded PDFs. The dense half
+- ~~**Console uploads are per-instance, so they are neither durable nor
+  consistent.**~~ **Fixed 2026-10-26.** Qdrant is the source of truth and the
+  sparse index is a cache of it. Everything the BM25 corpus keeps is already
+  in the point payload — content, hash, the whole `ChunkMetadata` — so a
+  namespace can be rebuilt from the vector store alone, and
+  `NamespaceRegistry.reconcile_sparse()` does exactly that whenever the row
+  count and the collection's point count disagree. It runs before a query
+  retrieves, before an ingest writes, and on `/namespaces/{ns}/sources`,
+  which had already paid for the count and so gets it free — and that is the
+  request the console makes after every upload, which is why propagation is
+  visible immediately rather than on a timer.
+
+  Both consequences go with it: a document indexed by one instance is
+  keyword-retrievable on the others, and a Qdrant delete now removes the
+  chunk text instead of leaving it to be served until the revision rolls.
+
+  The three things a naive version would get wrong, each with a test:
+  **an empty collection never empties a populated index** (a baked corpus
+  cannot be rebuilt from a collection that no longer holds it, so a transient
+  empty read must not cost a container its index — the mismatch is reported
+  and acted on nowhere); **a scroll that fails halfway is not adopted**,
+  because a partial read is indistinguishable from a corpus that shrank; and
+  **an unreachable Qdrant does not stamp the clock**, so "nobody knows" is
+  not cached as "agreed" for a whole TTL.
+
+  The disagreement test is a *count* — one collection-info call, where
+  comparing ids would cost the scroll the check exists to avoid. The gap
+  that leaves is stated in `docs/api.md`: an equal number of different
+  chunks is not detected. `RETRIEVAL_SPARSE_SYNC_TTL_SECONDS` (default 60)
+  bounds staleness; `0` buys correctness with a round trip per query.
+
+  18 tests; seven mutants each killed by a different test. Two of them
+  survived the first run and both were faults in the *tests*: the
+  concurrency test gathered two coroutines whose `AsyncMock`s never yield to
+  the loop, so they ran strictly in sequence and the lock was never
+  contended, and the route test exercised only the non-streaming path while
+  the console uses the streaming one.
+
+  Original entry: Found 2026-10-25 while clearing uploaded PDFs. The dense half
   goes to Qdrant and persists; the sparse half goes to
   `sparse_index_path(namespace)` on the container's own filesystem
   (`namespaces.py:149`), which Cloud Run discards on recycle. With `max 2`
