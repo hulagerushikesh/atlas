@@ -148,7 +148,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **823 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40296485709` on `80a599f`), 94.03% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **842 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40296485709` on `80a599f`), 94.14% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
 | Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00032-6xx**, image `80a599f`, deployed 2026-10-26 — the revision that makes `default` read-only over HTTP; it followed `00031-lv6`/`a15c3d1`, the first revision whose streaming path checks faithfulness, which in turn replaced `00030-ddz`/`83638af`, deployed 2026-10-25 to clear an uploaded PDF from the per-instance sparse index — same image as `00029-rgj`; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
@@ -481,6 +481,44 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-26 (uploads are durable now; **₹0**) — **defect 2 of 2 from the
+  first real user session is fixed.** A namespace has two halves in two
+  places: the dense half in Qdrant, shared by every instance, and the sparse
+  BM25 half as a JSON file on the container's own disk, which Cloud Run
+  discards on recycle. So an upload landed on whichever instance served the
+  request and nothing propagated it — two PDFs uploaded in one session were
+  both in Qdrant and only one was in the container that answered next.
+
+  The fix makes Qdrant the single source of truth and the sparse index a
+  cache of it. Everything the BM25 corpus keeps is already in the point
+  payload, so `reconcile_sparse()` compares its row count against the
+  collection's point count and rebuilds from a scroll when they differ. It
+  runs before a query retrieves, before an ingest writes, and on
+  `/namespaces/{ns}/sources` — which had already read that count, so there
+  it is free, and it is the request the console makes after every upload.
+  The second consequence goes with it: deleting a document's points from
+  Qdrant now removes its text, where before `BM25SparseIndex` kept the
+  content and a keyword hit returned it until the revision rolled.
+
+  Three refusals are the load-bearing part, each with its own test. An empty
+  collection never empties a populated index — a baked corpus cannot be
+  rebuilt from a collection that no longer holds it, so a transient empty
+  read must not cost a container its corpus; the mismatch is reported and
+  acted on nowhere. A scroll that fails halfway is not adopted, because a
+  partial read is indistinguishable from a corpus that shrank. An
+  unreachable Qdrant does not stamp the clock, so "nobody knows" is not
+  cached as "agreed". `RETRIEVAL_SPARSE_SYNC_TTL_SECONDS` (default 60)
+  bounds staleness and therefore the worst-case propagation delay.
+
+  842 tests, 94.14%. Seven mutants, seven distinct killing tests — but two
+  survived the first pass and **both were faults in the tests, not the
+  code**: the concurrency test gathered coroutines whose `AsyncMock`s never
+  yield to the event loop, so they ran in sequence and the lock was never
+  contended, and the route test covered only the non-streaming path while
+  the console streams. Same lesson as the disabled fixture: a test that
+  cannot reach the behaviour it names passes against code that does not
+  have it.
 
 - 2026-10-26 (described corpora are read-only; **₹0.23**) — two things
   landed. First, `a15c3d1` (the stream-then-badge work committed the day

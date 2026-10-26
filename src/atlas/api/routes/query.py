@@ -578,12 +578,19 @@ async def query(
     Set `namespace` to query a specific corpus (default: "default").
     """
     log = logger.bind(query=body.query[:80], namespace=body.namespace)
-    pipeline = get_registry(request).get(body.namespace).pipeline
+    registry = get_registry(request)
+    pipeline = registry.get(body.namespace).pipeline
     app_state = get_app_state(request)
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
         await _enforce_budget(app_state.spend)
+        # Half of retrieval is this process's own keyword index, and it is a
+        # cache of Qdrant rather than a second copy of record. Reconcile
+        # before the pipeline reads it, or a document indexed by the other
+        # instance is missing from the keyword half of every search this one
+        # serves. Within the TTL this is free; see `reconcile_sparse`.
+        await registry.reconcile_sparse(body.namespace)
         log.info("query_stream_start")
         return StreamingResponse(
             _stream_query(
@@ -624,8 +631,10 @@ async def query(
         return response
 
     # Cache hits are free, so the cap is checked only once we know we will
-    # call the model.
+    # call the model. Same for the reconcile: a cached answer does not
+    # retrieve, so it does not need the keyword index to be current.
     await _enforce_budget(app_state.spend)
+    await registry.reconcile_sparse(body.namespace)
     log.info("query_start")
     t_total = time.perf_counter()
 

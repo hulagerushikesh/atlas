@@ -79,6 +79,23 @@ class RetrievalConfig(BaseSettings):
 
     top_k: int = 20  # candidates from each retriever before fusion
 
+    # How long a process may trust its own keyword index without re-checking
+    # it against the vector store.
+    #
+    # The two halves of a namespace live in different places: the dense half
+    # in Qdrant, which every instance shares, and the sparse half on the
+    # instance's own filesystem, which Cloud Run discards on recycle. So an
+    # upload served by one instance was invisible to the other until this
+    # existed. The reconciler compares counts and rebuilds the sparse half
+    # from Qdrant when they disagree; this is how stale that comparison is
+    # allowed to get, and therefore the worst-case delay before every
+    # instance can keyword-retrieve a document any one of them indexed.
+    #
+    # 0 re-checks on every request -- correct, and one extra Qdrant round
+    # trip per query (~0.7 s from asia-south1 to a us-west-1 cluster), which
+    # is why it is not the default.
+    sparse_sync_ttl_seconds: float = 60.0
+
 
 # What the router is told when nothing describes the corpus. Deliberately
 # contentless: it says "whatever was ingested", so the classifier judges the

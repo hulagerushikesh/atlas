@@ -77,6 +77,28 @@ def _tokenize(text: str) -> list[str]:
     return tokens
 
 
+def corpus_entry(chunk_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """
+    One corpus row rebuilt from a stored Qdrant point.
+
+    The dense index writes `{"content": ..., "content_hash": ..., **metadata}`
+    as a flat payload, so everything this index keeps is already there and a
+    namespace can be reconstructed from the vector store alone. The shape of a
+    row is this module's business, which is why the conversion lives here and
+    not in the caller doing the scroll.
+
+    Unknown payload keys are carried into `metadata` rather than dropped;
+    `_entry_to_chunk_metadata` reads the fields it knows by name, so a payload
+    written by a newer version costs nothing here.
+    """
+    return {
+        "chunk_id": chunk_id,
+        "content": payload.get("content", ""),
+        "content_hash": payload.get("content_hash", ""),
+        "metadata": {k: v for k, v in payload.items() if k != "content"},
+    }
+
+
 class BM25SparseIndex(BaseIndex):
     """In-memory BM25 index with JSON persistence."""
 
@@ -126,6 +148,33 @@ class BM25SparseIndex(BaseIndex):
             await asyncio.to_thread(self._rebuild)
             await asyncio.to_thread(self._save_to_disk)
         return removed
+
+    def chunk_count(self) -> int:
+        """
+        Rows held right now. Synchronous and free -- it is a length, and the
+        reconciler compares it against the vector store's point count on a
+        path where one avoidable await is one too many.
+        """
+        return len(self._corpus)
+
+    async def replace_all(self, entries: list[dict[str, Any]]) -> int:
+        """
+        Discard the corpus and adopt *entries* wholesale.
+
+        Not an upsert: upsert merges, and merging is exactly wrong here. The
+        caller is handing over the vector store's contents, so a chunk this
+        index holds and the store does not must *go* -- that is a document
+        deleted from Qdrant whose text would otherwise keep coming back from
+        this half for the life of the container.
+
+        The caller is responsible for not calling this with a partial read.
+        A scroll that failed halfway looks exactly like a corpus that shrank.
+        """
+        self._corpus = entries
+        await asyncio.to_thread(self._rebuild)
+        await asyncio.to_thread(self._save_to_disk)
+        logger.info("bm25_index_replaced", chunks=len(entries))
+        return len(entries)
 
     async def prune_document(self, doc_id: str, chunk_count: int) -> int:
         stale = [
