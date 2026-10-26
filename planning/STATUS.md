@@ -148,9 +148,9 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | API & observability (E) | Done; **daily spend cap** (`BUDGET_DAILY_USD`, 429 past it, `/health.budget`); keys in SQLite or **Firestore** (`AUTH_STORE`) | auth, rate limit, cache, Prometheus, streaming |
 | Console | Rebuilt as React app (Vite + shadcn + Motion), cartographic design | baabc6e; `DESIGN.md` |
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
-| Quality gate | ruff + mypy clean, **808 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40091664915` on `83638af`, 808 + 1 skip, 0 non-success steps, 2m47s), 93% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
+| Quality gate | ruff + mypy clean, **823 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40296485709` on `80a599f`), 94.03% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00030-ddz**, image `83638af`, deployed 2026-10-25 to clear an uploaded PDF from the per-instance sparse index — same image as `00029-rgj`; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00032-6xx**, image `80a599f`, deployed 2026-10-26 — the revision that makes `default` read-only over HTTP; it followed `00031-lv6`/`a15c3d1`, the first revision whose streaming path checks faithfulness, which in turn replaced `00030-ddz`/`83638af`, deployed 2026-10-25 to clear an uploaded PDF from the per-instance sparse index — same image as `00029-rgj`; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -481,6 +481,40 @@ items: stale tail chunks, manifest noise, eval labels, `--set` overrides,
 daily spend cap, console markdown.
 
 ## Recent sessions
+
+- 2026-10-26 (described corpora are read-only; **₹0.23**) — two things
+  landed. First, `a15c3d1` (the stream-then-badge work committed the day
+  before) was built and rolled as **`atlas-api-00031-lv6`**, and verified
+  against production rather than a stub: one real streamed query, $0.002618
+  ≈ **₹0.23**, returned `done` with `verdict_pending: true` at 9,487 ms, a
+  `verdict` event scoring `1.0` at 11,159 ms, then `[DONE]`, with headers
+  `x-faithfulness: deferred` and `x-namespace: default`. That 9.5 s is a
+  **cold** number — it was the first query on a fresh revision, retrieval
+  5,135 ms against a warm 718 ms — so the warm figure for the deferred
+  check stays unclaimed. Also measured and worth keeping: **a deploy that
+  builds costs ₹0**, because Cloud Build's free tier is 120 build-minutes a
+  day and Atlas builds in ~2m45s. Earlier ₹2–4 estimates for a deploy were
+  wrong.
+
+  Second, **defect 1 from the first real user session is fixed** (`80a599f`).
+  A PDF uploaded into `default` indexed cleanly and then every question
+  about it came back `Routed out of scope`, because `ROUTER_DOMAIN`
+  describes `default` as the FastAPI docs and the router judges each
+  question against that sentence before retrieval runs. The fix refuses the
+  write instead of letting it succeed and fail later: `RouterConfig.describes`
+  is true only when a namespace is `domain_namespace` **and** the domain is
+  not `GENERIC_DOMAIN` — the second half matters because `domain_namespace`
+  defaults to `"default"` on every unconfigured checkout, so without it a
+  laptop with no `ROUTER_DOMAIN` set would refuse its own ingests. Both
+  ingest endpoints 409 with a message naming the claim and the way out, and
+  `/namespaces/{ns}/sources` now carries `writable` and `description` so the
+  console disables the drop zone *before* a file is chosen. `scripts/ingest.py`
+  drives the indexer directly, not over HTTP, so the curated corpus is still
+  built the way it always was. 823 tests, 94.03%, five mutants each killed by
+  an identifiable test; console verified in a real browser against a ₹0 stub.
+  Deployed as **`atlas-api-00032-6xx`** and verified live at ₹0: `default`
+  reports `writable: false` with the FastAPI sentence, an upload into it
+  returns 409, and an undescribed namespace still reports `writable: true`.
 
 - 2026-10-25 (stream-then-badge; **₹0**) — the streaming path now runs the
   faithfulness check *after* the answer instead of skipping it. The stated
