@@ -1,4 +1,4 @@
-# Status — 2026-10-24 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
+# Status — 2026-10-26 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
 
 **All 20 exit criteria are ticked** — the 17 of M1–M4, the last of those
 (M1's resume-bullets line) on 2026-10-22, and M5's three on 2026-10-24.
@@ -19,7 +19,10 @@ its own.
 (image `83638af`, the first to carry `PATCH /keys/{key_id}`, the key dialog
 and the run export), `00028-tsk` (`a923354`), and **`atlas-api-00029-rgj`,
 current**, which rolled `83638af` again with `SKIP_BUILD=1` and therefore
-shares `00027-4rp`'s digest `sha256:831ebea…` exactly. Verified against the
+shares `00027-4rp`'s digest `sha256:831ebea…` exactly. Superseded since: `00030-ddz`
+rolled `83638af` again on 2026-10-25, and **`atlas-api-00031-lv6` (image
+`a15c3d1`) is current** as of 2026-10-26 — the first revision whose
+streaming path checks faithfulness. Verified against the
 live service at ₹0: `/health` ok with Qdrant at 718 ms, `/keys` and
 `PATCH /keys/1` both 403 without the admin secret, `/query` 401 without a
 key, `/app` serving `console-DfTREPwH.js` — the bundle with the export
@@ -497,8 +500,35 @@ daily spend cap, console markdown.
   815 tests, 94.03%; three mutants each killed by a different test; UI
   sequence verified against a stub SSE server at ₹0 (answer 1.5 s, pulsing
   "Checking" 2.2 s, "Supported · 0.93" 4.3 s) with both degradations
-  landing on "Unchecked". **Committed `ea1264e`, not deployed** — live
-  verification still owes one real query.
+  landing on "Unchecked". Committed `ea1264e`, STATUS entry `a15c3d1`.
+
+- 2026-10-26 (stream-then-badge deployed and verified live; **₹0.23**) —
+  `scripts/deploy_gcp.sh` on `a15c3d1`: index gate clean on both namespaces
+  (4020 dense = 4020 sparse, 0 id drift, 0 hash differences, headers match
+  on all 4020), Cloud Build `04dc66e8` SUCCESS in **2m43s** — inside the
+  120-build-minute free tier, so **₹0** — digest
+  `sha256:30e56a8a35defe131907964d0d0218baef266db4aa1b36dbfa14639cffc38153`,
+  rolled as **`atlas-api-00031-lv6`** at 100% traffic. Free checks first:
+  `/health` 200 in 1.46 s with Qdrant ok, and `/app` serving
+  `landing-DkCb4DS9.js`, the same hash the committed build produces, so the
+  console bundle in production is the rebuilt one. Then **one real
+  streaming query, ₹0.23** (`spent_today_usd` 0 → 0.002618), which is what
+  the stub could not prove — the live server really does emit the new
+  sequence:
+
+      9487ms  done     {"classification": "simple", "is_faithful": null,
+                        "verdict_pending": true, "citations": <8>}
+     11159ms  verdict  {"is_faithful": true, "score": 1.0,
+                        "unsupported_claims": [], "ms": 1664}
+     11221ms  [DONE]
+
+  with `X-Faithfulness: deferred` and `X-Namespace: default` on the
+  response. The answer finishes at 9.5 s and the verdict lands 1.7 s later,
+  so the check costs 1,664 ms that the reader spends reading rather than
+  waiting. **That run was the first on a fresh revision**, so the 9.5 s to
+  final token is a cold number, not the warm one — retrieval alone reported
+  5,135 ms against a warm 718 ms `/health` Qdrant latency. A warm
+  measurement is unclaimed and would cost another ₹0.23.
 
 - 2026-10-25 (first real user; two defects and a null result; **₹6.33, all
   the user's own spend**) — the owner used Atlas as a user for the first
