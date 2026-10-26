@@ -13,6 +13,11 @@ server, and whatever it indexes can be read back out through `/query` — so
 unconfined it let any authorised caller turn the index into a file-read
 channel for anything the process could open. The confinement is a resolved
 prefix check, so `..` and symlinks out of the root are both refused.
+
+Both endpoints refuse a *described* namespace — see `_writable`. The HTTP
+API is not how a described corpus is built; `scripts/ingest.py` drives the
+indexer directly and is unaffected, which is how the FastAPI corpus this
+deployment describes was produced in the first place.
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ from atlas.api.schemas import (
     RejectedUpload,
     UploadIngestResponse,
 )
+from atlas.config import RouterConfig
 from atlas.cost import estimate_cost
 from atlas.ingestion.loaders import is_supported
 
@@ -65,6 +71,47 @@ def _confined(path: Path, root: str) -> Path:
     return resolved
 
 
+def _writable(namespace: str, cfg: RouterConfig) -> None:
+    """
+    Refuse a write into the namespace `ROUTER_DOMAIN` describes.
+
+    The router is handed one prose sentence per namespace and decides, before
+    retrieval runs, whether a question belongs to the corpus that sentence
+    describes. For a described namespace that sentence is a claim about the
+    contents — "the FastAPI web framework documentation" — and it stops being
+    true the moment a document that is not that lands there.
+
+    The failure this prevents is not an error; it is silence three steps
+    later. On 2026-10-25 a PDF uploaded into `default` indexed cleanly,
+    reported its chunks, and then every question about it came back
+    `Routed out of scope` in 987 ms with nothing retrieved. The upload was
+    accepted and the corpus was unusable, which is the worst of both.
+
+    `domain_namespace` exists to spare every *other* namespace this, and it
+    works; the hole was always the one namespace it names, which is also the
+    console's default target. So the refusal is here, at the write, where the
+    cause can still be named — rather than at the query, where all that is
+    left is an unexplained refusal.
+
+    A namespace with no specific description cannot be contradicted, so
+    `RouterConfig.describes` says no and this is a no-op: on a laptop with no
+    ROUTER_DOMAIN set, ingesting into `default` works exactly as before.
+    """
+    if not cfg.describes(namespace):
+        return
+    raise HTTPException(
+        status_code=409,
+        detail=(
+            f"'{namespace}' is a described corpus: the router is told it holds "
+            f"{cfg.domain}, and judges every question against that sentence "
+            "before retrieval runs. A document indexed here that does not fit "
+            "the description would be stored and then refused as out of scope "
+            "at query time. Ingest into another corpus — every namespace but "
+            f"'{namespace}' is routed neutrally."
+        ),
+    )
+
+
 @router.post("/ingest", response_model=IngestResponse)
 async def ingest(
     body: IngestRequest,
@@ -78,6 +125,7 @@ async def ingest(
     it safe to call /ingest on a watch loop.
     """
     app_state = get_app_state(request)
+    _writable(body.namespace, get_registry(request).settings.router)
     # Confinement before existence: a 404 on a path outside the root would
     # answer "does this file exist on the server?" for any path at all.
     path = _confined(Path(body.path), app_state.ingest.root)
@@ -166,6 +214,10 @@ async def ingest_upload(
     """
     app_state = get_app_state(request)
     limits = app_state.ingest
+    # Before the budget check and before a byte is read: a write that cannot
+    # be accepted should not spend, and should not make the caller wait for
+    # an upload first.
+    _writable(namespace, get_registry(request).settings.router)
 
     try:
         await app_state.spend.check()

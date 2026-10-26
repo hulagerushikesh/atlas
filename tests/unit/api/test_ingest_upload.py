@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock
 
 from fastapi.testclient import TestClient
 
-from atlas.config import IngestConfig
+from atlas.config import GENERIC_DOMAIN, IngestConfig, RouterConfig
 from atlas.ingestion.indexer import IndexResult
 
 
@@ -355,3 +355,151 @@ class TestWhatUploadRefuses:
 
         assert resp.status_code == 429
         assert resp.headers["Retry-After"]
+
+
+def _describe(client: TestClient, domain: str, namespace: str = "default") -> None:
+    """Make *namespace* the one ROUTER_DOMAIN describes, with *domain* as the claim."""
+    client.app.state.atlas.registry.settings.router = RouterConfig(
+        domain=domain, domain_namespace=namespace
+    )
+
+
+class TestADescribedCorpusRefusesWrites:
+    """
+    The hole in the 2026-10-13 fix, closed at the write instead of the query.
+
+    `domain_namespace` was added so an uploaded corpus would not be judged
+    against a sentence describing someone else's -- and it works for every
+    namespace except the one it names, which is also where the console
+    uploads by default. A PDF put there indexed cleanly and then answered
+    nothing: `Routed out of scope`, 987 ms, no retrieval.
+
+    These pin the refusal *and* its limit. A described corpus is refused; an
+    undescribed one, which is every other namespace and also `default` on a
+    machine with no ROUTER_DOMAIN set, is written to exactly as before.
+    """
+
+    def test_uploading_into_the_described_corpus_is_refused(
+        self, client: TestClient
+    ) -> None:
+        _describe(client, "the FastAPI web framework documentation")
+
+        resp = client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"my own notes", "text/markdown"))],
+            data={"namespace": "default"},
+        )
+
+        assert resp.status_code == 409
+
+    def test_the_refusal_names_the_claim_and_the_way_out(
+        self, client: TestClient
+    ) -> None:
+        # A bare 409 moves the silence rather than removing it: the caller
+        # still cannot tell why this corpus and not another.
+        _describe(client, "the FastAPI web framework documentation")
+
+        resp = client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"my own notes", "text/markdown"))],
+            data={"namespace": "default"},
+        )
+
+        detail = resp.json()["detail"]
+        assert "the FastAPI web framework documentation" in detail
+        assert "another corpus" in detail
+
+    def test_the_path_endpoint_is_refused_too(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        # Same corpus, same reason. /ingest is the operator's HTTP path, and
+        # a described corpus it writes into is just as broken at query time.
+        _describe(client, "the FastAPI web framework documentation")
+        f = tmp_path / "notes.md"
+        f.write_text("my own notes")
+
+        resp = client.post("/ingest", json={"path": str(f), "namespace": "default"})
+
+        assert resp.status_code == 409
+
+    def test_another_namespace_is_written_to_normally(
+        self, client: TestClient
+    ) -> None:
+        # The guard must not generalise into "uploads are off". Every
+        # namespace but the described one is routed neutrally and writable.
+        _describe(client, "the FastAPI web framework documentation")
+        _indexer(client)
+
+        resp = client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"my own notes", "text/markdown"))],
+            data={"namespace": "my-notes"},
+        )
+
+        assert resp.status_code == 200
+        assert resp.json()["namespace"] == "my-notes"
+
+    def test_a_contentless_domain_describes_nothing_so_default_stays_writable(
+        self, client: TestClient
+    ) -> None:
+        # `domain_namespace` defaults to "default" whether or not anyone set
+        # a domain, so keying the refusal on the name alone would break every
+        # laptop that never configured ROUTER_DOMAIN. GENERIC_DOMAIN claims
+        # nothing and so cannot be contradicted.
+        _describe(client, GENERIC_DOMAIN)
+        _indexer(client)
+
+        resp = client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"my own notes", "text/markdown"))],
+            data={"namespace": "default"},
+        )
+
+        assert resp.status_code == 200
+
+    def test_the_refusal_costs_nothing(self, client: TestClient) -> None:
+        # Refused before the budget check and before the indexer is reached:
+        # a write that cannot be accepted must not spend, and must not leave
+        # a half-built corpus behind.
+        _describe(client, "the FastAPI web framework documentation")
+        indexer = _indexer(client)
+        spend_before = client.app.state.atlas.spend
+
+        client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"my own notes", "text/markdown"))],
+            data={"namespace": "default"},
+        )
+
+        indexer.assert_not_awaited()
+        assert client.app.state.atlas.spend is spend_before
+
+
+class TestTheConsoleIsToldBeforeItTries:
+    """
+    A 409 the user only meets after choosing a file is a worse version of the
+    same problem. `/namespaces/{ns}/sources` is refetched on every corpus
+    change, so it is where the console learns that a drop zone should be off.
+    """
+
+    def test_a_described_corpus_reports_itself_read_only(
+        self, client: TestClient
+    ) -> None:
+        _describe(client, "the FastAPI web framework documentation")
+
+        j = client.get("/namespaces/default/sources").json()
+
+        assert j["writable"] is False
+        assert j["description"] == "the FastAPI web framework documentation"
+
+    def test_an_ordinary_corpus_is_writable_and_claims_nothing(
+        self, client: TestClient
+    ) -> None:
+        _describe(client, "the FastAPI web framework documentation")
+
+        j = client.get("/namespaces/my-notes/sources").json()
+
+        assert j["writable"] is True
+        # Not the domain sentence: it is not true of this corpus, and showing
+        # it here is how the original confusion started.
+        assert j["description"] is None

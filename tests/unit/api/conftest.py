@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState
+from atlas.config import GENERIC_DOMAIN, RouterConfig, Settings
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.retriever import RetrievedChunk
 from atlas.orchestration.faithfulness import FaithfulnessResult
@@ -128,6 +129,18 @@ def client() -> TestClient:
     # Agrees with the sparse rows above (12 + 7) so the default fixture is a
     # consistent namespace; mismatch tests override it.
     mock_registry.dense_chunk_count = AsyncMock(return_value=19)
+    # The ingest routes ask the registry whether a namespace is described
+    # before writing to it, and the sources route reports the same answer.
+    # On a bare `MagicMock` that question returns a truthy mock, which would
+    # 409 every ingest test in the suite. Real config, built explicitly
+    # rather than from `Settings()` -- that reads the developer's .env, where
+    # ROUTER_DOMAIN *is* set, so the fixture would describe `default` on this
+    # machine and not in CI. The contentless domain here means "an
+    # undescribed corpus"; tests that want a described one say so.
+    mock_registry.settings = MagicMock(spec=Settings)
+    mock_registry.settings.router = RouterConfig(
+        domain=GENERIC_DOMAIN, domain_namespace="default"
+    )
 
     app.state.atlas = AppState(
         registry=mock_registry,

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, FolderInput, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload } from "lucide-react"
+import { FileText, FolderInput, Lock, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 const EASE = [0.23, 1, 0.32, 1] as const
 
 export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { sheet, sheets, sources, sourcesLoading, indexWarning, setSheet, addSheet, loadSources } = useAtlas()
+  const { sheet, sheets, sources, sourcesLoading, indexWarning, readOnlyBecause, setSheet, addSheet, loadSources } = useAtlas()
   const [path, setPath] = useState("")
   const [busy, setBusy] = useState(false)
   const [newSheet, setNewSheet] = useState("")
@@ -35,7 +35,7 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
   }
 
   const upload = async (files: File[]) => {
-    if (!files.length || busy) return
+    if (!files.length || busy || readOnlyBecause) return
     setBusy(true)
     const id = toast.loading(`Uploading ${files.length} file${files.length > 1 ? "s" : ""} to ${sheet}…`)
     try {
@@ -62,7 +62,7 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
 
   const ingest = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!path.trim() || busy) return
+    if (!path.trim() || busy || readOnlyBecause) return
     setBusy(true)
     const id = toast.loading(`Indexing ${path}…`)
     try {
@@ -193,6 +193,23 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
             <div className="border-t px-4 py-3">
               <div className="label mb-2">Add documents</div>
 
+              {/* The server refuses writes to the described corpus, so the
+                  drop zone is off *before* a file is chosen rather than
+                  after — a 409 that arrives once you have already picked the
+                  file is the same silence moved one step later. The sentence
+                  is the reason: "read-only" on its own reads arbitrary. */}
+              {readOnlyBecause && (
+                <div className="mb-3 flex gap-2 rounded-sm border border-border bg-well px-2.5 py-2 text-[11px] leading-relaxed text-ink-2">
+                  <Lock className="mt-px size-3 shrink-0 text-ink-3" />
+                  <span>
+                    Read-only. The router is told this sheet holds{" "}
+                    <span className="text-ink-1">{readOnlyBecause}</span>, and judges every
+                    question against that before searching — so anything else indexed here
+                    would answer nothing. Make a new sheet with <Plus className="inline size-3 -translate-y-px" /> and add documents there.
+                  </span>
+                </div>
+              )}
+
               <input
                 ref={picker}
                 type="file"
@@ -203,23 +220,26 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
               />
 
               <div
-                onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+                aria-disabled={readOnlyBecause ? true : undefined}
+                onDragOver={(e) => { e.preventDefault(); if (!readOnlyBecause) setDragging(true) }}
                 onDragLeave={() => setDragging(false)}
                 onDrop={(e) => {
                   e.preventDefault()
                   setDragging(false)
                   void upload(Array.from(e.dataTransfer.files))
                 }}
-                onClick={() => picker.current?.click()}
+                onClick={() => { if (!readOnlyBecause) picker.current?.click() }}
                 className={cn(
-                  "flex cursor-pointer flex-col items-center gap-1 rounded-sm border border-dashed px-3 py-4 text-center transition-colors",
-                  dragging ? "border-blue bg-blue/5" : "border-border hover:border-ink-3",
+                  "flex flex-col items-center gap-1 rounded-sm border border-dashed px-3 py-4 text-center transition-colors",
+                  readOnlyBecause
+                    ? "cursor-not-allowed border-border/60 opacity-45"
+                    : "cursor-pointer " + (dragging ? "border-blue bg-blue/5" : "border-border hover:border-ink-3"),
                   busy && "pointer-events-none opacity-60",
                 )}
               >
                 <Upload className="size-4 text-ink-3" />
                 <span className="label normal-case tracking-normal text-[11px] leading-snug">
-                  Drop files or click to choose
+                  {readOnlyBecause ? "This sheet is read-only" : "Drop files or click to choose"}
                 </span>
                 <span className="font-mono text-[10px] text-ink-3">md · txt · pdf · html</span>
               </div>
@@ -229,7 +249,7 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
                 <form onSubmit={ingest} className="mt-2">
                   <div className="flex gap-1.5">
                     <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="data/corpus/fastapi" className="font-mono text-[12px]" aria-label="Path to ingest" />
-                    <Button type="submit" size="sm" variant="outline" disabled={busy || !path.trim()} className="press font-mono text-[11px] uppercase tracking-wider">
+                    <Button type="submit" size="sm" variant="outline" disabled={busy || !path.trim() || Boolean(readOnlyBecause)} className="press font-mono text-[11px] uppercase tracking-wider">
                       <FolderInput className="size-3.5" />
                     </Button>
                   </div>

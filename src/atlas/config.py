@@ -106,6 +106,22 @@ class RouterConfig(BaseSettings):
         """The domain sentence to classify against for *namespace*."""
         return self.domain if namespace == self.domain_namespace else GENERIC_DOMAIN
 
+    def describes(self, namespace: str) -> bool:
+        """
+        Whether `domain` makes a specific claim about what *namespace* holds.
+
+        `domain_namespace` alone is not enough to answer this. It is "default"
+        out of the box, so on a laptop with no ROUTER_DOMAIN set it names a
+        namespace whose description is GENERIC_DOMAIN -- a sentence that
+        claims nothing and therefore cannot be contradicted by anything
+        written into the corpus. Only a *specific* description can be made
+        false by an upload, and only then is there anything to protect.
+
+        This is what separates a deployment where ingesting into `default`
+        is ordinary from one where it silently breaks routing.
+        """
+        return namespace == self.domain_namespace and self.domain != GENERIC_DOMAIN
+
 
 class GraderConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="GRADER_", env_file=_ENV_FILE, extra="ignore")

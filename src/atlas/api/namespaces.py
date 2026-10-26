@@ -122,6 +122,18 @@ class NamespaceRegistry:
         self._shared = shared
         self._cache: dict[str, NamespaceComponents] = {}
 
+    @property
+    def settings(self) -> Settings:
+        """
+        The settings every namespace is built from.
+
+        Routes that need to answer a question *about* a namespace rather than
+        query it -- is this corpus described, and therefore not writable --
+        read it from here, so the answer and the pipeline that enforces it
+        come from the same object.
+        """
+        return self._shared.settings
+
     def get(self, namespace: str) -> NamespaceComponents:
         """Return cached components, building them on first access."""
         if namespace not in self._cache:
