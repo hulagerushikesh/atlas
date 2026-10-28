@@ -118,7 +118,7 @@ export function Principles() {
 const STAGES = [
   { n: "Route", kind: "llm", d: "Classifies the question as simple, complex, or out of scope. Out-of-scope questions exit here — no retrieval, no generation." },
   { n: "Decompose", kind: "llm", d: "Complex, multi-hop questions are split into up to four sub-questions, each retrieved independently and merged before grading." },
-  { n: "Retrieve", kind: "ret", d: "Dense (Qdrant ANN) and sparse (BM25) search run in parallel. Reciprocal Rank Fusion merges the lists; a cross-encoder reranks the top 20 and keeps the best 5." },
+  { n: "Retrieve", kind: "ret", d: "Dense (Qdrant ANN) and sparse (BM25) search run in parallel. Reciprocal Rank Fusion merges the lists; a cross-encoder reranks the top 20 and keeps the best 15." },
   { n: "Grade", kind: "llm", d: "Scores whether the retrieved context can answer the question. If not, reformulates and retries — up to twice — before anything is generated." },
   { n: "Generate", kind: "llm", d: "Writes the answer with inline citations, each linked to its reference. The prompt forbids facts that are not in the context." },
   { n: "Check", kind: "llm", d: "Splits the answer into claims and verifies each against the references. Anything ungrounded is flagged in the answer and listed beneath it." },
@@ -188,19 +188,20 @@ export function FieldNotes() {
 /* ── Measured ──────────────────────────────────────────────────────────── */
 
 const MEASURED = [
-  { k: "Context precision", v: "0.30", d: "of the 15 chunks handed to the generator came from a labelled-relevant page — one page per question cannot fill fifteen slots" },
-  { k: "Context recall", v: "0.90", d: "of labelled pages had at least one chunk retrieved — 1 of 15 questions missed outright" },
+  { k: "Answer correctness", v: "0.71", d: "against the dataset's own reference answers — the only metric here that moves between runs" },
   { k: "Faithfulness", v: "1.00", d: "of answer claims grounded in the retrieved references, per the claim-level judge" },
-  { k: "Answer relevance", v: "0.83", d: "question ↔ answer alignment (RAGAS reverse-question), ±0.01 run to run" },
+  { k: "Context recall", v: "0.94", d: "of labelled pages had at least one reference retrieved, over the 15 questions the metric applies to" },
+  { k: "Context precision", v: "0.47", d: "of the references handed to the generator came from a labelled-relevant page — one page per question cannot fill fifteen slots" },
 ]
 
 export function Measured() {
   return (
     <section id="measured" className="mx-auto max-w-6xl px-5 py-24">
-      <SectionHead eyebrow="Measured · 2026-09-20" title="First live run, numbers included.">
-        Full FastAPI documentation — 155 files, 4,021 references — indexed and queried through the real
-        pipeline. 15 questions, three runs; retrieval metrics are deterministic run to run. Two of the first
-        run&apos;s five misses were labelling errors — fixed in the dataset, not the code, and re-measured.
+      <SectionHead eyebrow="Measured · 2026-10-03" title="The rerun scored higher. It still counts as a tie.">
+        Full FastAPI documentation — 155 files, 4,020 references — indexed and queried through the real
+        pipeline, 16 questions, judges priced into the run. These are the baseline&apos;s numbers and they stay
+        the quoted ones: a later rerun put answer correctness at 0.80, and the comparator shipped with this
+        repo scored that difference a tie on all five metrics — p&nbsp;=&nbsp;0.61, 7 of 16 samples differing.
       </SectionHead>
       <div className="mt-12 grid gap-px overflow-hidden rounded-[3px] border bg-border sm:grid-cols-2 lg:grid-cols-4">
         {MEASURED.map((m, i) => (
@@ -212,12 +213,14 @@ export function Measured() {
         ))}
       </div>
       <Reveal delay={0.2} className="mt-6 max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
-        The honest read: faithfulness is real but easy on documentation questions. The misses were never
-        unreachable — widening the rerank window from five slots to fifteen recovered two of them and halved a
-        third, because those pages had been in the candidate set all along, ranked just below the cut. Recall
-        went 0.78 to 0.90 and faithfulness did not move; precision fell because it is a fraction of a window
-        that got three times wider, not because anything got worse. One question is still missed, and it is a
-        comparative one whose answer no single page states. Full per-question breakdown in the README.
+        The honest read: faithfulness is real but easy on documentation questions, and answer relevance sits
+        at 0.84 whichever run you take. Precision is low by construction — one labelled page per question
+        against a fifteen-slot window — not because retrieval got worse. Widening that window from five slots
+        to fifteen is what bought the recall: the missed pages had been in the candidate set all along, ranked
+        just below the old cut, and when it was measured recall went 0.78 to 0.90 while faithfulness did not
+        move. One question is still missed, and it is a comparative one whose answer no single page states.
+        A full run costs about ₹6 — $0.00281 a query for the pipeline, and the judges a third again on top of
+        that. Full per-question breakdown in the README.
       </Reveal>
     </section>
   )

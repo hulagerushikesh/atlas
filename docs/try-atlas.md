@@ -87,7 +87,7 @@ Next to the answer is one of:
 | **Weak** | Score 0.3–0.5. Treat the answer as a draft. |
 | **Unsupported** | The answer makes claims the retrieved passages do not support. |
 | **Out of scope** | The router decided the question is not about this corpus, and refused before spending anything on it. |
-| **Unchecked** | You used the streaming path, which skips the faithfulness check. Not a pass — an absence. |
+| **Unchecked** | No verdict came back at all — the check is switched off, or the connection closed before the verdict arrived. Not a pass: an absence. |
 
 **This is the feature.** Most RAG demos have no equivalent, which means they
 report "Supported" for every answer by saying nothing at all.
@@ -166,7 +166,11 @@ Response carries `answer`, `citations`, `evidence` (with the full score
 trail), `faithfulness_score`, `is_faithful`, `grader_score`, `timings` and
 `token_usage`.
 
-Token-by-token streaming — note this path skips the faithfulness check:
+Token-by-token streaming. The faithfulness check runs here too — it fires
+*after* the answer is on screen, so you wait for none of it. The `done` event
+carries `verdict_pending: true`, a separate `verdict` event follows with the
+score, and the response header `X-Faithfulness: deferred` says so up front.
+In the console the badge pulses until that verdict lands.
 
 ```bash
 curl -N https://atlas.hulage.in/query \
@@ -175,7 +179,7 @@ curl -N https://atlas.hulage.in/query \
   -d '{"query": "What is a sub-dependency?", "stream": true}'
 ```
 
-Unauthenticated and free: `/health`, `/namespaces`,
+Unauthenticated and free: `/health`, `/warm`, `/namespaces`,
 `/namespaces/{sheet}/sources`, `/metrics` (Prometheus), `/docs`.
 
 ---
