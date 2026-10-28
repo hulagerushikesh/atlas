@@ -44,3 +44,7 @@ console/node_modules/
 console/dist/
 bm25_index.json
 data/index/
+
+# Local editor/preview config — the dev-server entry Claude Code uses for the
+# browser preview. Machine-specific; shared .claude/ config stays committable.
+.claude/launch.json
