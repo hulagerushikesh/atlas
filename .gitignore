@@ -48,3 +48,8 @@ data/index/
 # Local editor/preview config — the dev-server entry Claude Code uses for the
 # browser preview. Machine-specific; shared .claude/ config stays committable.
 .claude/launch.json
+
+# Issued API keys and other local secrets. Raw keys are returned once by
+# POST /keys and cannot be retrieved again, so they get written to a file —
+# which must never be a committable one.
+*.secret.md
