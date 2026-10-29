@@ -97,7 +97,7 @@ class TestQueryTokenUsage:
 
     def test_a_cached_answer_costs_nothing(self, client: TestClient) -> None:
         cache = client.app.state.atlas.cache
-        cache._mem[cache._make_key("default:free")] = json.dumps({
+        cache._mem[cache._make_key("free", "default")] = json.dumps({
             "query": "free", "answer": "a", "classification": "simple",
             "citations": [], "is_faithful": True, "faithfulness_score": 1.0,
             "retrieved_chunk_ids": [], "timings": {"total_ms": 1.0},
