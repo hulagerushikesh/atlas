@@ -2,8 +2,9 @@
 
 How to explain Atlas to another engineer, in prose, out loud.
 
-**The numbers below go stale.** They were true on 2026-10-14. Before quoting
-any of them, check `planning/STATUS.md` for the current figures and
+**The numbers below go stale.** Last checked against `planning/STATUS.md`
+on 2026-10-29. Before quoting any of them, check that file for the current
+figures and
 `planning/ROADMAP.md` for what is actually done — a pitch that quotes a
 number the project has moved past is worse than one that quotes none.
 
@@ -69,10 +70,13 @@ spans five pages ever collected five pages. Widening it suppressed the retries
 and the union never formed. **The bug was the mechanism**, and I would never
 have known without an eval harness to run the comparison through.
 
-**The number that actually matters.** The eval set runs five metrics. Four of
-them look great: context recall 0.94, groundedness 1.000, answer relevance
-0.84. The fifth is answer correctness, scored against a human-written
-reference, and it reads **0.71**. Groundedness at a perfect 1.000 and
+**The number that actually matters.** The eval set runs five metrics. Three
+of them look great: context recall 0.94, groundedness 1.000, answer relevance
+0.84. The other two do not, and both belong in the pitch. Context precision is
+**0.47** — more than half of what retrieval hands the generator is noise, and
+the only reason that is survivable is the cross-encoder rerank sitting
+downstream of it. The fifth is answer correctness, scored against a
+human-written reference, and it reads **0.71**. Groundedness at a perfect 1.000 and
 correctness at 0.71 **in the same column is the entire point of running the
 fifth metric.** Every sentence the system produced was traceable to text it
 had actually retrieved — and roughly a quarter of the substance still did not
@@ -98,8 +102,8 @@ exactly the requests that went wrong. And a citation was leaking the server's
 temp directory path to the browser. None of these are findable by unit tests,
 because every unit involved was behaving correctly.
 
-**What it is and is not.** 656 tests, 93% coverage against a floor the build
-defends, CI running the whole gate on every push, about 20 paise per query,
+**What it is and is not.** 842 tests, 94% coverage against a floor the build
+defends, CI running the whole gate on every push, about 25 paise per query,
 and a spend counter that matched the actual invoice to four decimal places. It
 is **not** a product with users — it is a deployed, measured system, and I
 would rather say that plainly than dress it up. The line to lead with: *most
@@ -126,7 +130,7 @@ are at 100%.
 > questions with a citation on every claim. The part I care about is that it
 > grades itself: it scores whether the retrieved context was even sufficient
 > before answering, then checks every sentence of the answer against that
-> context. It is live, it is about 20 paise a question, and I can tell you its
+> context. It is live, it is about 25 paise a question, and I can tell you its
 > accuracy number — 0.71 against reference answers — while its groundedness is
 > a perfect 1.0. That gap is the interesting part, and almost nobody measures
 > it."
@@ -250,6 +254,9 @@ Stay on the right side of these when the follow-ups come.
   serves one.
 - **0.71 is a real number on 16 questions.** Small set. Say "sixteen
   questions" if pressed — it is honest, and it is more than most can say.
+- **Context precision is 0.47.** Never say "the metrics all look good" —
+  three of five do. Retrieval hands the generator more noise than signal and
+  the rerank is what saves it; say that before someone finds it in the report.
 - **Never say "it never hallucinates."** Say "every claim is traceable to a
   source, and it scores 1.000 on that — but traceable is not the same as
   correct, which is why I measure both." That distinction *is* the
