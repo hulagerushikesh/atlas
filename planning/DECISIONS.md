@@ -2932,3 +2932,34 @@ Format: date — decision — alternatives — reason.
   reached. Putting export in the top bar would have hidden that rather than
   fixed it, and the top bar holds app-level controls (health, palette,
   legend, theme, keys, settings) while an export acts on one run.
+
+- **2026-10-29** — The query cache key is
+  `atlas:query:<hash(namespace)>:<hash(query)>`, with the namespace hashed
+  rather than written in the clear. *Alt:* keep the caller's
+  `f"{namespace}:{query}"` glued into one hashed string (the shape in use
+  until today); or put the namespace in the key readably, which is what a
+  reader of Redis would prefer. *Why:* the glued shape put the namespace
+  *inside* the hash, which separated corpora correctly and made them
+  impossible to enumerate — so `invalidate_namespace` could not be written
+  at all, and the cache went uninvalidated on ingest for a month because the
+  fix looked like a one-liner and was not. Readable is rejected because the
+  Redis side invalidates with `KEYS <prefix>*`: a corpus named `*` would
+  match every other corpus's entries, and `team` would be a prefix of
+  `team:private`. Namespaces are caller-supplied strings with no character
+  restriction beyond a 64-char limit, so neither is hypothetical. A
+  fixed-width hash costs readability in `redis-cli` and buys a prefix that
+  cannot run past its own corpus; the log lines truncate keys anyway. Both
+  failure modes are pinned by tests that fail if the hash is removed.
+
+- **2026-10-29** — Invalidation is scoped to the ingested namespace, and
+  skipped entirely when `documents_processed == 0`. *Alt:* `cache.clear()`,
+  which is one line and certainly correct. *Why:* every surviving entry cost
+  a paid pipeline run (~₹0.25), so writing to one corpus is not a reason to
+  re-buy another's answers; and `make ingest` re-run unchanged is 0.3 s with
+  0 re-embeds by design, which `clear()` would have turned into a paid
+  generation per cached question — free in embeddings and expensive in
+  tokens. The honest limit, recorded rather than implied: L1 is per-process
+  and production runs `REDIS_URL=""` with `--max-instances 2`, so the other
+  instance keeps stale entries until the 1 h TTL expires them. Closing that
+  needs the shared L2 `REDIS_URL` already supports, which is a standing cost
+  and has not been priced.

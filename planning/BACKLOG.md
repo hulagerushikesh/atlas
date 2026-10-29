@@ -391,9 +391,36 @@ Newest at the bottom of each section.
 - ~~Fly.io config~~ removed; `docs/deploy.md` is Cloud Run only (M2).
 - ~~`console/README.md` is the Vite template default~~ replaced (M2).
 - PDF loader is `pypdf` text-only; tables and multi-column layouts degrade.
-- Cache is not invalidated on ingest (verify — exercise 08.1). Also the
-  API loads the BM25 file once at namespace build; CLI ingest after startup
-  is invisible until restart.
+- ~~Cache is not invalidated on ingest~~ **fixed 2026-10-29, Rs.0.** Both
+  `/ingest` and `/ingest/upload` call `cache.invalidate_namespace()` after a
+  successful index, scoped to the namespace they wrote to. Getting there
+  needed the key shape changed first: the route glued
+  `f"{namespace}:{query}"` into one string and handed it over, so the
+  namespace went *inside* the hash — entries were correctly separated per
+  corpus and simultaneously impossible to enumerate per corpus, which is why
+  invalidation had never been written rather than merely deferred. The key is
+  now `atlas:query:<hash(namespace)>:<hash(query)>`; the namespace half is
+  hashed rather than written in the clear because the Redis side invalidates
+  with `KEYS <prefix>*`, so a corpus named `*` would have matched every other
+  corpus's entries, and one named `team` would have been a prefix of
+  `team:private`. Both are pinned by tests, and both fail if the hash is
+  removed. Skipped when `documents_processed == 0`, so an idempotent re-ingest
+  (0.3 s, 0 re-embeds) does not turn into a paid pipeline run per cached
+  question. 14 tests; mutation-checked four ways — removing the invalidation
+  fails 2, ignoring the prefix fails 5, unhashing the namespace fails 2.
+
+  **What it does not fix, and the number that bounds it:** L1 is per-process
+  and production runs `REDIS_URL=""` with `--max-instances 2`, so an ingest
+  served by one instance leaves the other's entries stale until
+  `cache_ttl_seconds` expires them — one hour. Same shape as the BM25 index
+  before it became a cache rebuilt from Qdrant, with a worse failure mode: a
+  stale BM25 index loses an answer, a stale cache entry returns a confident
+  old one, carrying citations and a faithfulness verdict both honestly earned
+  against the corpus as it stood before the upload. Closing it needs the
+  shared L2 that `REDIS_URL` already supports, which is a standing cost.
+- The API loads the BM25 file once at namespace build; CLI ingest after
+  startup is invisible until restart. (Narrowed 2026-10-26: HTTP ingest
+  propagates via `reconcile_sparse`; the CLI path is what remains.)
 - ~~Eval script cannot apply `PipelineConfig.overrides`~~ `--set section.field=value` (post-M1).
 - ~~No daily spend cap~~ `BUDGET_DAILY_USD` → 429 + Retry-After (post-M1).
 - ~~Streaming errors after first byte become events; document the event

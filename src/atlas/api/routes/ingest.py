@@ -14,6 +14,11 @@ unconfined it let any authorised caller turn the index into a file-read
 channel for anything the process could open. The confinement is a resolved
 prefix check, so `..` and symlinks out of the root are both refused.
 
+Both endpoints drop the query cache for the namespace they wrote to, and
+only that one. Without it a corpus kept answering from the document set it
+held an hour ago — the first thing a new user does is upload a file and ask
+about it, which is exactly the sequence a stale cache gets wrong.
+
 Both endpoints refuse a *described* namespace — see `_writable`. The HTTP
 API is not how a described corpus is built; `scripts/ingest.py` drives the
 indexer directly and is unaffected, which is how the FastAPI corpus this
@@ -174,6 +179,15 @@ async def ingest(
         embedding_model=app_state.embedding_model,
         embedding_tokens=result.total_tokens,
     ))
+    # A corpus that just gained a document answers differently, and a cached
+    # answer is the one wrong answer a user cannot recognise as wrong -- it
+    # arrives with citations and a faithfulness verdict, both earned honestly
+    # against the corpus as it stood before the upload. Skipped when nothing
+    # was written, so an idempotent re-ingest stays free in both senses: no
+    # re-embed, and no paid pipeline runs to refill a cache that was correct.
+    if result.documents_processed:
+        await app_state.cache.invalidate_namespace(body.namespace)
+
     logger.info(
         "ingest_complete",
         docs_processed=result.documents_processed,
@@ -317,6 +331,9 @@ async def ingest_upload(
         embedding_model=app_state.embedding_model,
         embedding_tokens=result.total_tokens,
     ))
+    if result.documents_processed:
+        await app_state.cache.invalidate_namespace(namespace)
+
     logger.info(
         "ingest_upload_complete",
         namespace=namespace,

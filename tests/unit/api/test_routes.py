@@ -89,7 +89,7 @@ class TestQueryRoute:
                             "total_tokens": 0, "estimated_cost_usd": 0.0},
             "cached": False,
         }
-        key = cache._make_key("default:cached question")
+        key = cache._make_key("cached question", "default")
         cache._mem[key] = json.dumps(payload)
 
         resp = client.post("/query", json={"query": "cached question"})
