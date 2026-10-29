@@ -16,7 +16,9 @@ Design rationale:
     events. The final event carries citation metadata as a JSON payload so
     clients can render the reference list without a second request.
 
-    Cache integration: cache key = hash of the lower-cased query. On a cache
+    Cache integration: an entry is keyed by namespace *and* lower-cased query,
+    so the same question put to two corpora gets two answers, and an ingest can
+    drop one corpus's entries without touching another's. On a cache
     hit we short-circuit the entire pipeline and return in <1ms. Cache misses
     run the full pipeline; on completion the result is serialised and cached.
     We do NOT cache streaming responses — the overhead of buffering the stream
@@ -612,8 +614,11 @@ async def query(
         )
 
     # ── Standard path ─────────────────────────────────────────────────────────
-    cache_key = f"{body.namespace}:{body.query}"
-    cached_payload = await cache.get(cache_key)
+    # The namespace is a separate argument, not a prefix glued onto the query.
+    # Glued on it was inside the hash, so no amount of string work could find
+    # one corpus's entries again -- which is why an ingest could not invalidate
+    # them and a corpus answered from before its newest document for an hour.
+    cached_payload = await cache.get(body.query, body.namespace)
     if cached_payload is not None:
         log.info("query_cache_hit")
         response = QueryResponse.model_validate(cached_payload)
@@ -687,7 +692,10 @@ async def query(
     # because the route fixture disables auth, so `api_key_id` is None and
     # the whole block was dead in tests. Pinned now by a test that sets the
     # key id on the request scope.
-    spawn(cache.set(cache_key, response.model_dump()), name="cache_set")
+    spawn(
+        cache.set(body.query, response.model_dump(), body.namespace),
+        name="cache_set",
+    )
 
     # Tokens and cost are logged here, not only returned in the body and
     # summed into counters, because a sum cannot be turned back into a

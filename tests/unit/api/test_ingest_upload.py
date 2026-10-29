@@ -14,6 +14,7 @@ a key. Both halves are pinned here.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -503,3 +504,86 @@ class TestTheConsoleIsToldBeforeItTries:
         # Not the domain sentence: it is not true of this corpus, and showing
         # it here is how the original confusion started.
         assert j["description"] is None
+
+
+class TestAnIngestDropsTheStaleAnswers:
+    """The sequence a first-time user performs, in order.
+
+    Upload a file, ask about it. Before 2026-10-29 the second step could be
+    served from a cache populated before the first, so the corpus answered
+    from the document set it held up to an hour earlier -- with citations and
+    a faithfulness verdict, both honestly earned against the *old* corpus,
+    which is what makes a stale cache hit indistinguishable from a correct
+    answer. The first real user's first action is an upload, so this is not a
+    tail case.
+    """
+
+    def test_an_upload_drops_that_namespaces_cached_answers(
+        self, client: TestClient
+    ) -> None:
+        _indexer(client)
+        cache = client.app.state.atlas.cache
+        asyncio.run(cache.set("what is in my notes?", {"answer": "nothing yet"}, "notes"))
+
+        client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"# Notes\n\nhello", "text/markdown"))],
+            data={"namespace": "notes"},
+        )
+
+        assert asyncio.run(cache.get("what is in my notes?", "notes")) is None
+
+    def test_an_upload_leaves_other_corpora_alone(self, client: TestClient) -> None:
+        # Each surviving entry cost a full paid pipeline run. Writing to one
+        # corpus is not a reason to re-buy another's answers.
+        _indexer(client)
+        cache = client.app.state.atlas.cache
+        asyncio.run(cache.set("what is a dependency?", {"answer": "fastapi"}, "default"))
+
+        client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"hello", "text/markdown"))],
+            data={"namespace": "notes"},
+        )
+
+        kept = asyncio.run(cache.get("what is a dependency?", "default"))
+        assert kept is not None and kept["answer"] == "fastapi"
+
+    def test_the_path_endpoint_invalidates_too(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        _confine(client, str(tmp_path))
+        f = tmp_path / "doc.txt"
+        f.write_text("hello")
+        client.app.state.atlas.registry.get.return_value.indexer.index_path = AsyncMock(
+            return_value=_result()
+        )
+        cache = client.app.state.atlas.cache
+        asyncio.run(cache.set("q", {"answer": "stale"}, "default"))
+
+        resp = client.post("/ingest", json={"path": str(f)})
+
+        assert resp.status_code == 200
+        assert asyncio.run(cache.get("q", "default")) is None
+
+    def test_an_ingest_that_wrote_nothing_keeps_the_cache(
+        self, client: TestClient
+    ) -> None:
+        """Re-running an unchanged ingest is 0.3 s and 0 re-embeds by design.
+        Throwing the cache away would make it cost a paid pipeline run per
+        cached question instead -- the idempotency would be free in embeddings
+        and expensive in generation."""
+        client.app.state.atlas.registry.get.return_value.indexer.index_directory = (
+            AsyncMock(return_value=_result(docs=0, chunks=0, tokens=0))
+        )
+        cache = client.app.state.atlas.cache
+        asyncio.run(cache.set("q", {"answer": "still correct"}, "notes"))
+
+        client.post(
+            "/ingest/upload",
+            files=[("files", ("notes.md", b"hello", "text/markdown"))],
+            data={"namespace": "notes"},
+        )
+
+        kept = asyncio.run(cache.get("q", "notes"))
+        assert kept is not None and kept["answer"] == "still correct"
