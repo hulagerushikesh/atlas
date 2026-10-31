@@ -268,8 +268,11 @@ All three criteria met the same day, at ₹0 — none of this milestone needed a
 model call. **Deployed the same day** as `atlas-api-00027-4rp` (image
 `83638af`, Cloud Build `d92813dc` SUCCESS 2m51s), the first revision to carry
 the revoke route, the key dialog and the export; `00028-tsk` rolled after it off a
-docs-only commit, and `atlas-api-00029-rgj` — current — put `83638af` back
-with `SKIP_BUILD=1`, sharing `00027-4rp`'s digest exactly.
+docs-only commit, and `atlas-api-00029-rgj` — current when this was written,
+six revisions back as of 2026-10-31 — put `83638af` back with
+`SKIP_BUILD=1`, sharing `00027-4rp`'s digest exactly. The two `83638af`
+references here are image tags, which survive the 2026-10-31 history
+rewrite; see the note at the top of `planning/STATUS.md`.
 
 ## Parked (not scheduled)
 
