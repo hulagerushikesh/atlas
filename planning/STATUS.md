@@ -1,4 +1,17 @@
-# Status — 2026-10-26 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
+# Status — 2026-10-31 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
+
+**Every commit SHA in this file predates 2026-10-31.** The history was
+rewritten that day to carry a single author, so `09dc3d3`, `9e032df`,
+`f0ca32e`, `80a599f`, `a15c3d1`, `83638af` and the rest name commits that
+are no longer on any branch — `git show <sha>` works only until the loose
+objects are pruned. They still identify the right **images**: Artifact
+Registry tags are plain strings, so the live revision keeps serving and
+`SKIP_BUILD=1 IMAGE_TAG=80a599f scripts/deploy_gcp.sh` still rolls back.
+The pre-rewrite history is kept in a bundle outside the repo
+(`atlas-backup-pre-rewrite-2026-10-31.bundle`). Treat the SHAs below as
+image tags and revision labels, which is how the deploy row uses them, not
+as things to check out. The header date above moved 2026-10-26 → 2026-10-31
+in the same edit, having sat five days behind the deploy row it introduces.
 
 **All 20 exit criteria are ticked** — the 17 of M1–M4, the last of those
 (M1's resume-bullets line) on 2026-10-22, and M5's three on 2026-10-24.
