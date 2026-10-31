@@ -1,15 +1,18 @@
 # Roadmap
 
-Four milestones. Each has exit criteria; a milestone is not done until every
+Five milestones. Each has exit criteria; a milestone is not done until every
 one is ticked. Order is fixed — M2 without M1's numbers would deploy something
 unmeasured.
 
-**All four are done as of 2026-10-14, and as of 2026-10-22 all 17 exit
-criteria are ticked** — the last one, M1's resume-bullets line, closed when
-the Atlas block in `customise resume/resume_v5a.tex` was rewritten against
-this repo's own figures. There is deliberately **no M5 yet**: picking one is a decision, not a
-backlog item, and the pool to pick it from is *Parked* at the bottom of this
-file plus `planning/BACKLOG.md`. Until one is opened, "what's next" is
+**All five are done, and all 20 exit criteria are ticked** — M5 closed
+2026-10-24. This header said "four milestones" and "17 exit criteria" until
+2026-10-31, while M5 sat finished in the body below it and the file held 20
+checkboxes: a summary nothing re-checks drifts away from the document it
+summarises, exactly as a landing page drifts away from the system it
+describes. The count above is `grep -c '^\s*- \[x\]' planning/ROADMAP.md`,
+so it can be re-run rather than believed. There is deliberately **no M6**:
+picking one is a decision, not a backlog item, and the pool to pick it from
+is *Parked* at the bottom of this file plus `planning/BACKLOG.md`. Until one is opened, "what's next" is
 whatever `planning/STATUS.md` lists under *Blocked on you* — mostly two paid
 runs waiting on a spend go-ahead.
 
