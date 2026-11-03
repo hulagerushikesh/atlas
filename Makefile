@@ -89,13 +89,13 @@ ingest-dry: ## Preview which files would be ingested (no API calls)
 	$(PYTHON) scripts/ingest.py $(CORPUS_DIR) --namespace $(NAMESPACE) --dry-run
 
 eval: ## Run eval harness against the demo question set (requires ingested corpus)
-	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name duckdb-v1
+	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --namespace $(NAMESPACE) --run-name duckdb-v1
 
 create-key: ## Create an API key: make create-key NAME="my app" EMAIL=me@example.com
 	$(PYTHON) scripts/create_key.py --name "$(NAME)" --email "$(EMAIL)" --rate-limit $(or $(RPM),60)
 
 eval-compare: ## Compare latest eval against a baseline (set BASELINE=path/to/report.json)
-	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name duckdb-v1 \
+	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --namespace $(NAMESPACE) --run-name duckdb-v1 \
 	  --compare $(BASELINE)
 
 compare-reports: ## Re-judge two stored reports, free (set A=... B=...)

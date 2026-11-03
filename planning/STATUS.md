@@ -85,9 +85,28 @@ as measurement history. The 0.7105/1.0000 figures belong to that corpus and
 must not be quoted for this one. `make ingest CORPUS=fastapi NAMESPACE=default`
 rebuilds it.
 
-Not yet done: no eval has been run on `eval_data/duckdb_dataset.json`, so
-**there are no quotable quality numbers for the live corpus**, and the README's
-Results section carries a banner saying so. A run is about Rs.6.
+**Measured 2026-11-03, 16 rows, one run, Rs.5.08** — these are now the quotable
+numbers for the live corpus:
+P 0.5067 · R **1.0000** · F 0.9867 · AR 0.8738 · **AC 0.7736**, Rs.0.20/query
+for the pipeline alone, 7.4 s median per question and 13.7 s at p95.
+Report: `eval_data/reports/duckdb-v1_20261103-213709.json`.
+
+Recall was perfect on every row, so no labelled page was missed; precision is
+low by the same construction as before (mostly one labelled page against a
+fifteen-slot window, so a correct single-page answer scores 0.067). The one
+faithfulness miss is `dq-015`, the deliberately half-answerable row —
+`CREATE SECURE VIEW` is documented, `GRANT` appears nowhere, and the answer
+reached slightly past the pages. `dq-016` refused the out-of-scope question
+correctly.
+
+**Do not read 0.7736 against the old 0.7105 as an improvement.** Different
+questions, different labels, different corpus; `dataset_fingerprint` exists to
+stop exactly that comparison. It is a different exam, not a better score.
+
+The eval target needed fixing to produce this at all: `make eval` did not pass
+`--namespace`, so it ran the DuckDB dataset against `default`. The dataset
+guard caught it and refused for free rather than scoring sixteen zeros and
+reporting them as a retrieval failure — the exact case it was written for.
 
 ## One line
 

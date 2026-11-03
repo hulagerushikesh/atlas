@@ -245,11 +245,53 @@ docker compose up --build     # adds the `api` service to steps 3's two
 
 ## Results
 
-> **These are the retired corpus's numbers.** The demo corpus became the
-> DuckDB 2.0 docs on 2026-11-03 (see `planning/DECISIONS.md`). Everything in
-> this section was measured against the FastAPI documentation and describes
-> that corpus; it is kept because it is the measurement history, not because it
-> describes what the live instance now serves.
+### The live corpus — DuckDB 2.0, measured 2026-11-03
+
+226 markdown files, 3,975 chunks, namespace `duckdb`, queried through the real
+pipeline with Gemini (`gemini-3.1-flash-lite` for every LLM stage,
+`gemini-embedding-001` at 1536 dims). 16-question set,
+`eval_data/duckdb_dataset.json`. One run.
+
+| Metric | Score | Notes |
+|---|---|---|
+| Context precision | **0.5067** | over 15 of 16; the out-of-scope row has no labels to be precise about |
+| Context recall | **1.0000** | every labelled page was retrieved, on every row |
+| Faithfulness | **0.9867** | 15 of 16 rows scored 1.000 |
+| Answer relevance | **0.8738** | |
+| Answer correctness | **0.7736** | graded against hand-written reference answers |
+
+₹5.08 for the run, ₹0.20 a query for the pipeline alone; the judges are the
+rest. 7.4 s median end-to-end per question, 13.7 s at p95.
+
+**These numbers are not comparable to the FastAPI ones below.** Different
+questions, different labels, different corpus — `dataset_fingerprint` exists
+precisely to stop two such runs being read as a before-and-after. Correctness
+is higher here than the 0.7105 recorded for the old corpus, and that is not
+evidence of an improvement; it is a different exam.
+
+**Where the points were lost.** Recall was perfect, so nothing was missed.
+Precision is low by the same construction as before — mostly one labelled page
+per question against a fifteen-slot window, so a correct run still scores 0.067
+on a single-page question such as "Can a DuckDB schema contain another
+schema?". The single faithfulness miss is `dq-015`, the deliberately
+half-answerable row: the corpus documents `CREATE SECURE VIEW` but has no
+`GRANT` statement anywhere, and the answer reached slightly past what the pages
+support. That is the row designed to tempt exactly that, and it is the honest
+place to lose the point. The out-of-scope row, `dq-016`, refused correctly and
+scored 1.000.
+
+**What the corpus was chosen to show.** `dq-001` asks what `X'CAFE'` produces.
+The answer came back "a `BLOB`", with the pre-2.0 `VARCHAR` behaviour noted and
+cited. A model answering that from training data says `'xCAFE'`, because until
+2026-10-21 that was right.
+
+---
+
+> **Everything below is the retired corpus's numbers.** The demo corpus became
+> the DuckDB 2.0 docs on 2026-11-03 (see `planning/DECISIONS.md`). This section
+> was measured against the FastAPI documentation and describes that corpus; it
+> is kept because it is the measurement history, not because it describes what
+> the live instance now serves.
 
 Measured 2026-09-20 on the first live run: the full FastAPI documentation
 (155 markdown files, 4,021 chunks) indexed into local Qdrant + BM25, queried

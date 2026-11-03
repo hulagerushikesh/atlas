@@ -216,12 +216,15 @@ Unauthenticated and free: `/health`, `/warm`, `/namespaces`,
   service. If you hit the cap, queries stop until the next day. This is
   intentional — it is my credit card.
 - **Cold start ~12 s** after idle.
-- **Accuracy: 0.71** against human-written reference answers, on a 16-question
-  set. Small set. It is a real number, which is more than most such systems
-  can produce at all.
-- **Groundedness: 1.000** — every claim traces to a source. That is not the
-  same as being correct, and the gap between those two numbers is the whole
-  reason the project exists.
+- **Accuracy: 0.77** against hand-written reference answers, on a 16-question
+  set, measured 2026-11-03 on the corpus now live. Small set. It is a real
+  number, which is more than most such systems can produce at all.
+- **Groundedness: 0.99** — nearly every claim traces to a source. One of the
+  sixteen answers reached slightly past its evidence, on a question written to
+  be only half-answerable. Groundedness is not the same as being correct, and
+  the gap between these two numbers is the whole reason the project exists.
+- **Every labelled page was retrieved** on all sixteen questions. When an
+  answer is wrong here it is the writing that is wrong, not the finding.
 - **No users yet.** You are among the first. That is why I am asking.
 
 ---

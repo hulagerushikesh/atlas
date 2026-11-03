@@ -1,0 +1,1214 @@
+{
+  "pipeline_config": {
+    "name": "duckdb-v1",
+    "description": "chat=gemini-3.1-flash-lite embed=gemini-embedding-001@1536 retrieval.top_k=20 reranker=on/top_k=15 chunk=recursive/512/64 namespace=duckdb",
+    "overrides": {}
+  },
+  "sample_results": [
+    {
+      "sample_id": "dq-001",
+      "question": "What type does the literal X'CAFE' produce in DuckDB?",
+      "generated_answer": "In DuckDB 2.0 and later, the literal `X'CAFE'` produces a `BLOB` value [1][2][3][8]. In earlier versions, it was parsed as the `VARCHAR` string `'xCAFE'` [1][2][7].",
+      "retrieved_chunk_ids": [
+        "f8093276-0e00-596a-aab0-8a4c943c561e",
+        "637da6ec-a9d5-5419-b41d-1b65b8a333b9",
+        "3bb9288f-267d-5387-b5f0-a6ff3374ae85",
+        "1d3243a8-e928-52f2-b311-bd693f79bc4f",
+        "8713bd28-580e-5582-a905-f8e81cfbcf9f",
+        "e82eabb1-cdc6-54e4-ae29-84401c7698e4",
+        "f0a81d23-daa4-50b1-a632-0684e1c520e3",
+        "eb1ebb38-d7f9-5323-8f37-437b8002bf3f",
+        "7152b025-f644-5885-8fb2-f94f518acace",
+        "d3631a68-34c5-572f-bb2b-9fcd677d7062",
+        "12cef260-0bed-5893-bbfb-ad8ff8a22ff0",
+        "0d302d37-c87d-58c2-aade-fb56b0c780e8",
+        "1bbec380-0c6a-5411-a931-173473a03a7d",
+        "3bda5b1e-85c4-5fb9-ae9a-6033dc764753",
+        "36e63081-56a3-56c9-8b98-71781331c232"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "9/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/data_types/blob', 'sql/data_types/literal_types']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 2 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8888,
+          "reasoning": "Mean cosine similarity 0.889 over 3 synthetic questions. Synthetic questions: [\"What is the data type of the literal X'CAFE' in DuckDB version 2.0 and newer?\", \"How did DuckDB handle the literal X'CAFE' in versions prior to 2.0?\", 'How has the interpretation of hexadecimal string literals changed between DuckDB 1.x and 2.0?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.6667,
+          "reasoning": "4/6 reference facts present, 2 missing, 0 contradicted. Missing: ['The number of hex digits must be even', \"X'CAFE' is a two-byte BLOB (202, 254)\"]",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1763.5,
+        "retrieval": 2397.2,
+        "grading": 1152.2,
+        "generation": 900.2,
+        "faithfulness": 1178.7
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6478,
+          "completion_tokens": 367
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 13,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-002",
+      "question": "What type does the literal B'0101' produce in DuckDB?",
+      "generated_answer": "In DuckDB, the literal `B'0101'` produces a `BITSTRING` value [1][2][4].\n\n*   As of DuckDB 2.0, `B'\u2026'` literals are parsed as `BITSTRING` values [1][2].\n*   In versions prior to DuckDB 2.0, `B'0101'` was parsed as the `VARCHAR` string `'b0101'` [1][2][7].",
+      "retrieved_chunk_ids": [
+        "f8093276-0e00-596a-aab0-8a4c943c561e",
+        "12cef260-0bed-5893-bbfb-ad8ff8a22ff0",
+        "1d3243a8-e928-52f2-b311-bd693f79bc4f",
+        "3bb9288f-267d-5387-b5f0-a6ff3374ae85",
+        "8713bd28-580e-5582-a905-f8e81cfbcf9f",
+        "637da6ec-a9d5-5419-b41d-1b65b8a333b9",
+        "3ef51a8e-4ffc-5258-a8ae-03f6769c3bf2",
+        "7152b025-f644-5885-8fb2-f94f518acace",
+        "c7a4b11e-91d6-5d14-866b-ac80ec8303c7",
+        "a9bfdc50-7fef-5012-b39b-c56f8df901b8",
+        "270ae758-135c-56b8-a70c-00cff814e5fe",
+        "4b8d8ef7-1281-5fcb-92d4-d1c845e8351f",
+        "24424835-1fa5-5e29-ad97-9159847e2088",
+        "2db52e47-15bf-530d-b8b7-b50371cbf0c4",
+        "5dafcdbd-3346-5c03-a9d4-7aca3599b47b"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "9/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/data_types/bitstring', 'sql/data_types/literal_types']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.9115,
+          "reasoning": "Mean cosine similarity 0.912 over 3 synthetic questions. Synthetic questions: [\"What data type is produced by the literal B'0101' in current versions of DuckDB?\", \"How has the parsing of B'\u2026' literals changed since the release of DuckDB 2.0?\", \"What was the resulting data type for the literal B'0101' in versions of DuckDB prior to 2.0?\"]",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.8,
+          "reasoning": "4/5 reference facts present, 1 missing, 0 contradicted. Missing: ['It is a variable-length string of 1s and 0s']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1154.9,
+        "retrieval": 2599.2,
+        "grading": 1012.0,
+        "generation": 923.0,
+        "faithfulness": 1192.2
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6315,
+          "completion_tokens": 499
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 13,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-003",
+      "question": "Does DuckDB support CREATE TRIGGER, and what events can a trigger fire on?",
+      "generated_answer": "Yes, DuckDB supports the `CREATE TRIGGER` statement, which was introduced in version 2.0 [1][7].\n\nTriggers can be configured to fire in response to the following events:\n* `INSERT` [1][2]\n* `UPDATE` [1][2]\n* `DELETE` [1][2]",
+      "retrieved_chunk_ids": [
+        "d7495980-30ec-55e3-9638-7d79b1c4567a",
+        "005fa4cc-2052-5c0c-8fd0-69d72bc341b2",
+        "98e5cb11-8f03-5fea-9190-7c44c04cffa5",
+        "202024c4-35db-5d33-854a-2b5acb0a0c83",
+        "cf2fb9b8-d0b8-555f-b86f-5a2dc832ad6d",
+        "f79a7384-f6ef-560a-beaf-62002576ac3a",
+        "74b2c9af-e778-5c00-8605-289238f32849",
+        "fdab8429-d8ba-5e20-bf5a-e64eda4fed4d",
+        "f8e85426-c8c1-5197-aacf-6c767a92de97",
+        "99e8b838-4448-527e-a2f8-7b444042ca3c",
+        "b1869d5e-b492-5df8-a31e-2fb1e02090fc",
+        "a699574b-2b83-567b-b35d-d55ae9385d4c",
+        "6efb2727-3734-5220-87e5-7e1e29fdbf77",
+        "afa0dbcd-0abf-5171-9c07-5937784fbb90",
+        "487ffa09-47bf-5dde-814a-9947b9475e98"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6,
+          "reasoning": "9/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/statements/create_trigger']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 5 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.9273,
+          "reasoning": "Mean cosine similarity 0.927 over 3 synthetic questions. Synthetic questions: ['Does DuckDB support the use of the CREATE TRIGGER statement?', 'In which version of DuckDB was the CREATE TRIGGER functionality introduced?', 'Which database events can be configured to fire a trigger in DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.4286,
+          "reasoning": "3/7 reference facts present, 4 missing, 0 contradicted. Missing: ['Triggers can be FOR EACH STATEMENT.', 'FOR EACH STATEMENT triggers use REFERENCING OLD TABLE and NEW TABLE to expose transition tables.', 'Triggers can be FOR EACH ROW.', 'FOR EACH ROW triggers refer to the affected row through NEW and OLD qualifiers.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1883.4,
+        "retrieval": 1907.6,
+        "grading": 1170.5,
+        "generation": 1318.0,
+        "faithfulness": 1426.4
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6202,
+          "completion_tokens": 516
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 18,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-004",
+      "question": "Is there a single statement that installs a DuckDB extension and loads it at the same time?",
+      "generated_answer": "Yes, the `INSTALL AND LOAD` statement performs both actions in a single step [1]. As of DuckDB 2.0, this statement is available and is equivalent to running `INSTALL` followed by `LOAD` [1].",
+      "retrieved_chunk_ids": [
+        "5561173a-3fe0-526e-8ca5-971dbedf842b",
+        "72eb9424-de19-55a0-bcdc-34e7d528581a",
+        "f80fbaf4-0930-5805-a0a2-eeb8f4d8f6d6",
+        "136b599c-ebf6-5cfc-bfd6-b20c7a2dcf3a",
+        "b81fa720-56c9-5d7e-9774-170fb733bf4f",
+        "6363c917-c9a8-508e-9186-990f598ac82f",
+        "68e94e2e-762d-526d-9f91-894787823cc6",
+        "acd842c9-64d1-5d98-a52d-9bc0e976ffae",
+        "602e38e9-7694-5b8e-b95b-fab77b441d6b",
+        "45ebacd0-3244-5f24-9d71-c95eae76ab7e",
+        "5d9a0ba2-ba45-59f1-818f-b019e6658ae6",
+        "8bb2f7bf-140e-50da-a982-b0967bd842eb",
+        "87722715-16a8-59c6-aeb5-1d8092185077",
+        "21a5c160-06de-5ec2-abeb-503a276aed0d",
+        "8612cdca-4f59-54a5-afa8-d40e87c750e4"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.5333,
+          "reasoning": "8/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/statements/load_and_install']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8239,
+          "reasoning": "Mean cosine similarity 0.824 over 3 synthetic questions. Synthetic questions: ['What is the purpose of the INSTALL AND LOAD statement in DuckDB?', 'How does the INSTALL AND LOAD command compare to running the INSTALL and LOAD commands separately?', 'Is there a single command in DuckDB 2.0 that handles both installing and loading an extension?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.5714,
+          "reasoning": "4/7 reference facts present, 3 missing, 0 contradicted. Missing: ['The installation step is skipped if the extension is already installed.', 'The loading step is skipped if the extension is already loaded.', 'INSTALL AND LOAD supports the same clauses as INSTALL (FORCE, FROM, VERSION).']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1165.5,
+        "retrieval": 2584.5,
+        "grading": 883.8,
+        "generation": 863.3,
+        "faithfulness": 998.3
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6015,
+          "completion_tokens": 358
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 22,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-005",
+      "question": "Can a DuckDB schema contain another schema?",
+      "generated_answer": "Yes, schemas can be nested within other schemas [1]. This support was introduced in DuckDB 2.0 [1]. Objects within a nested schema are referenced using a fully qualified, dot-separated path [1].",
+      "retrieved_chunk_ids": [
+        "25f30ec6-bf5a-594d-aec4-dfd49d9cb8ad",
+        "9ef93daa-1d21-5ea8-90f1-0e19496a4e07",
+        "39849f14-2159-5bdd-9adf-81ad35cb6f7c",
+        "503aed69-6918-5856-9957-da28384fe236",
+        "2ea8565f-7a13-5366-ab77-cfb7d64623e6",
+        "ceeb2ace-30ba-5ca7-bd16-92e8efde2dc1",
+        "61913bba-f5d9-55ed-b7b7-65d6253b4d9f",
+        "fda66d13-9e05-5d34-b742-8c12a4e5a445",
+        "b1404d75-4c05-5dbe-867c-1e4b44362d20",
+        "75f51878-7cb0-5e6e-b6de-78c2459c0098",
+        "9d86f968-4aea-5151-9b0c-17330c78902a",
+        "93495cb1-3415-5d8e-8fb5-d4a32729a72a",
+        "81766534-ebdd-5aed-a57d-bf98bc7ccf61",
+        "9813cb55-36ce-5557-adc2-64a15e65931a",
+        "d8262bd5-b9bf-5776-ba7c-b988e959999d"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.0667,
+          "reasoning": "1/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/statements/create_schema']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8841,
+          "reasoning": "Mean cosine similarity 0.884 over 3 synthetic questions. Synthetic questions: ['Is it possible to nest schemas within other schemas in DuckDB?', 'When was support for nested schemas introduced in DuckDB?', 'How are objects within a nested schema referenced in DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "3/3 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 827.5,
+        "retrieval": 3642.4,
+        "grading": 1044.8,
+        "generation": 1008.2,
+        "faithfulness": 1194.6
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6312,
+          "completion_tokens": 362
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 10,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-006",
+      "question": "How do you read the value of a session variable inside a DuckDB query?",
+      "generated_answer": "You can read the value of a session variable in a DuckDB query using the following methods:\n\n*   **`getvariable` function:** Use `getvariable('variable_name')` to return the value of the specified variable [1][8][9]. If the variable is not set, it returns `NULL` [9].\n*   **`$name` shorthand:** As of DuckDB 2.0, you can reference a session variable directly using the `$name` syntax anywhere an expression is allowed [1][8].\n*   **Metadata:** You can view metadata about available variables, including their names and values, by querying the `duckdb_variables()` table function [7][13].",
+      "retrieved_chunk_ids": [
+        "e44ac6ce-b5ee-5552-a277-8a5d929d42b7",
+        "54cb67d0-2a50-5f7d-b079-47d52fbf2a67",
+        "acac8eca-173c-5a2b-a755-4612990395b8",
+        "2ec13a93-9ac7-59ca-b038-279af2b270cc",
+        "6d5551d9-0210-5167-9d77-635ff3cd1d02",
+        "cab5d460-45a1-5c07-b46d-6399feb83a8c",
+        "d3631a68-34c5-572f-bb2b-9fcd677d7062",
+        "7792739d-5b11-5ac1-8dee-07b2af0bbb7a",
+        "1895ee0d-a90e-5f32-a942-a0a17a75d13f",
+        "0228ea9f-a065-5cdb-9e1b-27ea89e88c1e",
+        "84cb3060-96c1-513e-b24f-33dbc4bbd13c",
+        "45ebacd0-3244-5f24-9d71-c95eae76ab7e",
+        "000f6af2-9cac-55aa-b567-9e2618ab0241",
+        "e75204b8-7438-5bef-9f07-3ae5908b76ad",
+        "18f0a219-89c2-5798-b77f-6288eb702883"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.2,
+          "reasoning": "3/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/statements/set_variable']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 5 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.9056,
+          "reasoning": "Mean cosine similarity 0.906 over 3 synthetic questions. Synthetic questions: ['How can I retrieve the value of a specific session variable in a DuckDB query?', 'What are the different ways to reference or view session variables within DuckDB?', 'How do I check the values of all currently defined session variables in DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "6/6 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 960.7,
+        "retrieval": 3388.7,
+        "grading": 995.3,
+        "generation": 1121.6,
+        "faithfulness": 1463.6
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6553,
+          "completion_tokens": 575
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 17,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-007",
+      "question": "Which parser does DuckDB use by default, and how do you turn the PEG parser on?",
+      "generated_answer": "* As of DuckDB 2.0, the PEG parser is the default parser [1][4].\n* In versions prior to 2.0, the PEG parser was an experimental, opt-in feature enabled via `enable_peg_parser()`, which is no longer required or available [2][4].\n* Because the PEG parser is now the default, no action is required to turn it on [4].",
+      "retrieved_chunk_ids": [
+        "73790ddb-a4d7-5973-b88f-aba1f9b34412",
+        "3a53872e-d3c0-5c3c-a1b4-9955ca2bb835",
+        "350623f9-bc33-56ed-85f7-675d0292636c",
+        "e30add1b-5656-52e4-9cd6-947ca044a8cf",
+        "e7042b7f-d320-5f14-8f6b-78bec094159c",
+        "3bda5b1e-85c4-5fb9-ae9a-6033dc764753",
+        "20ba9983-5cdc-513b-90f2-405bb68a8580",
+        "173cabb5-b008-5629-b317-fde808c2858e",
+        "1ba183c8-ba24-5bbb-87f9-bcbc118d8253",
+        "b7a6a93e-5404-579d-b966-b8e3009188f5",
+        "d20e3f44-0ca7-5693-8d4f-af4a1b858bf4",
+        "ad773cbd-951a-5f32-9fd8-e464be8caf2f",
+        "92e24bfd-f9ff-5bb5-b833-03ff27aa4bb6",
+        "aa420a97-6b85-58cd-af1f-27b405e85047",
+        "cbe745f8-8ed4-52ff-aa33-132cdac3a3f0"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.9333,
+          "reasoning": "14/15 retrieved chunks came from relevant documents (relevant doc IDs: ['guides/sql_features/graph_queries', 'sql/peg_parser']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8921,
+          "reasoning": "Mean cosine similarity 0.892 over 3 synthetic questions. Synthetic questions: ['What is the current status of the PEG parser in DuckDB as of version 2.0?', 'How do you enable the PEG parser in DuckDB versions released after 2.0?', 'What was the process for using the PEG parser in DuckDB versions prior to 2.0?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.5,
+          "reasoning": "4/8 reference facts present, 4 missing, 0 contradicted. Missing: ['The PEG parser replaces the parser front end derived from PostgreSQL', 'The PEG parser enables better suggestions, improved error messages with precise source locations, and extensions that extend the grammar', 'Switching parsers did not change the SQL dialect', 'Extensions adding new syntax hook into the PEG grammar and must be opted into explicitly with SET active_grammar_extensions']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 803.2,
+        "retrieval": 3238.5,
+        "grading": 1104.0,
+        "generation": 983.5,
+        "faithfulness": 1267.4
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 5744,
+          "completion_tokens": 539
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 19,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-008",
+      "question": "Does DuckDB still need the ICU library to work with named time zones?",
+      "generated_answer": "As of DuckDB 2.0, the `icu` extension no longer depends on the International Components for Unicode (ICU) library [1][2]. Instead, it implements time zones, calendars, and collations natively using data from the IANA time zone database [1][2][14].",
+      "retrieved_chunk_ids": [
+        "a92e6a94-30ba-5f64-9a39-e5dc881b2d7e",
+        "32837bee-92a1-54ba-8b18-5c85f2e47e35",
+        "fa47b8a4-8a22-537d-a112-cab780c0e5c9",
+        "fb2b35e3-27d6-5ae7-a8e2-ede5c34fa726",
+        "4a553cb6-56db-5b94-9f12-1442a691b277",
+        "c2917592-add6-5ede-98c8-cf6165350bf9",
+        "582f2e78-9c8b-57e1-962d-9385e9d76762",
+        "17c0bb7e-dcba-56ee-9c00-7164538fa76b",
+        "6379b9cb-4d45-5dc6-a33b-3975925d044e",
+        "8f921e83-39a2-58ff-8a21-64ea99ec89da",
+        "2ab443e5-b239-5e66-98dd-64543130e6b9",
+        "f41b861f-f714-5fb1-95b0-1e8a808e6207",
+        "96f73974-df1e-5c0d-97c4-2c9f03c88a04",
+        "15b7a8f4-5aab-5c60-bbfe-703ed4b2bd19",
+        "cdb3fb8f-58ef-5306-b4d9-5235e91144e8"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.7333,
+          "reasoning": "11/15 retrieved chunks came from relevant documents (relevant doc IDs: ['guides/sql_features/timestamps', 'sql/data_types/timestamp']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 2 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8154,
+          "reasoning": "Mean cosine similarity 0.815 over 3 synthetic questions. Synthetic questions: ['How does DuckDB 2.0 handle ICU functionality compared to previous versions?', 'What is the current dependency status of the DuckDB icu extension regarding the International Components for Unicode library?', 'How are time zones, calendars, and collations implemented in DuckDB 2.0?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.6,
+          "reasoning": "3/5 reference facts present, 2 missing, 0 contradicted. Missing: [\"The extension keeps the name 'icu'.\", 'The icu extension is still what provides time zone name handling and the timezone function.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 831.2,
+        "retrieval": 2458.4,
+        "grading": 1001.2,
+        "generation": 845.7,
+        "faithfulness": 1282.9
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6149,
+          "completion_tokens": 413
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 17,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-009",
+      "question": "How can you find out which columns of a DuckDB table are generated columns?",
+      "generated_answer": "To determine if a column is a generated column, you can use the following system views or functions:\n\n*   **`information_schema.columns`**: As of DuckDB 2.0, this view includes an `is_generated` column (returning `'ALWAYS'` or `'NEVER'`) and a `generation_expression` column (returning the expression used to compute the column) [2][5].\n*   **`duckdb_columns()`**: As of DuckDB 2.0, this function provides an `is_generated` column (returning `true` or `false`) and a `generation_expression` column [3][4].\n\nNote that `information_schema.columns` is implemented as a query on top of `duckdb_columns()` [6].",
+      "retrieved_chunk_ids": [
+        "8e3b058c-a3df-58c5-8398-34b83d716fae",
+        "67ae456b-2160-56ff-bf20-91bd11ca1195",
+        "f48926e0-b08b-53fd-86ad-c1bd9163b3c6",
+        "9aa8519e-f225-5e13-802d-9af540a050bc",
+        "664c4ea4-ebaa-5328-af59-f65cce2d5918",
+        "d8262bd5-b9bf-5776-ba7c-b988e959999d",
+        "7e5f3e02-86fc-505c-8c7d-16db9c10751d",
+        "42271b6c-d896-5aff-9b65-d7983e6d6787",
+        "04b2524c-a861-53aa-b625-7184fafdd457",
+        "528f77df-0793-5682-841e-bb06976a4c7d",
+        "f6cdd122-0e1e-5353-afb1-dcea817b784d",
+        "b763eca5-209d-554e-80de-be4c74d46193",
+        "df3af3a7-4bf1-5523-beab-b9e725ca429c",
+        "03dbfff4-2b17-50ec-996c-c8aed7c2101b",
+        "4b96aa61-5202-59ce-8b7a-a2160a24a927"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6667,
+          "reasoning": "10/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/meta/duckdb_table_functions', 'sql/meta/information_schema']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 6 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.9087,
+          "reasoning": "Mean cosine similarity 0.909 over 3 synthetic questions. Synthetic questions: ['How can I identify whether a specific column in a DuckDB table is a generated column?', 'Which system views or functions in DuckDB provide metadata about column generation expressions?', 'What are the differences between using information_schema.columns and duckdb_columns() to check for generated columns in DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "7/7 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 767.4,
+        "retrieval": 2871.9,
+        "grading": 984.1,
+        "generation": 1128.5,
+        "faithfulness": 1730.8
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6102,
+          "completion_tokens": 779
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 18,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-010",
+      "question": "Which statement should you use to inspect a table's schema in DuckDB, and what is wrong with the alternative?",
+      "generated_answer": "To inspect the schema of an individual table in DuckDB, you should use the `DESCRIBE` command [1][11].\n\nRegarding the alternative:\n* The `SHOW` statement can also be used to describe tables and queries [1].\n* As of DuckDB 2.0, the use of `SHOW` for this purpose is deprecated and will print a warning [1].",
+      "retrieved_chunk_ids": [
+        "5c895a7a-6316-5711-b682-5e3a9cec54ef",
+        "81766534-ebdd-5aed-a57d-bf98bc7ccf61",
+        "b1869d5e-b492-5df8-a31e-2fb1e02090fc",
+        "39849f14-2159-5bdd-9adf-81ad35cb6f7c",
+        "6194de10-ce31-5ca7-adf0-35ff11f9d3d6",
+        "165da7e4-8062-57a8-a791-ff9f915f476a",
+        "220caf0f-84c3-592e-a3c2-7beafd7252a6",
+        "ceeb2ace-30ba-5ca7-bd16-92e8efde2dc1",
+        "75f51878-7cb0-5e6e-b6de-78c2459c0098",
+        "fda66d13-9e05-5d34-b742-8c12a4e5a445",
+        "89813317-6897-5e63-be0a-d1db25a3de5a",
+        "503aed69-6918-5856-9957-da28384fe236",
+        "93495cb1-3415-5d8e-8fb5-d4a32729a72a",
+        "6420b510-ffe9-5350-8d1d-42060c17695d",
+        "d8262bd5-b9bf-5776-ba7c-b988e959999d"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.1333,
+          "reasoning": "2/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/statements/describe', 'sql/statements/show']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.876,
+          "reasoning": "Mean cosine similarity 0.876 over 3 synthetic questions. Synthetic questions: ['What is the recommended SQL command to inspect the schema of a specific table in DuckDB?', 'How can you view the structure of a table within the DuckDB environment?', 'What is the current status of using the SHOW statement to describe tables in DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.5714,
+          "reasoning": "4/7 reference facts present, 3 missing, 0 contradicted. Missing: ['DuckDB 2.0 gave SHOW a new PostgreSQL-style job of printing configuration settings.', 'If a table and a setting share a name, SHOW describes the table and prints a warning.', 'DESCRIBE never resolves a setting.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1582.7,
+        "decompose": 899.6,
+        "retrieval": 2402.8,
+        "grading": 1054.7,
+        "generation": 1066.2,
+        "faithfulness": 1197.2
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 5,
+          "prompt_tokens": 6727,
+          "completion_tokens": 507
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 2,
+          "prompt_tokens": 42,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-011",
+      "question": "How do you list the triggers that exist in a DuckDB database?",
+      "generated_answer": "To list the triggers defined in a DuckDB database, you can use the `duckdb_triggers()` function [1][6]:\n\n```sql\nSELECT trigger_name, table_name, action_timing, event_manipulation, for_each\nFROM duckdb_triggers();\n```",
+      "retrieved_chunk_ids": [
+        "cf2fb9b8-d0b8-555f-b86f-5a2dc832ad6d",
+        "99e8b838-4448-527e-a2f8-7b444042ca3c",
+        "6efb2727-3734-5220-87e5-7e1e29fdbf77",
+        "98e5cb11-8f03-5fea-9190-7c44c04cffa5",
+        "005fa4cc-2052-5c0c-8fd0-69d72bc341b2",
+        "fdab8429-d8ba-5e20-bf5a-e64eda4fed4d",
+        "f79a7384-f6ef-560a-beaf-62002576ac3a",
+        "202024c4-35db-5d33-854a-2b5acb0a0c83",
+        "d7495980-30ec-55e3-9638-7d79b1c4567a",
+        "b1869d5e-b492-5df8-a31e-2fb1e02090fc",
+        "d7028768-3cd3-5a57-a040-90f097152c07",
+        "a9bfdc50-7fef-5012-b39b-c56f8df901b8",
+        "f4cc9404-48bf-520a-a9f6-94277ebf49f0",
+        "45ff5c77-e23d-510c-a3be-b3224aa35fa9",
+        "6420b510-ffe9-5350-8d1d-42060c17695d"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.7333,
+          "reasoning": "11/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/meta/duckdb_table_functions', 'sql/statements/create_trigger']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 1 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.9327,
+          "reasoning": "Mean cosine similarity 0.933 over 3 synthetic questions. Synthetic questions: ['How can I retrieve a list of all defined triggers within a DuckDB database?', 'Which SQL function allows you to inspect trigger metadata in DuckDB?', 'What query can be used to view the trigger name, table name, and event timing for triggers in DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "5/5 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 739.4,
+        "retrieval": 2391.7,
+        "grading": 1036.7,
+        "generation": 900.7,
+        "faithfulness": 1258.5
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6410,
+          "completion_tokens": 365
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 15,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-012",
+      "question": "Can a DuckDB STRUCT type be empty, and is there anything about empty structs that still fails?",
+      "generated_answer": "As of DuckDB 2.0, `STRUCT` types can be empty [1]. \n\nRegarding empty structs:\n*   The bare type name `STRUCT` denotes an empty struct [1].\n*   `NULL::STRUCT` and `CREATE TABLE t (s STRUCT)` are valid [1].\n*   `struct_pack()` with no arguments returns an empty struct `{}` [1].\n*   `STRUCT()` with empty parentheses remains a syntax error [1].\n*   `unnest` and `struct_extract` raise an error when used on an empty struct [1].\n*   Persisting an empty struct into a pre-2.0 database format is not supported [1][7].",
+      "retrieved_chunk_ids": [
+        "2d260f81-d847-5055-ba28-60a72f61181f",
+        "d5217e59-d398-5950-aaaf-8ac8c98f713b",
+        "0dd06071-c8c2-57db-b49a-37320b717d4b",
+        "ffd63b0e-36d3-5eff-abe2-74ce1b06ceb1",
+        "ce87f6a8-327b-5a53-8316-460e4da9b9ba",
+        "bc04391b-bff4-5fa7-8154-ac4a31cd9dd4",
+        "be305a98-562c-5d50-adc1-805e608e556c",
+        "bd0afbb4-6609-5d92-b15d-5a1857188ee2",
+        "1f5e4d4f-d76c-5d11-8668-a075e30b93af",
+        "ff692fec-5403-57fa-af55-d7417f81f58d",
+        "4173d0df-15ce-5a34-900a-8f1344d560db",
+        "0a140746-91e1-5ea1-8f1e-d57c84f8c9ce",
+        "0d582f57-2d00-5293-9ebb-70ab983fbb67",
+        "d3926f8a-0f65-5ca3-b4bd-1a9472067879",
+        "20df65cc-26fd-57d0-a0c6-2a2e744f2a8d"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.6667,
+          "reasoning": "10/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/data_types/struct']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 7 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.9055,
+          "reasoning": "Mean cosine similarity 0.905 over 3 synthetic questions. Synthetic questions: ['How does DuckDB 2.0 handle empty struct types?', 'What are the limitations and behaviors associated with empty structs in DuckDB 2.0?', 'What syntax can be used to create an empty struct in DuckDB 2.0?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.8889,
+          "reasoning": "8/9 reference facts present, 1 missing, 0 contradicted. Missing: ['row() with no arguments returns the empty tuple ().']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1134.9,
+        "retrieval": 1402.0,
+        "grading": 988.9,
+        "generation": 1144.1,
+        "faithfulness": 1553.4
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6204,
+          "completion_tokens": 721
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 23,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-013",
+      "question": "If a string containing an IANA time zone name is cast to a TIMESTAMP WITHOUT TIME ZONE in DuckDB, does it raise an error?",
+      "generated_answer": "No, it does not raise an error. \n\n*   As of DuckDB 2.0, time zone names in strings passed to a `WITHOUT TIME ZONE` type are ignored [1].\n*   In versions prior to DuckDB 2.0, names other than `UTC` raised an error [1][2].",
+      "retrieved_chunk_ids": [
+        "fa47b8a4-8a22-537d-a112-cab780c0e5c9",
+        "96f73974-df1e-5c0d-97c4-2c9f03c88a04",
+        "894ac485-315b-57f2-8dd1-9824e06de330",
+        "77afc373-b5d0-58e2-9274-1fdeb9fc6c88",
+        "32837bee-92a1-54ba-8b18-5c85f2e47e35",
+        "16318145-41ab-5476-b2e0-34b949d8ccc6",
+        "f41510e4-9025-5d28-b022-dee9139e3663",
+        "88aa8e5f-1ad1-562a-bef8-64490fe33b82",
+        "56653a54-c846-5b29-97d1-c3e68d74546c",
+        "a92e6a94-30ba-5f64-9a39-e5dc881b2d7e",
+        "e2f18d6d-4c75-5897-a3dd-336772a6a188",
+        "a9996ac6-2cb9-5aa6-8a89-241e742f17c3",
+        "c4fcaeee-c08f-5090-8c1e-4748c6eae38f",
+        "1a0be033-486a-5046-9a36-a0acd3fdd506",
+        "bf1fb4c0-b785-526c-a416-80da81cefa15"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.5333,
+          "reasoning": "8/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/data_types/timestamp']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 3 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8758,
+          "reasoning": "Mean cosine similarity 0.876 over 3 synthetic questions. Synthetic questions: [\"Does providing a time zone name in a string for a 'WITHOUT TIME ZONE' type trigger an error in DuckDB 2.0?\", \"How does DuckDB 2.0 handle time zone names when parsing strings into 'WITHOUT TIME ZONE' types?\", \"What happens when you use a non-UTC time zone name in a 'WITHOUT TIME ZONE' type in DuckDB versions older than 2.0?\"]",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.75,
+          "reasoning": "3/4 reference facts present, 1 missing, 0 contradicted. Missing: ['UTC offsets and time zone specifications passed to a WITHOUT TIME ZONE type were already ignored before 2.0.']",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 905.7,
+        "retrieval": 4375.3,
+        "grading": 959.0,
+        "generation": 869.9,
+        "faithfulness": 1196.5
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 4,
+          "prompt_tokens": 6546,
+          "completion_tokens": 383
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 1,
+          "prompt_tokens": 30,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-014",
+      "question": "After you LOAD a DuckDB extension that adds new SQL syntax, is that syntax available straight away?",
+      "generated_answer": "No. Starting with DuckDB 2.0, if an extension adds new SQL syntax, you must explicitly opt in to that extension's grammar by setting the `active_grammar_extensions` configuration [1]. For example:\n\n```sql\nSET active_grammar_extensions = ['extension_name'];\n```",
+      "retrieved_chunk_ids": [
+        "92e24bfd-f9ff-5bb5-b833-03ff27aa4bb6",
+        "5561173a-3fe0-526e-8ca5-971dbedf842b",
+        "b7a6a93e-5404-579d-b966-b8e3009188f5",
+        "72eb9424-de19-55a0-bcdc-34e7d528581a",
+        "b81fa720-56c9-5d7e-9774-170fb733bf4f",
+        "1259469a-69fb-502b-9c9f-7136658bc45b",
+        "92ba5f9d-896c-5f1e-acf1-dbd21e1f8cd7",
+        "a0f2aaea-1d59-5643-92ab-d2b5cb8e635c",
+        "f80fbaf4-0930-5805-a0a2-eeb8f4d8f6d6",
+        "cbe745f8-8ed4-52ff-aa33-132cdac3a3f0",
+        "932bdf3f-7aa6-50eb-af6b-8654c27342de",
+        "7db27c36-5d05-58c3-823f-bf8163187319",
+        "3f1d8a31-661a-5d82-b685-f37d4cbe58f0",
+        "602e38e9-7694-5b8e-b95b-fab77b441d6b",
+        "453860d4-6499-5c21-b128-904b3400b5bf"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.2,
+          "reasoning": "3/15 retrieved chunks came from relevant documents (relevant doc IDs: ['guides/sql_features/graph_queries', 'sql/peg_parser']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 2/2 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Score 1.00 over 2 claims. All claims supported.",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.8662,
+          "reasoning": "Mean cosine similarity 0.866 over 3 synthetic questions. Synthetic questions: ['Are new SQL syntax features added by DuckDB extensions automatically enabled upon installation?', 'How do you enable specific extension-provided grammar in DuckDB version 2.0 and later?', 'What configuration setting must be updated to use custom SQL syntax introduced by an extension in newer versions of DuckDB?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 0.6,
+          "reasoning": "3/5 reference facts present, 2 missing, 0 contradicted. Missing: ['Installing and loading DuckPGQ is not enough to use CREATE PROPERTY GRAPH or GRAPH_TABLE.', \"Using CREATE PROPERTY GRAPH or GRAPH_TABLE requires SET active_grammar_extensions = ['duckpgq'].\"]",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 882.7,
+        "retrieval": 7086.6,
+        "grading": 3263.6,
+        "generation": 1073.2,
+        "faithfulness": 1348.6
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 6,
+          "prompt_tokens": 7850,
+          "completion_tokens": 662
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 3,
+          "prompt_tokens": 89,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-015",
+      "question": "How do I create a view that hides its underlying data, and grant specific users permission to read it?",
+      "generated_answer": "To create a view that hides its underlying data from functions such as `stats()` and `EXPLAIN ANALYZE`, you can use the `CREATE SECURE VIEW` statement [1][2][4]. As of DuckDB 2.0 (2024-06-03), this feature was introduced to prevent the leakage of information about underlying tables through statistics or query plans [1][2].\n\nExample syntax for a secure view:\n```sql\nCREATE SECURE VIEW view_name AS\n    SELECT column_name\n    FROM table_name\n    WHERE condition;\n```\n\nRegarding your request to grant specific users permission to read the view, I don't have sufficient information to answer this question, as the provided context does not contain details on user access control or permission management.",
+      "retrieved_chunk_ids": [
+        "03704740-3712-5d09-bcb3-0c6f05d51777",
+        "3d95bc98-b508-5049-8a5d-f081ed907602",
+        "8a3f2c5c-3e96-56d6-9252-abf8f3cfb231",
+        "7f078caf-8330-5bb0-9450-6c4da4127e7c",
+        "a0a6b251-8f57-5bb3-813f-222a28e92cb6",
+        "89a8bdc9-a02f-5d1c-8c02-5601b111d1cc",
+        "ad61b9c8-6ea4-523f-9b3e-43edec0841f1",
+        "45ff5c77-e23d-510c-a3be-b3224aa35fa9",
+        "b6e986da-1f48-5419-81ec-73d3ebf32aef",
+        "734f62ab-8960-5cee-986c-ec562aee4f1f",
+        "647f26aa-a007-5ce4-8e8c-275a95995c7d",
+        "265927ca-0b1b-5008-bc98-298734514169",
+        "a37d9ee0-2446-5049-a5ef-21d3da9540da",
+        "f9d0d3ec-af86-5c60-9f7b-b80fceb03d57",
+        "6e3a8104-ec76-54e4-aa3d-e0bf759417be"
+      ],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.4,
+          "reasoning": "6/15 retrieved chunks came from relevant documents (relevant doc IDs: ['sql/statements/create_view']).",
+          "applicable": true
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "Retrieved chunks from 1/1 relevant documents. All relevant documents recalled.",
+          "applicable": true
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 0.8,
+          "reasoning": "Score 0.80 over 5 claims. Unsupported: ['The date 2024-06-03 is associated with the release of DuckDB 2.0.']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.694,
+          "reasoning": "Mean cosine similarity 0.694 over 3 synthetic questions. Synthetic questions: ['How can you create a view in DuckDB that prevents sensitive data from being exposed via EXPLAIN ANALYZE or stats()?', 'What SQL syntax is used to define a secure view?', 'Since which version of DuckDB has the secure view feature been available to prevent metadata leakage?']",
+          "applicable": true
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "4/4 reference facts present, 0 missing, 0 contradicted.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 965.1,
+        "decompose": 975.9,
+        "retrieval": 4993.6,
+        "grading": 3189.7,
+        "generation": 1346.8,
+        "faithfulness": 1568.6
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 7,
+          "prompt_tokens": 8287,
+          "completion_tokens": 905
+        },
+        "gemini-embedding-001": {
+          "kind": "embedding",
+          "calls": 4,
+          "prompt_tokens": 86,
+          "completion_tokens": 0
+        }
+      }
+    },
+    {
+      "sample_id": "dq-016",
+      "question": "How do I set up change-data-capture from DuckDB into Kafka so downstream consumers see every row mutation?",
+      "generated_answer": "This question appears to be outside the scope of the knowledge base. Please ask a question related to the available documentation.",
+      "retrieved_chunk_ids": [],
+      "metrics": [
+        {
+          "metric_name": "context_precision",
+          "score": 0.0,
+          "reasoning": "No relevant documents specified; precision is undefined.",
+          "applicable": false
+        },
+        {
+          "metric_name": "context_recall",
+          "score": 1.0,
+          "reasoning": "No relevant documents specified; recall is vacuously 1.0.",
+          "applicable": false
+        },
+        {
+          "metric_name": "faithfulness",
+          "score": 1.0,
+          "reasoning": "Answer is the refusal sentence; no claims to verify.",
+          "applicable": false
+        },
+        {
+          "metric_name": "answer_relevance",
+          "score": 0.0,
+          "reasoning": "The pipeline refused. Relevance is undefined for a refusal \u2014 reverse-questioning the refusal sentence measures nothing.",
+          "applicable": false
+        },
+        {
+          "metric_name": "answer_correctness",
+          "score": 1.0,
+          "reasoning": "Out-of-scope row: the pipeline refused, which is correct.",
+          "applicable": true
+        }
+      ],
+      "stage_ms": {
+        "routing": 1116.2
+      },
+      "token_usage": {
+        "gemini-3.1-flash-lite": {
+          "kind": "chat",
+          "calls": 1,
+          "prompt_tokens": 502,
+          "completion_tokens": 69
+        }
+      }
+    }
+  ],
+  "aggregate_scores": {
+    "context_precision": 0.5067,
+    "context_recall": 1.0,
+    "faithfulness": 0.9867,
+    "answer_relevance": 0.8738,
+    "answer_correctness": 0.7736
+  },
+  "dataset_name": "duckdb_docs_v1",
+  "dataset_fingerprint": "781ff236ac4cd3cf",
+  "answers_fingerprint": "17e19c202171d2e4",
+  "token_usage": {
+    "gemini-3.1-flash-lite": {
+      "kind": "chat",
+      "calls": 112,
+      "prompt_tokens": 140104,
+      "completion_tokens": 14976
+    },
+    "gemini-embedding-001": {
+      "kind": "embedding",
+      "calls": 36,
+      "prompt_tokens": 1656,
+      "completion_tokens": 0
+    }
+  },
+  "total_tokens_used": 156736,
+  "duration_seconds": 51.5,
+  "model_calls": {
+    "gemini-3.1-flash-lite": 112
+  }
+}
