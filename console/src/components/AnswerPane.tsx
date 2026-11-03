@@ -9,6 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { fmtScore, useAtlas, type Strength } from "@/lib/store"
 import type { Evidence } from "@/lib/api"
 import { cn } from "@/lib/utils"
+import { WhatIsThis } from "@/components/WhatIsThis"
+import { Orientation } from "@/components/Orientation"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
@@ -198,7 +200,7 @@ function StrengthBadge({ s }: { s: Strength }) {
 /* ── Pane ──────────────────────────────────────────────────────────────── */
 
 export function AnswerPane() {
-  const { run, sheet, ask } = useAtlas()
+  const { run, sheet, ask, tourOpen } = useAtlas()
   const [q, setQ] = useState("")
   const [topK, setTopK] = useState(5)
   const [stream, setStream] = useState(true)
@@ -232,13 +234,23 @@ export function AnswerPane() {
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-card">
       <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4 md:px-8">
-        <div className="label">Answer</div>
+        <div className="label inline-flex items-center gap-1.5">Answer<WhatIsThis pane="answer" /></div>
         <div className="mt-3 max-w-[68ch] text-[18px] leading-[1.6]">
           <AnimatePresence mode="wait" initial={false}>
             {run.phase === "idle" ? (
-              <motion.div key="idle" exit={{ opacity: 0 }} className="label max-w-[52ch] normal-case leading-relaxed tracking-normal">
-                <Compass className="mb-3 size-5 text-ink-3" strokeWidth={1.5} />
-                Ask the sheet. The answer appears here as a document with a reference on every claim; the references themselves appear on the right.
+              <motion.div key="idle" exit={{ opacity: 0 }}>
+                {/* First visit gets the orientation card; everyone after it
+                    gets the one line, because by then the layout is known
+                    and a repeated explanation is just something to scroll
+                    past. */}
+                {tourOpen ? (
+                  <Orientation />
+                ) : (
+                  <div className="label max-w-[52ch] normal-case leading-relaxed tracking-normal">
+                    <Compass className="mb-3 size-5 text-ink-3" strokeWidth={1.5} />
+                    Ask the sheet. The answer appears here as a document with a reference on every claim; the references themselves appear on the right.
+                  </div>
+                )}
               </motion.div>
             ) : (
               <motion.div key={run.startedAt} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: EASE }}>

@@ -144,8 +144,14 @@ interface AtlasState {
   // credential that can revoke every key, where an API key can only spend.
   adminSecret: string
   paletteOpen: boolean
+  // The first-visit orientation card. Persisted inverted -- a *dismissal* is
+  // what gets stored, so a reader who has never seen it (no key, private
+  // mode, storage blocked) is shown it rather than silently skipped past it.
+  tourOpen: boolean
   flashChunk: string | null
   theme: "" | "light" | "dark"
+
+  setTour: (open: boolean) => void
 
   boot: () => Promise<void>
   setSheet: (s: string) => void
@@ -191,12 +197,17 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   accessOpen: false,
   adminSecret: "",
   paletteOpen: false,
+  tourOpen: ls.get("atlas_oriented") !== "1",
   flashChunk: null,
   theme: (ls.get("atlas_theme") as "" | "light" | "dark") || "",
 
   set: (patch) => set(patch),
 
   setTheme: (t) => { ls.set("atlas_theme", t); applyTheme(t); set({ theme: t }) },
+
+  // Dismissing is remembered; reopening from the palette is not, so the card
+  // never comes back on its own after someone has closed it.
+  setTour: (open) => { if (!open) ls.set("atlas_oriented", "1"); set({ tourOpen: open }) },
 
   boot: async () => {
     getHealth().then((h) => set({ health: h.status })).catch(() => set({ health: "unreachable" }))

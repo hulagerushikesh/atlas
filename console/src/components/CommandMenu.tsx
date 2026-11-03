@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Download, KeyRound, Layers, Map, Moon, PanelLeft, Route, Settings2, Sun, SunMoon, TableProperties } from "lucide-react"
+import { Compass, Download, KeyRound, Layers, Map, Moon, PanelLeft, Route, Settings2, Sun, SunMoon, TableProperties } from "lucide-react"
 import {
   Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut,
 } from "@/components/ui/command"
@@ -12,7 +12,7 @@ import { useAtlas } from "@/lib/store"
  * suppressed via data-[state] overrides below.
  */
 export function CommandMenu({ onToggleCorpus }: { onToggleCorpus: () => void }) {
-  const { paletteOpen, set, sheets, sheet, setSheet, setTheme, surveyOpen, keyOpen, run } = useAtlas()
+  const { paletteOpen, set, sheets, sheet, setSheet, setTheme, setTour, surveyOpen, keyOpen, run } = useAtlas()
   const exportable = run.phase !== "idle" && run.phase !== "running"
 
   useEffect(() => {
@@ -47,6 +47,9 @@ export function CommandMenu({ onToggleCorpus }: { onToggleCorpus: () => void }) 
           <CommandItem onSelect={close(() => set({ evidenceOpen: true }))}><Layers className="size-4" /> Show evidence</CommandItem>
           <CommandItem onSelect={close(() => set({ surveyOpen: !surveyOpen }))}><TableProperties className="size-4" /> {surveyOpen ? "Collapse" : "Expand"} survey</CommandItem>
           <CommandItem onSelect={close(() => set({ keyOpen: !keyOpen }))}><Route className="size-4" /> {keyOpen ? "Hide" : "Show"} key</CommandItem>
+          {/* The orientation card is dismissed for good once closed, so
+              this is the only way back to it. */}
+          <CommandItem onSelect={close(() => setTour(true))}><Compass className="size-4" /> What am I looking at?</CommandItem>
         </CommandGroup>
         <CommandSeparator />
         <CommandGroup heading="Theme">

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { STAGES, fmt, useAtlas, type Stage, type StageStatus } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { WhatIsThis } from "@/components/WhatIsThis"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
@@ -60,7 +61,7 @@ export function SurveyBar() {
   return (
     <footer className="shrink-0 border-t bg-card">
       <div className="flex h-8 items-center gap-4 px-4">
-        <span className="label inline-flex items-center gap-2"><Route className="size-3.5" />Survey</span>
+        <span className="label inline-flex items-center gap-2"><Route className="size-3.5" />Survey<WhatIsThis pane="survey" /></span>
         <span className="label min-w-0 truncate normal-case tracking-[0.06em] tabular text-ink-2"><Figs /></span>
         <Button variant="ghost" size="sm" className="press ml-auto h-6 gap-1 px-2 font-mono text-[11px] uppercase tracking-wider" onClick={() => set({ surveyOpen: !surveyOpen })} aria-expanded={surveyOpen}>
           {surveyOpen ? "Collapse" : "Expand"}
