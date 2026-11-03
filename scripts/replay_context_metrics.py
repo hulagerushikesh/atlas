@@ -21,7 +21,7 @@ Trust check:
 
 Usage:
     .venv/bin/python scripts/replay_context_metrics.py \
-        eval_data/reports/ctx-headers_*.json --corpus data/corpus/fastapi
+        eval_data/reports/ctx-headers_*.json --corpus data/corpus/duckdb
 """
 
 from __future__ import annotations
@@ -60,8 +60,8 @@ def score(sources: list[str], relevant: set[str]) -> tuple[float, float]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("report", type=Path)
-    ap.add_argument("--dataset", type=Path, default=Path("eval_data/fastapi_dataset.json"))
-    ap.add_argument("--corpus", type=Path, default=Path("data/corpus/fastapi"))
+    ap.add_argument("--dataset", type=Path, default=Path("eval_data/duckdb_dataset.json"))
+    ap.add_argument("--corpus", type=Path, default=Path("data/corpus/duckdb"))
     args = ap.parse_args()
 
     rev = build_reverse_map(args.corpus)

@@ -15,7 +15,7 @@ which dataset is right depends on what was ingested into the namespace — so
 the script asks, and then checks the answer against the namespace's index.
 
 Usage:
-    python scripts/run_eval.py --dataset eval_data/fastapi_dataset.json
+    python scripts/run_eval.py --dataset eval_data/duckdb_dataset.json
     python scripts/run_eval.py --dataset eval_data/sample_dataset.json
     python scripts/run_eval.py --run-name my_experiment --concurrency 2
     python scripts/run_eval.py --compare eval_data/reports/baseline.json

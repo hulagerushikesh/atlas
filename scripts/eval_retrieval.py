@@ -20,7 +20,7 @@ namespace, so the script asks rather than guessing, and then checks the answer
 against the namespace's own index.
 
 Usage:
-    .venv/bin/python scripts/eval_retrieval.py --dataset eval_data/fastapi_dataset.json
+    .venv/bin/python scripts/eval_retrieval.py --dataset eval_data/duckdb_dataset.json
     .venv/bin/python scripts/eval_retrieval.py --set retrieval.top_k=30
 """
 

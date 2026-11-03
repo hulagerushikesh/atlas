@@ -11,6 +11,11 @@ build/
 
 # Env
 .env
+# ...and every sidecar of it. `.env` alone let `.env.bak-...` stage cleanly
+# on 2026-11-03; a pre-commit secret scan caught it, which is not a control
+# to rely on twice. `.env.example` is tracked and must stay keyless.
+.env.*
+!.env.example
 .venv/
 venv/
 

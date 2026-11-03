@@ -231,7 +231,7 @@ export function Measured() {
 const STEPS = [
   { t: "Add your API key", b: <>Copy <code>.env.example</code> to <code>.env</code> and set <code>OPENAI_API_KEY</code> — any OpenAI-compatible endpoint works via <code>OPENAI_BASE_URL</code>; the measured run used Gemini. Everything else has local defaults.</> },
   { t: "Start the infrastructure", b: <>Qdrant and Redis run in Docker; the API runs on your machine.</> },
-  { t: "Fetch and index a corpus", b: <>The bundled script downloads the FastAPI docs (MIT, 155 files). Ingest fails fast and names the file if anything goes wrong.</> },
+  { t: "Fetch and index a corpus", b: <>The bundled script downloads the DuckDB 2.0 docs (MIT, 226 files). Ingest fails fast and names the file if anything goes wrong.</> },
   { t: "Serve", b: <>Console at <code>/app</code>, Swagger at <code>/docs</code>, Prometheus at <code>/metrics</code>.</> },
   { t: "Ask", b: <>Use the console, or <code>POST /query</code> and read the evidence straight from the response.</> },
 ]
@@ -239,7 +239,7 @@ const STEPS = [
 const SCRIPT = `cp .env.example .env            # set OPENAI_API_KEY
 make docker-up                    # qdrant + redis
 make install
-make fetch-corpus && make ingest  # 155 FastAPI docs
+make fetch-corpus && make ingest  # 226 DuckDB 2.0 docs
 make serve                        # → http://localhost:8010/app`
 
 export function QuickStart() {

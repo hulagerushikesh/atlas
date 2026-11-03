@@ -5,8 +5,10 @@ PYTHON     := .venv/bin/python
 UVICORN    := .venv/bin/uvicorn
 PYTEST     := .venv/bin/pytest
 PORT       ?= 8010
-CORPUS_DIR := data/corpus/fastapi
-EVAL_DATA  := eval_data/fastapi_dataset.json
+CORPUS    ?= duckdb
+CORPUS_DIR := data/corpus/$(CORPUS)
+EVAL_DATA  ?= eval_data/duckdb_dataset.json
+NAMESPACE  ?= duckdb
 
 .PHONY: help install serve test test-unit test-integration \
         lint typecheck fetch-corpus ingest eval \
@@ -77,23 +79,23 @@ typecheck: ## Run mypy type checker
 
 # ── Corpus & eval ──────────────────────────────────────────────────────────────
 
-fetch-corpus: ## Download FastAPI docs into data/corpus/fastapi/
-	$(PYTHON) scripts/fetch_corpus.py --out $(CORPUS_DIR)
+fetch-corpus: ## Download the demo corpus (DuckDB 2.0 docs) into data/corpus/duckdb/
+	$(PYTHON) scripts/fetch_corpus.py --corpus $(CORPUS)
 
-ingest: ## Index the FastAPI corpus into Qdrant (requires OPENAI_API_KEY + Qdrant)
-	$(PYTHON) scripts/ingest.py $(CORPUS_DIR) --chunker recursive --verbose
+ingest: ## Index the demo corpus into Qdrant (requires OPENAI_API_KEY + Qdrant)
+	$(PYTHON) scripts/ingest.py $(CORPUS_DIR) --namespace $(NAMESPACE) --chunker recursive --verbose
 
 ingest-dry: ## Preview which files would be ingested (no API calls)
-	$(PYTHON) scripts/ingest.py $(CORPUS_DIR) --dry-run
+	$(PYTHON) scripts/ingest.py $(CORPUS_DIR) --namespace $(NAMESPACE) --dry-run
 
-eval: ## Run eval harness against the FastAPI question set (requires ingested corpus)
-	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name fastapi-v1
+eval: ## Run eval harness against the demo question set (requires ingested corpus)
+	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name duckdb-v1
 
 create-key: ## Create an API key: make create-key NAME="my app" EMAIL=me@example.com
 	$(PYTHON) scripts/create_key.py --name "$(NAME)" --email "$(EMAIL)" --rate-limit $(or $(RPM),60)
 
 eval-compare: ## Compare latest eval against a baseline (set BASELINE=path/to/report.json)
-	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name fastapi-v1 \
+	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --run-name duckdb-v1 \
 	  --compare $(BASELINE)
 
 compare-reports: ## Re-judge two stored reports, free (set A=... B=...)

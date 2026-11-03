@@ -53,7 +53,7 @@ judged ones on candidates.
 
 ## Building a dataset (`eval_data/`)
 
-`fastapi_dataset.json`: `{name, description, samples[]}` with
+`duckdb_dataset.json`: `{name, description, samples[]}` with
 `question`, `ground_truth_answer`, `relevant_doc_ids`, `metadata`. Good
 datasets have: a range of difficulty, questions phrased unlike the source
 text, some multi-hop, some *unanswerable* (to test refusal), and labels you

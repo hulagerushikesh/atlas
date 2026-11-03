@@ -7,6 +7,7 @@ test_fetch_corpus.py does it.
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import sys
 from pathlib import Path
@@ -89,3 +90,105 @@ class TestTheDestinationIsNamed:
         source = _SCRIPT.read_text()
         assert 'print(f"Writing to: {destination}")' in source
         assert 'print(f"Would write to: {destination}")' in source
+
+
+class TestTheCollectionNamedIsTheCollectionWritten:
+    """
+    The destination line named `QDRANT_COLLECTION_NAME`; the write goes to
+    `atlas_<namespace>`.
+
+    Until 2026-11-03 `main` built the banner from
+    `settings.qdrant.collection_name` while `_build_indexer` overrode that with
+    `namespace_to_collection(args.namespace)`. With the deployed `.env` -- where
+    `QDRANT_COLLECTION_NAME=atlas_chunks`, the live demo corpus -- a dry run for
+    a brand new namespace announced that it was about to write into the
+    collection serving the site. It was not, and never had been; the data was
+    always safe. The line that exists to answer "which Qdrant is the money
+    about to be spent on" simply answered with the wrong collection, and it is
+    the line a person reads before deciding whether to let the command run.
+
+    Found by swapping the demo corpus: the dry run claimed it would put DuckDB
+    pages into the FastAPI collection, which stopped the ingest for long enough
+    to look. The reverse mistake is the dangerous one -- a run that says it is
+    going somewhere harmless when it is not -- and the same single source of
+    truth prevents both.
+    """
+
+    def _dry_run_output(
+        self,
+        ing: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+        namespace: str,
+        configured_collection: str,
+    ) -> str:
+        import asyncio
+
+        import atlas.config as config
+
+        (tmp_path / "doc.md").write_text("# a document\n")
+        settings = config.get_settings().model_copy(
+            update={
+                "qdrant": config.get_settings().qdrant.model_copy(
+                    update={
+                        "collection_name": configured_collection,
+                        "url": "http://localhost:6333",
+                    }
+                )
+            }
+        )
+        monkeypatch.setattr(config, "get_settings", lambda: settings)
+
+        args = argparse.Namespace(
+            path=str(tmp_path),
+            namespace=namespace,
+            glob="**/*",
+            source_root=None,
+            chunker=None,
+            dry_run=True,
+            verbose=False,
+        )
+        assert asyncio.run(ing.main(args)) == 0
+        return capsys.readouterr().out
+
+    def test_the_dry_run_names_the_namespace_collection(
+        self,
+        ing: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        out = self._dry_run_output(
+            ing, monkeypatch, capsys, tmp_path,
+            namespace="duckdb", configured_collection="atlas_chunks",
+        )
+        assert "atlas_duckdb" in out
+
+    def test_the_dry_run_does_not_name_the_configured_collection(
+        self,
+        ing: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        # The mutation that matters: with the old code this line held
+        # `atlas_chunks`, the collection the write would never touch.
+        out = self._dry_run_output(
+            ing, monkeypatch, capsys, tmp_path,
+            namespace="duckdb", configured_collection="atlas_chunks",
+        )
+        assert "atlas_chunks" not in out
+
+    def test_it_tracks_the_namespace_rather_than_being_hardcoded(
+        self,
+        ing: Any,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: Path,
+    ) -> None:
+        out = self._dry_run_output(
+            ing, monkeypatch, capsys, tmp_path,
+            namespace="tenant-7", configured_collection="atlas_chunks",
+        )
+        assert "atlas_tenant-7" in out

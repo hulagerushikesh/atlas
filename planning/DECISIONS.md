@@ -2963,3 +2963,30 @@ Format: date — decision — alternatives — reason.
   instance keeps stale entries until the 1 h TTL expires them. Closing that
   needs the shared L2 `REDIS_URL` already supports, which is a standing cost
   and has not been priced.
+
+- **2026-11-03** — The demo corpus is the **DuckDB 2.0** SQL reference and
+  guides, pinned, in a new `duckdb` namespace. *Alt:* keep the FastAPI docs;
+  tune retrieval instead; write a corpus by hand. *Why:* the first outside user
+  reported that GitHub Copilot answered the demo's questions just as well, and
+  he was right — the FastAPI documentation is in the training data of every
+  frontier model, so retrieval could not be shown to add anything and no
+  tuning would have changed that. DuckDB 2.0 was released **2026-10-21**, after
+  the training cutoff of every model that serves this system, and its docs
+  record behaviour that *changed*: `X'CAFE'` is a `BLOB` where it was the
+  `VARCHAR` `'xCAFE'`, `B'0101'` is a `BITSTRING`, the PEG parser is the
+  default and `enable_peg_parser()` is "no longer required or available",
+  `CREATE TRIGGER` exists, a `STRUCT` may be empty, the `icu` extension no
+  longer depends on ICU, and a time zone name passed to a `WITHOUT TIME ZONE`
+  type is now ignored where it used to raise. So a model answering from memory
+  does not refuse, it answers the 1.x way with full confidence — strictly more
+  damning in a side-by-side than "I don't know", and visible in one question.
+  Rejected on licence before this: `modelcontextprotocol`, `temporalio` and
+  `zed` all carry `NOASSERTION`. Cost ₹0.83 to index, 226 files / 3,975 chunks
+  / 470,651 tokens.
+  Mechanics worth keeping: a new namespace rather than re-using `default`,
+  because `scripts/ingest.py` adds and has no wipe flag, so ingesting over
+  `default` would have left a silently mixed corpus whose dense and sparse
+  counts still agreed — the one inconsistency `verify_index.py` cannot see.
+  `fastapi` stays registered and indexed so the two can be compared, and
+  `eval_data/fastapi_dataset.json` and its reports stay as measurement
+  history: those numbers describe that corpus, not this one.

@@ -1,0 +1,222 @@
+{
+  "name": "duckdb_docs_v1",
+  "description": "16 developer questions over the DuckDB 2.0 SQL reference and guides (MIT license). relevant_doc_ids are corpus-relative paths without extension (see atlas.evaluation.doc_match). Every row was read back against the fetched corpus on 2026-11-03: each claim a ground_truth_answer makes is quoted or paraphrased from a labelled page, and no labelled page is there without a claim resting on it. This set replaces fastapi_docs_v1 for one reason, recorded in planning/DECISIONS.md: the FastAPI documentation is in every frontier model's training data, so retrieval could not be shown to add anything. DuckDB 2.0 was released on 2026-10-21, after the training cutoff of the models serving this system, and eleven of these rows turn on behaviour the documentation itself marks as changed in 2.0 -- a model answering from memory does not say it does not know, it gives the 1.x answer. metadata.pre_20_answer records that wrong answer wherever the row was chosen for it, so a regression in retrieval is visible as the model drifting back to it.",
+  "corpus_root": "data/corpus/duckdb",
+  "samples": [
+    {
+      "id": "dq-001",
+      "question": "What type does the literal X'CAFE' produce in DuckDB?",
+      "ground_truth_answer": "X'...' is a hex string literal and produces a BLOB value; the number of hex digits must be even. X'CAFE' is therefore a two-byte BLOB (202, 254). This changed in DuckDB 2.0: in earlier versions X'CAFE' was parsed as the VARCHAR string 'xCAFE'.",
+      "relevant_doc_ids": [
+        "sql/data_types/blob",
+        "sql/data_types/literal_types"
+      ],
+      "metadata": {
+        "category": "simple_factual",
+        "difficulty": "easy",
+        "pre_20_answer": "the VARCHAR string 'xCAFE'"
+      }
+    },
+    {
+      "id": "dq-002",
+      "question": "What type does the literal B'0101' produce in DuckDB?",
+      "ground_truth_answer": "B'...' is a bit string literal and produces a BITSTRING value (aliased BIT), a variable-length string of 1s and 0s. This changed in DuckDB 2.0: in earlier versions B'0101' was parsed as the VARCHAR string 'b0101'.",
+      "relevant_doc_ids": [
+        "sql/data_types/bitstring",
+        "sql/data_types/literal_types"
+      ],
+      "metadata": {
+        "category": "simple_factual",
+        "difficulty": "easy",
+        "pre_20_answer": "the VARCHAR string 'b0101'"
+      }
+    },
+    {
+      "id": "dq-003",
+      "question": "Does DuckDB support CREATE TRIGGER, and what events can a trigger fire on?",
+      "ground_truth_answer": "Yes. CREATE TRIGGER was introduced in DuckDB 2.0. It registers SQL statements that run automatically in response to INSERT, UPDATE or DELETE events on a table. Triggers can be FOR EACH STATEMENT, using REFERENCING OLD TABLE and NEW TABLE to expose the rows before and after the change as transition tables, or FOR EACH ROW, referring to the affected row through the NEW and OLD qualifiers.",
+      "relevant_doc_ids": [
+        "sql/statements/create_trigger"
+      ],
+      "metadata": {
+        "category": "simple_factual",
+        "difficulty": "easy",
+        "pre_20_answer": "that DuckDB has no trigger support at all"
+      }
+    },
+    {
+      "id": "dq-004",
+      "question": "Is there a single statement that installs a DuckDB extension and loads it at the same time?",
+      "ground_truth_answer": "Yes, INSTALL AND LOAD, introduced in DuckDB 2.0. It is equivalent to running INSTALL followed by LOAD; the installation step is skipped if the extension is already installed, and the loading step is skipped if it is already loaded. It supports the same clauses as INSTALL: it can be prefixed with FORCE and followed by a FROM clause to select the repository and a VERSION clause to select the version.",
+      "relevant_doc_ids": [
+        "sql/statements/load_and_install"
+      ],
+      "metadata": {
+        "category": "simple_factual",
+        "difficulty": "easy",
+        "pre_20_answer": "that you must run INSTALL and then LOAD as two separate statements"
+      }
+    },
+    {
+      "id": "dq-005",
+      "question": "Can a DuckDB schema contain another schema?",
+      "ground_truth_answer": "Yes. Support for nested schemas was introduced in DuckDB 2.0. A schema can be nested within another schema, and objects in a nested schema are referenced by their fully qualified, dot-separated path, for example CREATE SCHEMA finance; CREATE SCHEMA finance.reports; CREATE TABLE finance.reports.q3 (revenue DECIMAL).",
+      "relevant_doc_ids": [
+        "sql/statements/create_schema"
+      ],
+      "metadata": {
+        "category": "simple_factual",
+        "difficulty": "medium",
+        "pre_20_answer": "that schemas cannot nest, only catalog.schema.table three-part names exist"
+      }
+    },
+    {
+      "id": "dq-006",
+      "question": "How do you read the value of a session variable inside a DuckDB query?",
+      "ground_truth_answer": "With the getvariable function, or with the $name shorthand introduced in DuckDB 2.0. After SET VARIABLE my_var = 30, both getvariable('my_var') and $my_var return 30, so SELECT 20 + $my_var yields 50.",
+      "relevant_doc_ids": [
+        "sql/statements/set_variable"
+      ],
+      "metadata": {
+        "category": "simple_factual",
+        "difficulty": "medium",
+        "pre_20_answer": "that only getvariable() exists and $name is a prepared-statement parameter"
+      }
+    },
+    {
+      "id": "dq-007",
+      "question": "Which parser does DuckDB use by default, and how do you turn the PEG parser on?",
+      "ground_truth_answer": "The PEG parser is the default parser as of DuckDB 2.0, so there is nothing to turn on: in earlier versions it was an experimental, opt-in feature enabled with enable_peg_parser(), which is no longer required or available. It replaces the parser front end derived from PostgreSQL and enables better suggestions, improved error messages with precise source locations, and extensions that extend the grammar. Switching parsers did not change the SQL dialect. A related consequence is that extensions adding new syntax hook into the PEG grammar and must be opted into explicitly with SET active_grammar_extensions.",
+      "relevant_doc_ids": [
+        "sql/peg_parser",
+        "guides/sql_features/graph_queries"
+      ],
+      "metadata": {
+        "category": "multi_hop",
+        "difficulty": "hard",
+        "pre_20_answer": "call enable_peg_parser() to opt into the experimental parser"
+      }
+    },
+    {
+      "id": "dq-008",
+      "question": "Does DuckDB still need the ICU library to work with named time zones?",
+      "ground_truth_answer": "No. Starting with DuckDB 2.0 the icu extension no longer depends on the International Components for Unicode library: it implements time zones, calendars and collations natively, using time zone data built from the IANA time zone database. The extension keeps the name icu despite this, and is still what provides time zone name handling and the timezone function.",
+      "relevant_doc_ids": [
+        "sql/data_types/timestamp",
+        "guides/sql_features/timestamps"
+      ],
+      "metadata": {
+        "category": "multi_hop",
+        "difficulty": "hard",
+        "pre_20_answer": "that the icu extension bundles and depends on the ICU library"
+      }
+    },
+    {
+      "id": "dq-009",
+      "question": "How can you find out which columns of a DuckDB table are generated columns?",
+      "ground_truth_answer": "Through the metadata functions. duckdb_columns() exposes is_generated, a BOOLEAN that is true if the column is a generated column, and generation_expression, the expression used to compute it or NULL otherwise; both are available as of DuckDB 2.0. information_schema.columns exposes the same information with is_generated as a VARCHAR holding 'ALWAYS' or 'NEVER', plus generation_expression; those two columns were also introduced in DuckDB 2.0.",
+      "relevant_doc_ids": [
+        "sql/meta/duckdb_table_functions",
+        "sql/meta/information_schema"
+      ],
+      "metadata": {
+        "category": "multi_hop",
+        "difficulty": "medium",
+        "pre_20_answer": "that no is_generated column is exposed and you must parse the DDL"
+      }
+    },
+    {
+      "id": "dq-010",
+      "question": "Which statement should you use to inspect a table's schema in DuckDB, and what is wrong with the alternative?",
+      "ground_truth_answer": "Use DESCRIBE. SHOW can also show the schema of a table, view or query, but that usage is deprecated as of DuckDB 2.0 and prints a warning. DuckDB 2.0 also gave SHOW a new PostgreSQL-style job: printing a configuration setting when the name is not a table, so SHOW threads returns the thread count. If a table and a setting share a name, SHOW describes the table and prints the deprecation warning, while DESCRIBE never resolves a setting.",
+      "relevant_doc_ids": [
+        "sql/statements/describe",
+        "sql/statements/show"
+      ],
+      "metadata": {
+        "category": "multi_hop",
+        "difficulty": "medium",
+        "pre_20_answer": "that SHOW and DESCRIBE are interchangeable with no deprecation"
+      }
+    },
+    {
+      "id": "dq-011",
+      "question": "How do you list the triggers that exist in a DuckDB database?",
+      "ground_truth_answer": "With the duckdb_triggers() function, introduced in DuckDB 2.0, which provides metadata about the triggers available in the DuckDB instance. The triggers it reports are the ones registered with CREATE TRIGGER, itself new in 2.0.",
+      "relevant_doc_ids": [
+        "sql/meta/duckdb_table_functions",
+        "sql/statements/create_trigger"
+      ],
+      "metadata": {
+        "category": "multi_hop",
+        "difficulty": "medium",
+        "pre_20_answer": "that neither triggers nor a duckdb_triggers() function exist"
+      }
+    },
+    {
+      "id": "dq-012",
+      "question": "Can a DuckDB STRUCT type be empty, and is there anything about empty structs that still fails?",
+      "ground_truth_answer": "As of DuckDB 2.0 STRUCT types may be empty. The bare type name STRUCT denotes an empty struct, so both NULL::STRUCT and CREATE TABLE t (s STRUCT) are valid, and struct_pack() with no arguments returns {} -- whereas row() with no arguments returns the empty tuple (). Several things still fail: STRUCT() with empty parentheses remains a syntax error, unnest and struct_extract raise an error on an empty struct, and persisting an empty struct into a pre-2.0 database format is not supported.",
+      "relevant_doc_ids": [
+        "sql/data_types/struct"
+      ],
+      "metadata": {
+        "category": "negation_constraint",
+        "difficulty": "hard",
+        "pre_20_answer": "that a STRUCT must have at least one field, so all of these are errors"
+      }
+    },
+    {
+      "id": "dq-013",
+      "question": "If a string containing an IANA time zone name is cast to a TIMESTAMP WITHOUT TIME ZONE in DuckDB, does it raise an error?",
+      "ground_truth_answer": "No. Starting with DuckDB 2.0, time zone names in strings passed to a WITHOUT TIME ZONE type are ignored; in earlier versions, names other than UTC raised an error. UTC offsets and time zone specifications passed to a WITHOUT TIME ZONE type were already ignored before 2.0.",
+      "relevant_doc_ids": [
+        "sql/data_types/timestamp"
+      ],
+      "metadata": {
+        "category": "negation_constraint",
+        "difficulty": "hard",
+        "pre_20_answer": "that it raises a conversion error for any name other than UTC"
+      }
+    },
+    {
+      "id": "dq-014",
+      "question": "After you LOAD a DuckDB extension that adds new SQL syntax, is that syntax available straight away?",
+      "ground_truth_answer": "No. Starting with DuckDB 2.0, extensions that add new syntax hook into the grammar of the PEG parser and you have to opt in to an extension's grammar explicitly, with SET active_grammar_extensions. Installing and loading DuckPGQ is not enough to use CREATE PROPERTY GRAPH or GRAPH_TABLE; that needs SET active_grammar_extensions = ['duckpgq'].",
+      "relevant_doc_ids": [
+        "guides/sql_features/graph_queries",
+        "sql/peg_parser"
+      ],
+      "metadata": {
+        "category": "negation_constraint",
+        "difficulty": "hard",
+        "pre_20_answer": "that LOAD alone makes the extension's syntax usable"
+      }
+    },
+    {
+      "id": "dq-015",
+      "question": "How do I create a view that hides its underlying data, and grant specific users permission to read it?",
+      "ground_truth_answer": "Only the first half is answerable from this corpus. CREATE SECURE VIEW, introduced in DuckDB 2.0, creates a view that hides internals from functions such as stats() and EXPLAIN ANALYZE, as in CREATE SECURE VIEW users AS SELECT username FROM all_users WHERE access_level = 'standard'. Per-user permissions are a different matter: the corpus documents no GRANT statement, roles, or users, so access control of that kind is not something these pages describe. The correct answer gives the SECURE VIEW half and says the permission half is not covered.",
+      "relevant_doc_ids": [
+        "sql/statements/create_view"
+      ],
+      "metadata": {
+        "category": "partial_scope",
+        "difficulty": "hard",
+        "label_rationale": "Half in scope by design. SECURE VIEW is documented on the labelled page; SQL-level GRANT/roles/users are absent from the corpus -- verified 2026-11-03 by grep, whose only GRANT hit is prose about S3 credentials in guides/network_cloud_storage/duckdb_views_only.md, not a SQL statement. Retrieval should reach create_view; the answer should refuse the second half rather than invent a GRANT syntax."
+      }
+    },
+    {
+      "id": "dq-016",
+      "question": "How do I set up change-data-capture from DuckDB into Kafka so downstream consumers see every row mutation?",
+      "ground_truth_answer": "Out of scope. The corpus is the DuckDB 2.0 SQL reference and guides, which cover no Kafka integration, no change-data-capture, and no replication or streaming of mutations to an external system. The correct behaviour is the refusal sentence, not an answer assembled from the CREATE TRIGGER page, which is about running SQL inside the same database and is not a CDC mechanism.",
+      "relevant_doc_ids": [],
+      "metadata": {
+        "category": "out_of_scope",
+        "difficulty": "hard",
+        "out_of_scope": true,
+        "label_rationale": "A hard negative, not an easy one. Verified absent 2026-11-03 by grep over the fetched corpus: kafka, change data capture, change-data-capture, replicat, failover, multi-region, high availability and debezium all return zero hits. It is a hard negative because CREATE TRIGGER is new in 2.0, is genuinely about reacting to INSERT/UPDATE/DELETE, and is the page a retriever will surface -- so the row tests whether the router refuses rather than whether retrieval finds nothing."
+      }
+    }
+  ]
+}

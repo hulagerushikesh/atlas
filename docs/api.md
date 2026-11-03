@@ -620,7 +620,7 @@ run differs only in `exported_at`.
 {
   "schema": "atlas.run.v1",
   "exported_at": "2026-10-24T11:24:03.214Z",
-  "sheet": "fastapi",
+  "sheet": "duckdb",
   "question": "How does dependency caching work?",
   "phase": "done",              // done | refused | failed
   "failure": null,              // {what, why} when phase is "failed"

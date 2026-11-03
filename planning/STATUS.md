@@ -56,6 +56,39 @@ worse than `concat` — held, and for the mechanism it named. See DECISIONS
 2026-10-17 and 2026-10-18. Cost: **₹12.55** on the 17th, **₹6.94** on the
 18th, **₹19.49** total.
 
+## Demo corpus — swapped 2026-11-03
+
+The live demo corpus is the **DuckDB 2.0** SQL reference and guides: 226 files,
+3,975 chunks, namespace `duckdb`, pin `0f7f0f4e`, MIT. `ROUTER_DOMAIN` and
+`ROUTER_DOMAIN_NAMESPACE` name it in both `.env` and `scripts/deploy_gcp.sh`,
+and those two strings must stay identical or a local eval measures a different
+router from the one production runs.
+
+Why, in one line: the first outside user said Copilot answered the FastAPI demo
+questions just as well, and he was right — those docs are in every model's
+training data. DuckDB 2.0 shipped 2026-10-21, after every current model's
+cutoff, and its pages record behaviour that *changed*, so a model answering
+from memory is confidently wrong rather than merely ignorant. Full reasoning in
+`planning/DECISIONS.md`.
+
+Cost: **Rs.6.21** to index — 470,651 tokens at $0.15/1M for
+`gemini-embedding-001`, measured, 144 s. Worth recording that this was quoted
+at Rs.0.81 beforehand: the estimate used the `text-embedding-3-small` rate of
+$0.02/1M from `src/atlas/cost.py` instead of the Gemini one in the same dict,
+7.7x low. Price an embedding job against `_EMBEDDING_PRICES[OPENAI_EMBEDDING_MODEL]`,
+not against whichever rate comes to mind.
+
+The FastAPI corpus is **not** retired destructively: `fastapi` stays in the
+`scripts/fetch_corpus.py` registry, `atlas_chunks` stays indexed under
+namespace `default`, and `eval_data/fastapi_dataset.json` plus its reports stay
+as measurement history. The 0.7105/1.0000 figures belong to that corpus and
+must not be quoted for this one. `make ingest CORPUS=fastapi NAMESPACE=default`
+rebuilds it.
+
+Not yet done: no eval has been run on `eval_data/duckdb_dataset.json`, so
+**there are no quotable quality numbers for the live corpus**, and the README's
+Results section carries a banner saying so. A run is about Rs.6.
+
 ## One line
 
 **M2 is done and shipped: https://atlas.hulage.in is live and current** —
