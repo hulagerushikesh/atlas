@@ -116,7 +116,12 @@ export type StreamEvent =
   // UI can show "checking" instead of guessing. Optional, because a server
   // older than the verdict event does not send it: absent reads as false,
   // and the client then behaves exactly as it did before.
-  | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean | null; answer?: string; verdict_pending?: boolean }
+  //
+  // `cached` is present only when the whole stream was replayed from the
+  // query cache. Worth surfacing rather than swallowing: a replayed answer
+  // was produced against the corpus as it stood up to an hour ago, and the
+  // stage timings in that stream are the original run's, not this one's.
+  | { type: "done"; classification: string; citations: Citation[]; is_faithful: boolean | null; answer?: string; verdict_pending?: boolean; cached?: boolean }
   // The faithfulness verdict, sent after `done` because the check runs once
   // the answer is already on screen. Nulls mean no verdict was reached --
   // the answer was a refusal, or the judge itself failed -- which is not the
