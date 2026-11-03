@@ -9,20 +9,32 @@ Design rationale:
     Stage timings are recorded with perf_counter() at each await boundary so
     they reflect actual wall-clock latency including any event-loop wait time.
 
-    Streaming: bypass the cache (can't cache a stream), call
-    AnswerGenerator.stream() directly — which skips the faithfulness check
-    because we don't have the full answer until the stream ends. We return a
-    StreamingResponse with media_type="text/event-stream" and yield SSE-format
+    Streaming: call AnswerGenerator.stream() directly and return a
+    StreamingResponse with media_type="text/event-stream", yielding SSE-format
     events. The final event carries citation metadata as a JSON payload so
-    clients can render the reference list without a second request.
+    clients can render the reference list without a second request. The
+    faithfulness check runs after the answer is delivered and arrives as a
+    separate `verdict` event.
 
     Cache integration: an entry is keyed by namespace *and* lower-cased query,
     so the same question put to two corpora gets two answers, and an ingest can
     drop one corpus's entries without touching another's. On a cache
     hit we short-circuit the entire pipeline and return in <1ms. Cache misses
     run the full pipeline; on completion the result is serialised and cached.
-    We do NOT cache streaming responses — the overhead of buffering the stream
-    to serialise it defeats the point of streaming.
+
+    Both modes use the cache, as of 2026-11-03. Streaming did not, on the
+    stated grounds that caching a stream means buffering it and buffering
+    defeats streaming. Both halves of that were wrong. This path already
+    buffers the whole answer — `full_answer` is built to map citations and
+    again to check faithfulness — so the entry costs a `json.dumps` and no
+    added latency. And the console streams by default, so the exemption did
+    not spare the cache a narrow case: it meant no real query ever read or
+    wrote it. The first outside user's session recorded zero cache hits across
+    five queries, which reads as a broken cache and was a cache nothing asked.
+    A finished stream is now stored in the same `QueryResponse` shape the
+    non-streaming path stores, so one entry serves either mode, and a hit is
+    replayed as a synthetic stream by `_replay_stream` — same event sequence,
+    no model calls, ~0.1s instead of ~8s, and free.
 
     Token tracking: the request runs inside a `usage_scope()`, so every
     model call it makes is counted where it is made — router, decomposer,
@@ -45,6 +57,7 @@ import asyncio
 import json
 import time
 from collections.abc import AsyncIterator
+from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
@@ -76,6 +89,15 @@ router = APIRouter()
 
 # Enough to recognise the passage; the full chunk is one click away.
 _EXCERPT_CHARS = 320
+
+# Hoisted out of the streaming branch because it is now sent in an event *and*
+# stored as a cache entry's `answer`. Inline in both places, the two would
+# drift, and a refusal replayed from cache would not match the one a live
+# refusal sends.
+_OUT_OF_SCOPE_ANSWER = (
+    "This question appears to be outside the scope of the knowledge base. "
+    "Please ask a question related to the available documentation."
+)
 
 
 def _evidence_response(
@@ -230,6 +252,191 @@ async def _charge(
     return cost
 
 
+@dataclass
+class _StreamCapture:
+    """What a stream remembers about itself, so a finished one can be cached.
+
+    The streaming path never built a `PipelineResult`, which is what
+    `_build_response` turns into the cacheable payload — the stages are run
+    one at a time here so each can be announced as it lands. Rather than
+    assemble a fake result, each stage records what it produced into this, and
+    `_cache_entry` turns it into the same `QueryResponse` the non-streaming
+    path caches. Shape parity is the point: an entry written by a streamed
+    query has to serve a non-streamed one, and `QueryResponse.model_validate`
+    on the way out would reject anything less.
+
+    `complete` is the one field that is not data. Only a run that reached the
+    end sets it, so a stream that threw at generation, or whose judge fell
+    over, is not written — a half-written answer in the cache is worse than no
+    cache, and an answer stored with a null verdict because the checker
+    glitched would keep saying "unchecked" for the whole TTL. The
+    non-streaming path has the same property for free: a pipeline that raises
+    never reaches `cache.set`.
+    """
+
+    query: str = ""
+    complete: bool = False
+    answer: str = ""
+    classification: str = ""
+    sub_queries: list[str] = field(default_factory=list)
+    citations: list[dict[str, Any]] = field(default_factory=list)
+    retrieved_chunk_ids: list[str] = field(default_factory=list)
+    evidence: list[EvidenceResponse] = field(default_factory=list)
+    grader_score: float | None = None
+    is_faithful: bool | None = None
+    faithfulness_score: float | None = None
+    unsupported_claims: list[str] = field(default_factory=list)
+    stage_ms: dict[str, float] = field(default_factory=dict)
+
+
+def _cache_entry(
+    capture: _StreamCapture, usage: UsageMeter, total_ms: float
+) -> dict[str, Any]:
+    """Turn a finished stream into the payload the cache stores.
+
+    Built through `QueryResponse` rather than as a hand-written dict so the
+    entry is validated at write time, where the stack trace points at the
+    stage that filled the field in. A dict assembled by hand passes
+    `json.dumps` and fails `model_validate` an hour later, on a cache *hit*,
+    in a request that has nothing to do with the one that wrote it.
+
+    `grader_retries` is 0 and `hypotheses` empty because this path runs
+    neither — no grader retry loop, no HyDE. Stated rather than omitted: the
+    defaults would supply the same values, but silently, and a reader
+    comparing a streamed entry with a non-streamed one needs to know these are
+    facts about the path and not fields nobody filled in.
+    """
+    by_model = usage.by_model
+    prompt_tokens = sum(u.prompt_tokens for u in by_model.values())
+    completion_tokens = sum(u.completion_tokens for u in by_model.values())
+    return QueryResponse(
+        query=capture.query,
+        answer=capture.answer,
+        classification=capture.classification,
+        citations=[CitationResponse(**c) for c in capture.citations],
+        is_faithful=capture.is_faithful,
+        faithfulness_score=capture.faithfulness_score,
+        retrieved_chunk_ids=capture.retrieved_chunk_ids,
+        timings=_stage_timings(capture.stage_ms, total_ms),
+        token_usage=TokenUsage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=prompt_tokens + completion_tokens,
+            estimated_cost_usd=estimate_usage_cost(by_model),
+        ),
+        grader_retries=0,
+        cached=False,
+        sub_queries=capture.sub_queries,
+        grader_score=capture.grader_score,
+        unsupported_claims=capture.unsupported_claims,
+        evidence=capture.evidence,
+        hypotheses=[],
+    ).model_dump()
+
+
+async def _replay_stream(payload: dict[str, Any]) -> AsyncIterator[str]:
+    """Replay a cached answer as a stream, so a hit costs nothing and renders.
+
+    A cache hit on this path could have returned the answer in one event, but
+    then a repeated question would lose the stage strip, the evidence trail
+    and the verdict badge — every part of the console that exists to show how
+    the answer was reached. The reader would see a trust instrument that goes
+    blank on the second ask. So a hit emits the same event sequence a live run
+    does, from stored values, and the client needs no branch for it.
+
+    Two deliberate departures from a live run. The stage timings are the
+    original run's, not this replay's, because they describe how the answer
+    was produced and a row of zeros would describe nothing; the client's own
+    total is measured locally and correctly shows ~0.1s. And `done` still
+    carries `is_faithful: null` with the verdict following in its own event,
+    even though both are known here — one contract for live and replayed
+    streams is worth more than saving an event.
+
+    `grading` omits `sufficient`: a `QueryResponse` does not store it, and the
+    console only renders that field when it is explicitly false, so leaving it
+    out loses nothing and inventing it would assert something unrecorded.
+    """
+    def _evt(data: dict[str, Any]) -> str:
+        return f"data: {json.dumps(data)}\n\n"
+
+    timings = payload.get("timings") or {}
+    classification = payload.get("classification") or "simple"
+
+    yield _evt({"type": "stage", "name": "routing", "status": "start"})
+    yield _evt({"type": "stage", "name": "routing", "status": "done",
+                "classification": classification, "ms": timings.get("routing_ms")})
+
+    if classification == "out_of_scope":
+        yield _evt({"type": "done", "classification": "out_of_scope",
+                    "answer": payload.get("answer") or _OUT_OF_SCOPE_ANSWER,
+                    "citations": [], "is_faithful": None,
+                    "verdict_pending": False, "cached": True})
+        yield "data: [DONE]\n\n"
+        return
+
+    sub_queries = payload.get("sub_queries") or []
+    if len(sub_queries) > 1:
+        yield _evt({"type": "stage", "name": "decompose", "status": "start"})
+        yield _evt({"type": "stage", "name": "decompose", "status": "done",
+                    "sub_queries": len(sub_queries),
+                    "ms": timings.get("decompose_ms")})
+
+    yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
+    yield _evt({"type": "stage", "name": "retrieval", "status": "done",
+                "chunks": len(payload.get("retrieved_chunk_ids") or []),
+                "ms": timings.get("retrieval_ms"),
+                "evidence": payload.get("evidence") or []})
+
+    yield _evt({"type": "stage", "name": "grading", "status": "start"})
+    yield _evt({"type": "stage", "name": "grading", "status": "done",
+                "score": payload.get("grader_score"),
+                "ms": timings.get("grading_ms")})
+
+    yield _evt({"type": "stage", "name": "generation", "status": "start"})
+    # One delta, not a re-typed answer. The typing effect exists because the
+    # tokens arrive that way; faking it here would spend the latency the cache
+    # just saved in order to look like the slow path.
+    yield _evt({"type": "delta", "text": payload.get("answer") or ""})
+
+    has_verdict = (
+        payload.get("is_faithful") is not None
+        or payload.get("faithfulness_score") is not None
+    )
+    yield _evt({"type": "done", "classification": classification,
+                "citations": payload.get("citations") or [],
+                "is_faithful": None, "verdict_pending": has_verdict,
+                "cached": True})
+    if has_verdict:
+        yield _evt({"type": "verdict",
+                    "is_faithful": payload.get("is_faithful"),
+                    "score": payload.get("faithfulness_score"),
+                    "unsupported_claims": payload.get("unsupported_claims") or [],
+                    "ms": timings.get("faithfulness_ms") or 0})
+    yield "data: [DONE]\n\n"
+
+
+def _log_cache_hit(request: Request, namespace: str) -> None:
+    """Record a cache hit against the caller's key, from either query path.
+
+    One function for both because the last copy of this block was the bug:
+    it referenced `_auth` from a sibling branch's local import and raised
+    UnboundLocalError on every authenticated request that took the other
+    branch. Two call sites, one import.
+    """
+    api_key_id = getattr(request.state, "api_key_id", None)
+    if api_key_id is None:
+        return
+    from atlas.api import auth as _auth  # noqa: PLC0415 — circular at module scope
+
+    spawn(
+        _auth.log_usage(
+            api_key_id=api_key_id, namespace=namespace,
+            prompt_tokens=0, completion_tokens=0, latency_ms=0, cache_hit=True,
+        ),
+        name="log_usage_cache_hit",
+    )
+
+
 async def _stream_query(
     query: str,
     pipeline: RAGPipeline,
@@ -238,6 +445,7 @@ async def _stream_query(
     *,
     api_key_id: str | None = None,
     namespace: str = "default",
+    cache: QueryCache | None = None,
 ) -> AsyncIterator[str]:
     """Stream the answer, and charge the daily cap for the whole request.
 
@@ -278,6 +486,12 @@ async def _stream_query(
     """
     usage = UsageMeter()
     t_total = time.perf_counter()
+    # Filled in stage by stage as the events go out, and written to the cache
+    # below if the run reaches the end. Created here rather than inside
+    # `_stream_events` because the cache write needs the request-level clock
+    # and meter that live out here, and because a generator that was torn down
+    # mid-flight still has to leave its capture behind to be inspected.
+    capture = _StreamCapture(query=query)
     # Which stage was in flight when it broke. Read back off the events being
     # forwarded rather than passed down as a mutable argument: every stage
     # already announces itself with a `status: "start"`, so the wrapper knows
@@ -289,7 +503,7 @@ async def _stream_query(
     # `except` would find nothing.
     request_id = _request_id()
     try:
-        async for event in _stream_events(query, pipeline, usage, chat_model):
+        async for event in _stream_events(query, pipeline, usage, chat_model, capture):
             if '"status": "start"' in event:
                 stage = json.loads(event[len("data: "):]).get("name", stage)
             yield event
@@ -330,6 +544,17 @@ async def _stream_query(
     total_ms = (time.perf_counter() - t_total) * 1000
     cost = await _charge(usage, spend, api_key_id=api_key_id,
                          namespace=namespace, latency_ms=total_ms)
+
+    # Fire-and-forget, like the non-streaming path's write: the client has the
+    # whole answer already, and nothing it does next should wait on Redis.
+    # Guarded on `complete` so only a run that finished and got a verdict is
+    # stored — see `_StreamCapture`.
+    if cache is not None and capture.complete:
+        spawn(
+            cache.set(query, _cache_entry(capture, usage, total_ms), namespace),
+            name="cache_set_stream",
+        )
+
     # Same event name as the non-streaming path, with `stream` to tell them
     # apart. One name is the point: a p95 of cost / query mined from these
     # lines has to cover every query, and the last time these two paths
@@ -350,6 +575,7 @@ async def _stream_events(
     pipeline: RAGPipeline,
     usage: UsageMeter,
     chat_model: str = "unknown",
+    capture: _StreamCapture | None = None,
 ) -> AsyncIterator[str]:
     """
     Streaming path: route → decompose? → retrieve → grade → stream tokens.
@@ -387,11 +613,18 @@ async def _stream_events(
     def _evt(data: dict[str, Any]) -> str:
         return f"data: {json.dumps(data)}\n\n"
 
+    # Defaulted rather than required so this stays callable on its own, in a
+    # test that only wants the event sequence. The discarded capture is the
+    # honest outcome there: nothing holds it, so nothing can be cached from it.
+    cap = capture if capture is not None else _StreamCapture(query=query)
+
     # ── Stage 1: Route ─────────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "routing", "status": "start"})
     t0 = time.perf_counter()
     classification = await counted(usage, pipeline._router.classify(query))
     routing_ms = round((time.perf_counter() - t0) * 1000)
+    cap.classification = classification
+    cap.stage_ms["routing"] = routing_ms
     yield _evt({"type": "stage", "name": "routing", "status": "done",
                 "classification": classification, "ms": routing_ms})
 
@@ -400,10 +633,15 @@ async def _stream_events(
         # nothing and cites nothing, so there is no sense in which it passed
         # one -- and `true` here is indistinguishable, to any client, from a
         # verified answer.
+        # Cached like any other answer. A refusal is the cheapest entry in the
+        # cache and the most repeated question in a demo — "what is the capital
+        # of France?" is what people try first — and it still costs a routing
+        # call to produce. `is_faithful` stays null: the entry records that
+        # nothing was checked, which is what a refusal grounds.
+        cap.answer = _OUT_OF_SCOPE_ANSWER
+        cap.complete = True
         yield _evt({"type": "done", "classification": "out_of_scope",
-                    "answer": "This question appears to be outside the scope "
-                    "of the knowledge base. "
-                              "Please ask a question related to the available documentation.",
+                    "answer": _OUT_OF_SCOPE_ANSWER,
                     "citations": [], "is_faithful": None,
                     "verdict_pending": False})
         yield "data: [DONE]\n\n"
@@ -415,40 +653,60 @@ async def _stream_events(
         yield _evt({"type": "stage", "name": "decompose", "status": "start"})
         t0 = time.perf_counter()
         sub_queries = await counted(usage, pipeline._decomposer.decompose(query))
+        cap.stage_ms["decompose"] = round((time.perf_counter() - t0) * 1000)
         yield _evt({"type": "stage", "name": "decompose", "status": "done",
                     "sub_queries": len(sub_queries),
-                    "ms": round((time.perf_counter() - t0) * 1000)})
+                    "ms": cap.stage_ms["decompose"]})
+    cap.sub_queries = list(sub_queries)
 
     # ── Stage 3: Retrieve ──────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
     t0 = time.perf_counter()
     retrieval = await counted(usage, pipeline._retrieve_all(sub_queries, query))
     chunks = retrieval.chunks
+    cap.stage_ms["retrieval"] = round((time.perf_counter() - t0) * 1000)
+    cap.retrieved_chunk_ids = [c.chunk_id for c in chunks]
     # Evidence goes out as soon as retrieval finishes so the client can
-    # render the trail while generation is still streaming.
+    # render the trail while generation is still streaming. The citation map
+    # is empty here because nothing has been generated yet; the cache entry
+    # gets the same list again below, once the numbers are known.
     yield _evt({"type": "stage", "name": "retrieval", "status": "done",
-                "chunks": len(chunks), "ms": round((time.perf_counter() - t0) * 1000),
+                "chunks": len(chunks), "ms": cap.stage_ms["retrieval"],
                 "evidence": [e.model_dump() for e in _evidence_response(retrieval.evidence, {})]})
 
     # ── Stage 4: Grade (fast, worth the latency for quality signal) ────────────
     yield _evt({"type": "stage", "name": "grading", "status": "start"})
     t0 = time.perf_counter()
     sufficient, score, _ = await counted(usage, pipeline._grader.grade(query, chunks))
+    cap.stage_ms["grading"] = round((time.perf_counter() - t0) * 1000)
+    # Unrounded in the entry, rounded in the event: the event is a label on a
+    # stage strip, the entry is what a non-streaming reader gets back as
+    # `grader_score`, and that path does not round either.
+    cap.grader_score = score
     yield _evt({"type": "stage", "name": "grading", "status": "done",
                 "score": round(score, 2), "sufficient": sufficient,
-                "ms": round((time.perf_counter() - t0) * 1000)})
+                "ms": cap.stage_ms["grading"]})
 
     # ── Stage 5: Generate (stream tokens) ─────────────────────────────────────
     yield _evt({"type": "stage", "name": "generation", "status": "start"})
+    t0 = time.perf_counter()
     full_answer = ""
     async for delta in pipeline._generator.stream(query, chunks):
         full_answer += delta
         yield _evt({"type": "delta", "text": delta})
+    # Timed server-side for the first time here. The console measures this
+    # stage off its own clock, which is right for a live run and impossible
+    # for a replayed one — a cached entry has to carry the number.
+    cap.stage_ms["generation"] = round((time.perf_counter() - t0) * 1000)
+    cap.answer = full_answer
 
     # Build citation map from the completed answer
     from atlas.orchestration.generator import _CITATION_RE
     cited_indices = {int(m) for m in _CITATION_RE.findall(full_answer)}
-    citations = []
+    # Annotated because the entry is also read back out of here to build the
+    # citation map for the cache entry, and an inferred dict[str, object] makes
+    # that comprehension untypeable.
+    citations: list[dict[str, Any]] = []
     for idx in sorted(cited_indices):
         if 1 <= idx <= len(chunks):
             chunk = chunks[idx - 1]
@@ -458,6 +716,14 @@ async def _stream_events(
                 "source": chunk.metadata.source,
                 "page_number": chunk.metadata.page_number,
             })
+    cap.citations = citations
+    # Rebuilt with the citation numbers in place, which the event sent before
+    # generation could not have. A cached entry read back by a non-streaming
+    # client has to carry them: that path fills `evidence[].citation`, and an
+    # entry that left it null would make a cited passage look uncited.
+    cap.evidence = _evidence_response(
+        retrieval.evidence, {c["chunk_id"]: c["number"] for c in citations}
+    )
 
     # The stream carries no usage block, so this one call is approximated at
     # ~4 chars/token and recorded into the same meter as the measured ones.
@@ -481,6 +747,10 @@ async def _stream_events(
     yield _evt({"type": "done", "classification": classification,
                 "citations": citations, "is_faithful": None,
                 "verdict_pending": checking})
+
+    # Cacheable from here: the answer is complete, cited and sent. The judge
+    # below can revoke it, and nothing else can.
+    cap.complete = True
 
     # ── Stage 6: Check (after `done`, so the reader waits for none of it) ─────
     if checking:
@@ -508,8 +778,18 @@ async def _stream_events(
                            error_type=type(exc).__name__)
             payload = {"type": "verdict", "is_faithful": None, "score": None,
                        "unsupported_claims": []}
+            # Not cached. The answer is fine and the reader keeps it, but an
+            # entry stored now would serve "unchecked" to everyone who asks
+            # this question for the next hour, off one transient judge
+            # failure. Re-running the pipeline to get a real verdict costs a
+            # query; caching a missing one costs the claim the product makes.
+            cap.complete = False
         payload["ms"] = round((time.perf_counter() - t0) * 1000)
         yield _evt(payload)
+        cap.is_faithful = payload["is_faithful"]
+        cap.faithfulness_score = payload["score"]
+        cap.unsupported_claims = list(payload["unsupported_claims"])
+        cap.stage_ms["faithfulness"] = payload["ms"]
 
     # The out-of-scope branch above has always sent this and the success path
     # never did, so a client could not tell "finished" from "socket closed"
@@ -586,6 +866,32 @@ async def query(
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
+        # Checked before the cap and before the reconcile, for the same reason
+        # the non-streaming path checks it there: a hit calls no model, so it
+        # owes the cap nothing, and it retrieves nothing, so it does not need
+        # the keyword index to be current.
+        cached_payload = await cache.get(body.query, body.namespace)
+        if cached_payload is not None:
+            log.info("query_cache_hit", stream=True)
+            _log_cache_hit(request, body.namespace)
+            return StreamingResponse(
+                _replay_stream(cached_payload),
+                media_type="text/event-stream",
+                # `deferred` / `disabled` by what this response will actually
+                # send, which is what the header means to a client waiting on
+                # a verdict event — not by whether the checker is enabled now.
+                # An entry stored before the check existed carries no verdict,
+                # and promising one would leave a reader waiting for an event
+                # that is never coming.
+                headers={"X-Faithfulness": (
+                             "deferred"
+                             if cached_payload.get("faithfulness_score") is not None
+                             or cached_payload.get("is_faithful") is not None
+                             else "disabled"
+                         ),
+                         "X-Namespace": body.namespace,
+                         "X-Cache": "hit"},
+            )
         await _enforce_budget(app_state.spend)
         # Half of retrieval is this process's own keyword index, and it is a
         # cache of Qdrant rather than a second copy of record. Reconcile
@@ -599,6 +905,7 @@ async def query(
                 body.query, pipeline, app_state.spend, app_state.chat_model,
                 api_key_id=getattr(request.state, "api_key_id", None),
                 namespace=body.namespace,
+                cache=cache,
             ),
             media_type="text/event-stream",
             # Was "skipped-streaming", which stopped being true on
@@ -610,7 +917,8 @@ async def query(
             headers={"X-Faithfulness": (
                          "deferred" if pipeline._faithfulness.enabled else "disabled"
                      ),
-                     "X-Namespace": body.namespace},
+                     "X-Namespace": body.namespace,
+                     "X-Cache": "miss"},
         )
 
     # ── Standard path ─────────────────────────────────────────────────────────
@@ -623,16 +931,7 @@ async def query(
         log.info("query_cache_hit")
         response = QueryResponse.model_validate(cached_payload)
         response.cached = True
-        from atlas.api import auth as _auth
-        api_key_id = getattr(request.state, "api_key_id", None)
-        if api_key_id is not None:
-            spawn(
-                _auth.log_usage(
-                    api_key_id=api_key_id, namespace=body.namespace,
-                    prompt_tokens=0, completion_tokens=0, latency_ms=0, cache_hit=True,
-                ),
-                name="log_usage_cache_hit",
-            )
+        _log_cache_hit(request, body.namespace)
         return response
 
     # Cache hits are free, so the cap is checked only once we know we will

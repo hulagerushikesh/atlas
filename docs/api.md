@@ -143,8 +143,16 @@ after the answer**, not instead of it: the answer streams to the client, and the
 verdict follows in a separate `verdict` event once the check finishes. The reader
 therefore waits for the answer and not for the audit. The `X-Faithfulness`
 response header says which to expect — `deferred` when a `verdict` event is
-coming, `disabled` when the checker is off and none will be sent. (It read
-`skipped-streaming` before 2026-10-25, when the check genuinely did not run here.)
+coming, `disabled` when none will be sent. (It read `skipped-streaming` before
+2026-10-25, when the check genuinely did not run here.)
+
+`X-Cache` is `hit` or `miss`. On a hit the whole sequence below is replayed from the
+cached entry — same stages, same evidence, same verdict, no model calls — and `done`
+carries `cached: true`, which is how a client tells a replayed answer from a fresh one.
+The stage timings in a replay are the original run's, because they describe how the
+answer was produced; a client measuring its own total correctly sees a fraction of
+them. A replayed entry carries no verdict only if it was stored before the check
+existed, in which case the header reads `disabled` and no `verdict` event follows.
 
 Every event is one `data:` line holding a JSON object with a `type`. Clients
 concatenate `delta.text` to rebuild the answer and can render each stage as it
@@ -158,7 +166,7 @@ lands.
 | `stage` | `{"type":"stage","name":"retrieval","status":"done","chunks":15,"ms":840,"evidence":[…]}` | evidence ships before generation, so the trail renders while tokens stream |
 | `stage` | `{"type":"stage","name":"grading","status":"done","score":0.82,"sufficient":true,"ms":390}` | grading finished |
 | `delta` | `{"type":"delta","text":"…"}` | one token span |
-| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":null,"verdict_pending":true}` | the answer is complete. `is_faithful` is **always `null` here** — at the moment this is sent, nothing has been checked yet. Null means *unchecked*, not *failed*. `verdict_pending` says whether a `verdict` event follows; it is absent on servers older than 2026-10-25, which reads as false |
+| `done`  | `{"type":"done","classification":"simple","citations":[…],"is_faithful":null,"verdict_pending":true}` | the answer is complete. `is_faithful` is **always `null` here** — at the moment this is sent, nothing has been checked yet, and on a replay it stays null so live and cached streams have one shape. Null means *unchecked*, not *failed*. `verdict_pending` says whether a `verdict` event follows; it is absent on servers older than 2026-10-25, which reads as false. `cached: true` is present only on a replay |
 | `verdict` | `{"type":"verdict","is_faithful":true,"score":1.0,"unsupported_claims":[],"ms":2140}` | the faithfulness check finished, after the answer. `is_faithful` and `score` are `null` when no verdict was reached — the answer was a refusal, or the judge itself failed — which is *unchecked*, not a failed check |
 | `error` | `{"type":"error","error":"…","stage":"grading","request_id":"…"}` | the pipeline threw after streaming began. A judge that throws does **not** produce one of these: the answer is already delivered, so the failure degrades to a null verdict instead of destroying it |
 
@@ -489,12 +497,26 @@ over capacity. O(1) for all operations.
 logged as warnings. The cache continues to work at L1 only — the pipeline is never
 blocked by a Redis outage.
 
-**What is NOT cached**: streaming responses (buffering defeats streaming) and ingest
-results (cheap to recompute, idempotent).
+**Streaming is cached too**, since 2026-11-03. It was exempt before, on the grounds
+that caching a stream means buffering it and buffering is what streaming avoids. Both
+halves were wrong: this path already buffers the whole answer (once to map citations,
+once to check faithfulness), and the console streams by default — so the exemption was
+not narrow, it meant no real query read or wrote the cache at all. A finished stream is
+stored as the same `QueryResponse` the non-streaming path stores, so one entry serves
+either mode, and a hit is replayed as a synthetic stream: same events, no model calls.
 
-**Cache invalidation**: TTL-based only (default 1 hour). For content changes that
-should immediately invalidate cached answers, call `cache.clear()` or add an ingest
-completion hook.
+**What is NOT cached**: ingest results (cheap to recompute, idempotent); a stream that
+died mid-answer; and a stream whose faithfulness judge threw. The last one is a
+deliberate trade — the answer is kept and delivered, but an entry stored with a null
+verdict would serve "unchecked" for the rest of the TTL off one transient failure, so
+the next ask re-runs and gets a real verdict instead.
+
+**Cache invalidation**: both ingest endpoints call `invalidate_namespace` after a
+successful index, scoped to the namespace written to, plus the TTL (default 1 hour) as
+the backstop. One caveat, stated rather than implied: L1 is per-process and Cloud Run
+runs with `REDIS_URL=""` and `--max-instances 2`, so an ingest served by one instance
+cannot reach the other's memory, and that one keeps its entries until the TTL expires
+them. Closing it properly needs the shared L2 that `REDIS_URL` already supports.
 
 ---
 

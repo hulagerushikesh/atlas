@@ -21,10 +21,22 @@ Design rationale:
     fixed-width hash has neither problem. top_k is deliberately absent — it
     varies rarely and the caller can truncate the cached chunk list.
 
+    Streaming populates this too, as of 2026-11-03. The rule here used to be
+    that it could not: caching a stream means buffering it, and buffering is
+    what streaming exists to avoid. Both halves were wrong. The streaming path
+    already buffers the whole answer — once to map citations, once to check
+    faithfulness — so an entry costs a `json.dumps`. And the console streams by
+    default, which made the exemption total rather than narrow: no real query
+    read or wrote this cache at all. The first outside user's five queries
+    recorded zero hits, which looks exactly like a cache that is broken and was
+    a cache that nothing ever asked.
+
     When to NOT cache:
-      - Streaming requests (we cache the complete response, streaming is
-        unsuitable for cache population because we'd need to buffer the stream)
       - Ingest results (idempotent by design, cheap to recompute)
+      - A stream that did not finish, or whose faithfulness check failed. A
+        half-written answer is worse in the cache than absent, and an entry
+        stored with a null verdict would answer "unchecked" for the rest of the
+        TTL on the strength of one transient judge failure.
 
     Cache invalidation: both endpoints in `routes/ingest.py` call
     `invalidate_namespace` after a successful index, because a corpus that
