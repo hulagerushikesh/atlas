@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { postIngest, postUpload } from "@/lib/api"
 import { fmt, useAtlas } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { WhatIsThis } from "@/components/WhatIsThis"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
@@ -84,7 +85,7 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
       className="relative flex h-full shrink-0 flex-col overflow-hidden border-r bg-sidebar"
     >
       <div className={cn("flex h-10 shrink-0 items-center border-b px-2", collapsed ? "justify-center" : "justify-between pl-4")}>
-        {!collapsed && <span className="label">Corpus</span>}
+        {!collapsed && <span className="label inline-flex items-center gap-1.5">Corpus<WhatIsThis pane="corpus" /></span>}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" className="press" onClick={onToggle} aria-label={collapsed ? "Expand corpus" : "Collapse corpus"}>

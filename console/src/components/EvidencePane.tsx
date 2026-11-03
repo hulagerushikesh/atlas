@@ -7,12 +7,56 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { Evidence } from "@/lib/api"
 import { exportRun } from "@/lib/export"
 import { fmt, fmtScore, useAtlas } from "@/lib/store"
+import { scoreLabel, scoreNote, type ScoreKey } from "@/lib/glossary"
+import { WhatIsThis } from "@/components/WhatIsThis"
 import { cn } from "@/lib/utils"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 const ORDER = ["dense", "bm25", "rrf", "rerank", "score"] as const
 
 function topScore(e: Evidence) { return e.scores.rerank ?? e.scores.rrf ?? e.scores.score ?? 0 }
+
+/*
+ * A score with its name in plain words, and the jargon one hover away.
+ *
+ * These printed as `dense 0.82  bm25 4.71  rrf 0.031  rerank 0.94` until
+ * 2026-11-03. Every number was honest and none of them were legible: the
+ * first outside reader could not tell which one the cut was made on, and
+ * read the tiny `rrf` as a bad result when a small number is all that score
+ * can ever be. The label is now the plain word; the technical name, what
+ * produced the number and how to read its scale live in the tooltip.
+ *
+ * Focusable on purpose -- a tooltip hung on a bare span is unreachable
+ * without a mouse. The click is swallowed so reading a score does not also
+ * expand the card underneath it.
+ */
+function ScoreChip({ k, v }: { k: ScoreKey; v: number }) {
+  const note = scoreNote(k)
+  const body = (
+    <span className="cursor-help">
+      <b className="font-medium text-ink-2">{scoreLabel(k)}</b> {fmtScore(k, v)}
+    </span>
+  )
+  if (!note) return body
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className="rounded-[2px] outline-none focus-visible:ring-2 focus-visible:ring-blue" onClick={(ev) => ev.stopPropagation()}>
+          {body}
+        </span>
+      </TooltipTrigger>
+      {/* One child: TooltipContent is an `inline-flex` row, so three
+          siblings become three squeezed columns. */}
+      <TooltipContent className="max-w-[34ch]">
+        <span className="block space-y-1.5 text-pretty">
+          <span className="block font-medium">{note.technical}</span>
+          <span className="block">{note.what}</span>
+          <span className="block opacity-80">{note.read}</span>
+        </span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
 
 function RefCard({ e, max, index }: { e: Evidence; max: number; index: number }) {
   const flash = useAtlas((s) => s.flashChunk === e.chunk_id)
@@ -53,7 +97,7 @@ function RefCard({ e, max, index }: { e: Evidence; max: number; index: number })
       <p className={cn("mt-1.5 text-[13.5px] leading-snug text-ink-2", !open && "line-clamp-2")}>{e.excerpt}</p>
       <div className="label mt-2 flex flex-wrap gap-x-3 gap-y-1 normal-case tracking-normal tabular">
         {ORDER.filter((k) => e.scores[k] != null).map((k) => (
-          <span key={k}><b className="font-medium text-ink-2">{k}</b> {fmtScore(k, e.scores[k]!)}</span>
+          <ScoreChip key={k} k={k} v={e.scores[k]!} />
         ))}
       </div>
       <div className="mt-2 h-1 overflow-hidden rounded-[1px] bg-well">
@@ -107,7 +151,7 @@ function Header() {
   const n = run.evidence.length
   return (
     <div className="flex h-10 shrink-0 items-center justify-between gap-1 border-b px-4">
-      <span className="label inline-flex min-w-0 items-center gap-2"><Layers className="size-3.5" />Evidence · {n} ref{n === 1 ? "" : "s"}</span>
+      <span className="label inline-flex min-w-0 items-center gap-2"><Layers className="size-3.5" />Evidence · {n} ref{n === 1 ? "" : "s"}<WhatIsThis pane="evidence" /></span>
       <div className="flex shrink-0 items-center">
         <ExportButton />
         {evidenceOpen && (

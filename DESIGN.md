@@ -381,13 +381,56 @@ other does not.
 
 ### Key (legend)
 
-A single strip, togglable from the header, that maps colours to meanings:
+A single strip, togglable from the header. Two rows, because the console has
+two vocabularies a reader has to learn:
 
 ```
 ▮ retrieval   ▮ language model   ▮ supported   ▮ mixed   ▮ unsupported
+ELEVATION   meaning — dense vector similarity   wording — bm25 keyword score
+            combined — reciprocal rank fusion   final — cross-encoder rerank
 ```
 
-The key exists so no colour has to be explained twice.
+The key exists so no colour, and no score, has to be explained twice.
+
+### Pane note
+
+A `?` mark in every pane header, opening a tooltip that says what the pane is
+for. Same shape in all four, so the habit transfers after the first use. A
+button, never a decorated span: it has to be reachable by keyboard and
+tappable where there is no hover.
+
+Four regions appear at once in this layout and the product never introduced
+any of them. The first outside reader (2026-10-25) drove the console
+successfully and still could not say what the right-hand column was.
+
+### Score chip
+
+One score on an evidence card: a plain word, the figure, and the jargon one
+hover away.
+
+```
+meaning 0.82    wording 4.7    combined 0.031    final 0.94
+```
+
+The tooltip carries three lines — the technical name, what produced the
+number, and **how to read its scale**. The third is the one that matters:
+`rrf` is always a small number and was being read as a bad result.
+
+Focusable, and the click is swallowed so reading a score does not also
+expand the card under it.
+
+### Orientation card
+
+What a first visit sees in place of an empty answer pane: the four regions in
+reading order, then one real question for the current sheet that runs on
+click. Dismissed for good once closed; reachable again from the palette as
+"What am I looking at?".
+
+Not a spotlight tour. Below `xl` the evidence pane is a drawer and below `md`
+the corpus pane is gone, so anything that points at fixed screen regions is
+wrong on half the devices that load it. For the same reason each line drops
+its positional clause below the breakpoint where that position is true —
+"Corpus, on the left" becomes "Corpus" on a phone.
 
 ---
 
@@ -439,6 +482,14 @@ Rules:
 - The user manages **sheets** and **sources**; the system finds
   **references**. Never "namespace", "chunk", "vector" in user-facing copy.
   Those words are fine in the expanded survey and in mono data rows.
+- A mono data row may carry a technical name, but it may not be the *only*
+  label. Evidence scores printed as `dense / bm25 / rrf / rerank` for months:
+  permitted by the rule above, and unreadable to everyone but the author. The
+  plain word is the label; the technical name lives in the tooltip, where it
+  stays searchable without having to be decoded first.
+- Every explanation has one home: `console/src/lib/glossary.ts`. The card, the
+  pane note and the key all read from it, so the same thing cannot be
+  explained two slightly different ways.
 - Active voice, present tense. "Indexed 121 sources" not "121 sources have
   been indexed successfully".
 - Buttons name the outcome: "Ingest", "Compare runs", "Copy reference".

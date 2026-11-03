@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useAtlas, fmt } from "@/lib/store"
+import { SCORES } from "@/lib/glossary"
 import { cn } from "@/lib/utils"
 
 const HEALTH: Record<string, { dot: string; label: string }> = {
@@ -123,13 +124,29 @@ export function KeyStrip() {
       aria-hidden={!open}
     >
       <div className="min-h-0">
-        <div className="label flex flex-wrap gap-x-6 gap-y-1 px-4 py-2 text-ink-2">
-          <Sw c="bg-blue" t="retrieval" />
-          <Sw c="bg-ochre" t="language model" />
-          <Sw c="bg-good" t="supported" />
-          <Sw c="bg-warn" t="mixed / weak" />
-          <Sw c="bg-bad" t="unsupported" />
-          <Sw c="border border-dashed border-ink-3" t="not reached" />
+        <div className="px-4 py-2">
+          <div className="label flex flex-wrap gap-x-6 gap-y-1 text-ink-2">
+            <Sw c="bg-blue" t="retrieval" />
+            <Sw c="bg-ochre" t="language model" />
+            <Sw c="bg-good" t="supported" />
+            <Sw c="bg-warn" t="mixed / weak" />
+            <Sw c="bg-bad" t="unsupported" />
+            <Sw c="border border-dashed border-ink-3" t="not reached" />
+          </div>
+          {/*
+            The second half of the key. The colours were explained here from
+            the start; the four numbers on every evidence card never were,
+            and they are the part a reader actually stops on. Short gloss
+            only — the full note is in each card's own tooltip.
+          */}
+          <div className="label mt-1.5 flex flex-wrap gap-x-5 gap-y-1 border-t pt-1.5 normal-case tracking-normal text-ink-3">
+            <span className="uppercase tracking-wider">Elevation</span>
+            {(["dense", "bm25", "rrf", "rerank"] as const).map((k) => (
+              <span key={k}>
+                <b className="font-medium text-ink-2">{SCORES[k].label}</b> — {SCORES[k].technical.toLowerCase()}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
     </div>
