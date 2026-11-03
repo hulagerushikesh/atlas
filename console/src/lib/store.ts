@@ -343,6 +343,12 @@ export const useAtlas = create<AtlasState>((set, get) => ({
           else stage("faithfulness", "skipped", undefined, "skipped while streaming")
           finish({
             phase: "done", streaming: false, answer, evidence, citations: ev.citations, numberToChunk,
+            // Set on this path too, not only on the JSON one. A streamed
+            // repeat is served from cache since 2026-11-03, and without this
+            // the only visible difference is that it came back instantly --
+            // which reads as the service being fast rather than as an answer
+            // that may predate the corpus's newest document.
+            cached: ev.cached === true,
             strength: pendingVerdict
               ? { label: "Checking", kind: "none", pending: true }
               : { label: "Unchecked", kind: "none", note: "streamed" },
