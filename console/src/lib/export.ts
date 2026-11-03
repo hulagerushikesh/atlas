@@ -81,7 +81,7 @@ export function buildRunExport(run: RunState, now: Date = new Date()): RunExport
   }
 }
 
-/** `atlas-fastapi-20261024-0915.json` — sheet first, because that is what the reader sorts by. */
+/** `atlas-duckdb-20261103-2115.json` — sheet first, because that is what the reader sorts by. */
 export function exportFilename(run: RunExport): string {
   const sheet = run.sheet.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "sheet"
   const t = run.exported_at.replace(/[-:]/g, "").replace("T", "-").slice(0, 13)

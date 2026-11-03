@@ -28,9 +28,20 @@ Atlas is built around that instrument. Every run tells you:
   the model was given;
 - how long each stage took and what the call cost in tokens.
 
-The corpus on the live instance is the **FastAPI documentation** — 155 pages,
-4,020 chunks. That is a deliberate choice: it is a real corpus, it is large
-enough to be hard, and as an engineer you can check the answers yourself.
+The corpus on the live instance is the **DuckDB 2.0 documentation** — 226
+pages, 3,975 chunks, the SQL reference and guides.
+
+The choice of corpus is the whole point, so it is worth a paragraph. DuckDB 2.0
+was released on **21 October 2026**. Every model you can currently ask —
+including the one Atlas itself uses — was trained before that. So when you ask
+one of these questions somewhere else, you do not get "I don't know": you get
+the DuckDB 1.x answer, stated with complete confidence.
+
+That is the comparison I actually want you to run. The previous corpus here was
+the FastAPI documentation, and it was a bad demo for exactly the opposite
+reason: every model has it memorised, so retrieval added nothing you could see.
+Pick a question below, ask Atlas, then paste the same question into whatever
+assistant you already use. The difference is the product.
 
 ---
 
@@ -57,8 +68,12 @@ Save.
 Type into the box in the middle and press Enter. Try:
 
 ```
-How does dependency injection work in FastAPI?
+What type does X'CAFE' produce in DuckDB?
 ```
+
+The answer is a `BLOB`. Ask your usual assistant and it will almost certainly
+say the `VARCHAR` string `'xCAFE'` — correct until DuckDB 2.0 changed it, and
+wrong now. Atlas has the page.
 
 Four things are now on screen:
 
@@ -131,15 +146,23 @@ actually given.
 
 The interesting questions are the ones designed to make it fail honestly.
 
-1. **Something outside the corpus** — "What is the capital of France?" It
+1. **Something every model gets wrong.** These are all real 2.0 changes, and
+   all of them have a confident, outdated answer in the training data:
+   - "Does DuckDB support CREATE TRIGGER?" — it does now. Models say no.
+   - "How do I turn on the PEG parser?" — it is the default; the function you
+     used to call for it no longer exists.
+   - "Can a DuckDB STRUCT be empty?" — yes, as of 2.0.
+   - "Does the icu extension need the ICU library?" — no, not since 2.0.
+2. **Something outside the corpus** — "What is the capital of France?" It
    should refuse with *Out of scope* and spend nothing on retrieval.
-2. **Something adjacent but absent** — ask about a FastAPI feature released
-   after the corpus snapshot. Watch whether it admits the gap or invents.
-3. **A multi-part question** — "What is the difference between a dependency
-   and middleware, and when would I use each?" Watch `decompose` light up.
-4. **An exact identifier** — a class or parameter name such as
-   `use_cache=False`. This is where BM25 earns its place; dense-only
-   retrieval tends to miss literal tokens.
+3. **Something adjacent but absent** — "How do I stream DuckDB changes into
+   Kafka?" There is no such page. Watch whether it admits the gap or builds an
+   answer out of the trigger documentation, which is close but not an answer.
+4. **A multi-part question** — "What is the difference between DESCRIBE and
+   SHOW, and when would I use each?" Watch `decompose` light up.
+5. **An exact identifier** — a literal such as `active_grammar_extensions` or
+   `is_generated`. This is where BM25 earns its place; dense-only retrieval
+   tends to miss literal tokens.
 5. **Something ambiguous** — "How do I make it faster?" See whether the
    grader catches the insufficient context before the generator papers over
    it.
@@ -187,17 +210,21 @@ Unauthenticated and free: `/health`, `/warm`, `/namespaces`,
 ## 6. Limits, stated up front
 
 - **One corpus live.** Multi-corpus is built and tested; the public instance
-  serves the FastAPI docs only.
+  serves the DuckDB 2.0 docs. The retired FastAPI corpus is still indexed under
+  the `default` sheet if you want to compare the two.
 - **60 requests/minute** per key, and a **daily spend cap** on the whole
   service. If you hit the cap, queries stop until the next day. This is
   intentional — it is my credit card.
 - **Cold start ~12 s** after idle.
-- **Accuracy: 0.71** against human-written reference answers, on a 16-question
-  set. Small set. It is a real number, which is more than most such systems
-  can produce at all.
-- **Groundedness: 1.000** — every claim traces to a source. That is not the
-  same as being correct, and the gap between those two numbers is the whole
-  reason the project exists.
+- **Accuracy: 0.77** against hand-written reference answers, on a 16-question
+  set, measured 2026-11-03 on the corpus now live. Small set. It is a real
+  number, which is more than most such systems can produce at all.
+- **Groundedness: 0.99** — nearly every claim traces to a source. One of the
+  sixteen answers reached slightly past its evidence, on a question written to
+  be only half-answerable. Groundedness is not the same as being correct, and
+  the gap between these two numbers is the whole reason the project exists.
+- **Every labelled page was retrieved** on all sixteen questions. When an
+  answer is wrong here it is the writing that is wrong, not the finding.
 - **No users yet.** You are among the first. That is why I am asking.
 
 ---

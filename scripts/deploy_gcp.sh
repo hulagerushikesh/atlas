@@ -115,7 +115,8 @@ BUDGET_DAILY_USD=${BUDGET_DAILY_USD:-0.60},BUDGET_STORE=firestore,\
 OPENAI_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/,\
 OPENAI_PRIMARY_MODEL=gemini-3.1-flash-lite,OPENAI_FALLBACK_MODEL=gemini-3.5-flash-lite,\
 OPENAI_EMBEDDING_MODEL=gemini-embedding-001,OPENAI_EMBEDDING_DIMENSIONS=1536,\
-ROUTER_DOMAIN=the FastAPI web framework documentation,\
+ROUTER_DOMAIN=the DuckDB 2.0 SQL reference and guides: the SQL dialect of the DuckDB database and how to use it from Python and the command line,\
+ROUTER_DOMAIN_NAMESPACE=duckdb,\
 ATLAS_INDEX_DIR=/app/data/index,\
 REDIS_URL=" \
   --set-secrets "OPENAI_API_KEY=atlas-openai-api-key:latest,\

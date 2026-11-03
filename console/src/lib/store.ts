@@ -163,13 +163,19 @@ const idleRun = (): RunState => ({
   totalMs: null, tokens: null, cached: false,
 })
 
+// The sheet a first-time visitor lands on. The demo corpus moved from the
+// FastAPI docs to the DuckDB 2.0 docs on 2026-11-03; a returning visitor
+// keeps whatever `atlas_sheet` holds, and `default` still exists, so an old
+// pick stays valid rather than breaking.
+export const DEFAULT_SHEET = "duckdb"
+
 export function applyTheme(t: "" | "light" | "dark") {
   const dark = t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches)
   document.documentElement.classList.toggle("dark", dark)
 }
 
 export const useAtlas = create<AtlasState>((set, get) => ({
-  sheet: ls.get("atlas_sheet") || "default",
+  sheet: ls.get("atlas_sheet") || DEFAULT_SHEET,
   sheets: [],
   sources: [],
   sourcesLoading: true,
@@ -196,7 +202,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
     getHealth().then((h) => set({ health: h.status })).catch(() => set({ health: "unreachable" }))
     let names: string[] = []
     try { names = await getSheets() } catch { /* offline */ }
-    if (!names.length) names = ["default"]
+    if (!names.length) names = [DEFAULT_SHEET]
     const wanted = get().sheet
     if (!names.includes(wanted)) names.unshift(wanted)
     set({ sheets: names })

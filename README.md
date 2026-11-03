@@ -157,16 +157,16 @@ cp .env.example .env && $EDITOR .env
 make docker-up
 
 # 4. Download the document corpus                                 (~55s)
-#    155 FastAPI markdown pages, MIT, pinned to one commit so you get the
+#    226 DuckDB 2.0 markdown pages, MIT, pinned to one commit so you get the
 #    same corpus every number in this README was measured against.
 make fetch-corpus
 
-# 5. Index one page, so the first answer costs ~Rs.0.01 instead of ~Rs.6.45
-#    (~8s: 35 chunks, 4,610 tokens of embeddings. Prints which Qdrant it is
+# 5. Index one page, so the first answer costs ~Rs.0.01 instead of ~Rs.6.21
+#    (~623 tokens of embeddings, about Rs.0.01. Prints which Qdrant it is
 #    writing to -- check it says localhost before you spend anything.)
 .venv/bin/python scripts/ingest.py \
-    data/corpus/fastapi/tutorial/first-steps.md \
-    --namespace quickstart --source-root data/corpus/fastapi
+    data/corpus/duckdb/sql/data_types/blob.md \
+    --namespace quickstart --source-root data/corpus/duckdb
 
 # 6. Start the API                                        (~10s to healthy)
 make serve
@@ -174,26 +174,31 @@ make serve
 # 7. Ask it something that page can answer              (one call, ~7s, Rs.0.17)
 curl -s localhost:8010/query \
   -H 'content-type: application/json' \
-  -d '{"query": "What does the FastAPI first steps guide say to import?",
+  -d '{"query": "What type does X'\''CAFE'\'' produce in DuckDB?",
        "namespace": "quickstart"}' | python3 -m json.tool
 ```
 
 The answer carries citations pointing back at the file in step 5. To index the
-whole corpus instead, `make ingest` (~Rs.6.45 of embeddings, a few minutes);
+whole corpus instead, `make ingest` (Rs.6.21 of embeddings measured on
+2026-11-03 -- 226 files, 3,975 chunks, 470,651 tokens, 144s);
 `make eval` then reproduces the numbers in [Results](#results).
 
 Steps 1, 3 and 4 are about **2m 15s** together and cost nothing. Steps 5 and 7
 are the only ones that spend money, because embeddings and the answer are API
-calls. Measured on 2026-10-13: the ingest cost **Rs.0.01** (4,610 tokens) and
-the query **Rs.0.17** ($0.0019647, which `/health` then reports as the day's
-spend), for **Rs.0.18** from clone to cited answer. End to end, including the
-minute of pasting a key in step 2, that run took **about 3.5 minutes** -- the
-answer came back with faithfulness 1.0 and citations resolving to the file from
-step 5.
+calls. Measured end to end on 2026-10-13, against the FastAPI corpus this repo
+served until 2026-11-03: the ingest cost **Rs.0.01** (4,610 tokens) and the
+query **Rs.0.17** ($0.0019647, which `/health` then reports as the day's
+spend), for **Rs.0.18** from clone to cited answer -- about **3.5 minutes**
+including the minute of pasting a key in step 2, with faithfulness 1.0 and
+citations resolving to the file from step 5. The corpus swap does not change
+the shape of that run and the single page named in step 5 prices out the same
+(623 tokens against 4,610, both about Rs.0.01), but the walk-through has not
+been re-timed on the new corpus, so treat the 3.5 minutes as the FastAPI
+figure rather than a fresh one.
 
 ```bash
 make test       # 842 tests. Works before step 4: the dataset guards resolve
-                # their labels from data/corpus/fastapi.files.json, so a clean
+                # their labels from data/corpus/duckdb.files.json, so a clean
                 # clone checks them with no corpus and no network.
 make help       # every target, with a one-line description
 ```
@@ -239,6 +244,54 @@ docker compose up --build     # adds the `api` service to steps 3's two
 ---
 
 ## Results
+
+### The live corpus — DuckDB 2.0, measured 2026-11-03
+
+226 markdown files, 3,975 chunks, namespace `duckdb`, queried through the real
+pipeline with Gemini (`gemini-3.1-flash-lite` for every LLM stage,
+`gemini-embedding-001` at 1536 dims). 16-question set,
+`eval_data/duckdb_dataset.json`. One run.
+
+| Metric | Score | Notes |
+|---|---|---|
+| Context precision | **0.5067** | over 15 of 16; the out-of-scope row has no labels to be precise about |
+| Context recall | **1.0000** | every labelled page was retrieved, on every row |
+| Faithfulness | **0.9867** | 15 of 16 rows scored 1.000 |
+| Answer relevance | **0.8738** | |
+| Answer correctness | **0.7736** | graded against hand-written reference answers |
+
+₹5.08 for the run, ₹0.20 a query for the pipeline alone; the judges are the
+rest. 7.4 s median end-to-end per question, 13.7 s at p95.
+
+**These numbers are not comparable to the FastAPI ones below.** Different
+questions, different labels, different corpus — `dataset_fingerprint` exists
+precisely to stop two such runs being read as a before-and-after. Correctness
+is higher here than the 0.7105 recorded for the old corpus, and that is not
+evidence of an improvement; it is a different exam.
+
+**Where the points were lost.** Recall was perfect, so nothing was missed.
+Precision is low by the same construction as before — mostly one labelled page
+per question against a fifteen-slot window, so a correct run still scores 0.067
+on a single-page question such as "Can a DuckDB schema contain another
+schema?". The single faithfulness miss is `dq-015`, the deliberately
+half-answerable row: the corpus documents `CREATE SECURE VIEW` but has no
+`GRANT` statement anywhere, and the answer reached slightly past what the pages
+support. That is the row designed to tempt exactly that, and it is the honest
+place to lose the point. The out-of-scope row, `dq-016`, refused correctly and
+scored 1.000.
+
+**What the corpus was chosen to show.** `dq-001` asks what `X'CAFE'` produces.
+The answer came back "a `BLOB`", with the pre-2.0 `VARCHAR` behaviour noted and
+cited. A model answering that from training data says `'xCAFE'`, because until
+2026-10-21 that was right.
+
+---
+
+> **Everything below is the retired corpus's numbers.** The demo corpus became
+> the DuckDB 2.0 docs on 2026-11-03 (see `planning/DECISIONS.md`). This section
+> was measured against the FastAPI documentation and describes that corpus; it
+> is kept because it is the measurement history, not because it describes what
+> the live instance now serves.
 
 Measured 2026-09-20 on the first live run: the full FastAPI documentation
 (155 markdown files, 4,021 chunks) indexed into local Qdrant + BM25, queried
@@ -460,7 +513,7 @@ Every one of these was invisible to 252 green unit tests:
 |---|---|
 | Re-ingesting duplicated the whole corpus (ids were `uuid4` per run) | Deterministic `uuid5` ids; re-ingest of an unchanged corpus is 0.3 s and zero API calls |
 | CLI ingested into one Qdrant collection, the API read another; BM25 shared one file across namespaces | Namespace resolves both the collection and `data/index/<ns>/bm25_index.json` |
-| Router rejected every FastAPI question as "general coding help" | `ROUTER_DOMAIN` describes the corpus to the router |
+| Router rejected every corpus question as "general coding help" | `ROUTER_DOMAIN` describes the corpus to the router |
 | Pinned Qdrant image predated the client's `query_points` API (404 on every search) | Image bumped to v1.15.4 |
 | Eval matched dataset doc ids against ingester uuids (could only score 0) | Match on corpus-relative path |
 | Faithfulness judge JSON truncated at 512 tokens on long answers | 2048 tokens, short evidence strings, judge failure flagged not fatal |

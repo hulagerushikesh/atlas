@@ -29,7 +29,7 @@ What it grades:
         returns a confident-looking wrong page and scores 0.000.
 
 Usage:
-    .venv/bin/python scripts/probe_router.py --dataset eval_data/fastapi_dataset.json
+    .venv/bin/python scripts/probe_router.py --dataset eval_data/duckdb_dataset.json
     .venv/bin/python scripts/probe_router.py --dataset ... --json > before.json
     .venv/bin/python scripts/probe_router.py --dataset ... --query "..." --expect out_of_scope
 """

@@ -75,7 +75,7 @@ Work in `.venv/bin/python` or `.venv/bin/ipython`.
 
 ## 05 — Chunking & ingestion
 
-1. **Three chunkers, one doc.** Take `data/corpus/fastapi/` (run
+1. **Three chunkers, one doc.** Take `data/corpus/duckdb/` (run
    `make fetch-corpus` if empty) and chunk one markdown file with `fixed`,
    `recursive` and (with a key) `semantic`. Print chunk count and the first
    80 chars of each chunk. Which one cuts mid-sentence?
@@ -113,7 +113,7 @@ Work in `.venv/bin/python` or `.venv/bin/ipython`.
    `faithfulness.py`'s prompt asks for.
 2. **Noise floor (key).** Run `make eval` twice with the same config. Diff
    the reports. That spread is the smallest change you can trust.
-3. **Dataset.** Add five questions to `eval_data/fastapi_dataset.json`: one
+3. **Dataset.** Add five questions to `eval_data/duckdb_dataset.json`: one
    multi-hop, one phrased nothing like the docs, one unanswerable, two easy.
    Label `relevant_doc_ids` honestly. Run eval; look at the per-sample rows.
 4. **Judge bias.** Give the faithfulness judge a fluent, confident, wrong

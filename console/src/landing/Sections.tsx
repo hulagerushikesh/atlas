@@ -188,20 +188,21 @@ export function FieldNotes() {
 /* ── Measured ──────────────────────────────────────────────────────────── */
 
 const MEASURED = [
-  { k: "Answer correctness", v: "0.71", d: "against the dataset's own reference answers — the only metric here that moves between runs" },
-  { k: "Faithfulness", v: "1.00", d: "of answer claims grounded in the retrieved references, per the claim-level judge" },
-  { k: "Context recall", v: "0.94", d: "of labelled pages had at least one reference retrieved, over the 15 questions the metric applies to" },
-  { k: "Context precision", v: "0.47", d: "of the references handed to the generator came from a labelled-relevant page — one page per question cannot fill fifteen slots" },
+  { k: "Answer correctness", v: "0.77", d: "against the dataset's own reference answers — the only metric here that moves between runs" },
+  { k: "Faithfulness", v: "0.99", d: "of answer claims grounded in the retrieved references, per the claim-level judge; one of sixteen answers reached past its evidence" },
+  { k: "Context recall", v: "1.00", d: "of labelled pages had at least one reference retrieved — every page, on every question the metric applies to" },
+  { k: "Context precision", v: "0.51", d: "of the references handed to the generator came from a labelled-relevant page — one page per question cannot fill fifteen slots" },
 ]
 
 export function Measured() {
   return (
     <section id="measured" className="mx-auto max-w-6xl px-5 py-24">
-      <SectionHead eyebrow="Measured · 2026-10-03" title="The rerun scored higher. It still counts as a tie.">
-        Full FastAPI documentation — 155 files, 4,020 references — indexed and queried through the real
-        pipeline, 16 questions, judges priced into the run. These are the baseline&apos;s numbers and they stay
-        the quoted ones: a later rerun put answer correctness at 0.80, and the comparator shipped with this
-        repo scored that difference a tie on all five metrics — p&nbsp;=&nbsp;0.61, 7 of 16 samples differing.
+      <SectionHead eyebrow="Measured · 2026-11-03" title="Every labelled page was retrieved. The writing is where points go.">
+        Full DuckDB 2.0 documentation — 226 files, 3,975 references — indexed and queried through the real
+        pipeline, 16 questions, judges priced into the run. Recall was perfect, so nothing was missed; the
+        one faithfulness miss is a question written to be only half-answerable, where the answer reached
+        past its evidence. These numbers are not comparable to the retired FastAPI corpus&apos;s — different
+        questions, different labels, a different exam.
       </SectionHead>
       <div className="mt-12 grid gap-px overflow-hidden rounded-[3px] border bg-border sm:grid-cols-2 lg:grid-cols-4">
         {MEASURED.map((m, i) => (
@@ -214,13 +215,13 @@ export function Measured() {
       </div>
       <Reveal delay={0.2} className="mt-6 max-w-[72ch] text-[15px] leading-relaxed text-ink-2">
         The honest read: faithfulness is real but easy on documentation questions, and answer relevance sits
-        at 0.84 whichever run you take. Precision is low by construction — one labelled page per question
-        against a fifteen-slot window — not because retrieval got worse. Widening that window from five slots
-        to fifteen is what bought the recall: the missed pages had been in the candidate set all along, ranked
-        just below the old cut, and when it was measured recall went 0.78 to 0.90 while faithfulness did not
-        move. One question is still missed, and it is a comparative one whose answer no single page states.
-        A full run costs about ₹6 — $0.00281 a query for the pipeline, and the judges a third again on top of
-        that. Full per-question breakdown in the README.
+        at 0.87. Precision is low by construction — one labelled page per question against a fifteen-slot
+        window — not because retrieval got worse; a correct answer to a single-page question still scores
+        0.07. The corpus is the point of this run. DuckDB 2.0 shipped on 21 October 2026, after the training
+        cutoff of every model here, so these are questions a model answers confidently and wrongly from
+        memory: asked what <code>X&apos;CAFE&apos;</code> produces, it says the string <code>&apos;xCAFE&apos;</code>,
+        correct until 2.0 made it a <code>BLOB</code>. The run cost ₹5.08 — ₹0.20 a query for the pipeline,
+        the judges the rest. Full per-question breakdown in the README.
       </Reveal>
     </section>
   )
@@ -231,7 +232,7 @@ export function Measured() {
 const STEPS = [
   { t: "Add your API key", b: <>Copy <code>.env.example</code> to <code>.env</code> and set <code>OPENAI_API_KEY</code> — any OpenAI-compatible endpoint works via <code>OPENAI_BASE_URL</code>; the measured run used Gemini. Everything else has local defaults.</> },
   { t: "Start the infrastructure", b: <>Qdrant and Redis run in Docker; the API runs on your machine.</> },
-  { t: "Fetch and index a corpus", b: <>The bundled script downloads the FastAPI docs (MIT, 155 files). Ingest fails fast and names the file if anything goes wrong.</> },
+  { t: "Fetch and index a corpus", b: <>The bundled script downloads the DuckDB 2.0 docs (MIT, 226 files). Ingest fails fast and names the file if anything goes wrong.</> },
   { t: "Serve", b: <>Console at <code>/app</code>, Swagger at <code>/docs</code>, Prometheus at <code>/metrics</code>.</> },
   { t: "Ask", b: <>Use the console, or <code>POST /query</code> and read the evidence straight from the response.</> },
 ]
@@ -239,7 +240,7 @@ const STEPS = [
 const SCRIPT = `cp .env.example .env            # set OPENAI_API_KEY
 make docker-up                    # qdrant + redis
 make install
-make fetch-corpus && make ingest  # 155 FastAPI docs
+make fetch-corpus && make ingest  # 226 DuckDB 2.0 docs
 make serve                        # → http://localhost:8010/app`
 
 export function QuickStart() {

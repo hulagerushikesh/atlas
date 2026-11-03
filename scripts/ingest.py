@@ -107,6 +107,17 @@ def _describe_destination(url: str, collection: str) -> str:
     new namespace straight into production without anything on screen saying
     so. Host only -- the url carries no credential (QDRANT_API_KEY is separate)
     but the cluster id is enough to tell local from managed at a glance.
+
+    `collection` must be the *resolved* collection, i.e.
+    `namespace_to_collection(namespace)` and not `settings.qdrant.collection_name`.
+    Until 2026-11-03 the caller passed the latter, so both this line and the
+    dry run named whatever QDRANT_COLLECTION_NAME happened to hold -- for the
+    deployed `.env`, `atlas_chunks`, the live demo corpus -- while the write
+    went to `atlas_<namespace>`. Harmless to the data and the exact opposite of
+    harmless to the person reading it: the one line that exists to say which
+    collection is about to be written named a collection that was not going to
+    be touched. Found while swapping the demo corpus, by a dry run that claimed
+    it was about to write DuckDB pages into the FastAPI collection.
     """
     from urllib.parse import urlsplit
 
@@ -150,8 +161,13 @@ async def main(args: argparse.Namespace) -> int:
             "  note: adding to a corpus indexed from a higher directory? "
             "pass --source-root so the headers match."
         )
+    # The collection the write actually lands in -- `_build_indexer` applies
+    # this same mapping. Resolved here so the printed destination cannot
+    # disagree with it.
+    from atlas.api.namespaces import namespace_to_collection
+
     destination = _describe_destination(
-        settings.qdrant.url, settings.qdrant.collection_name
+        settings.qdrant.url, namespace_to_collection(args.namespace)
     )
 
     if args.dry_run:

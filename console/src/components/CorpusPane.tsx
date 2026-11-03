@@ -248,7 +248,7 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
                 <summary className="label cursor-pointer select-none text-[10px]">Server path</summary>
                 <form onSubmit={ingest} className="mt-2">
                   <div className="flex gap-1.5">
-                    <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="data/corpus/fastapi" className="font-mono text-[12px]" aria-label="Path to ingest" />
+                    <Input value={path} onChange={(e) => setPath(e.target.value)} placeholder="data/corpus/duckdb" className="font-mono text-[12px]" aria-label="Path to ingest" />
                     <Button type="submit" size="sm" variant="outline" disabled={busy || !path.trim() || Boolean(readOnlyBecause)} className="press font-mono text-[11px] uppercase tracking-wider">
                       <FolderInput className="size-3.5" />
                     </Button>

@@ -11,7 +11,12 @@ import { cn } from "@/lib/utils"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
-const QUESTION = "How do path parameters get validated?"
+// The demo corpus is the DuckDB 2.0 docs, released 2026-10-21 -- after the
+// training cutoff of the models serving this system. This question is the
+// reason the corpus was chosen: a model answering from memory does not say
+// it does not know, it gives the DuckDB 1.x answer. Retrieval is the whole
+// difference, which is what the hero needs to show.
+const QUESTION = "What type does X'CAFE' produce in DuckDB?"
 
 const STAGES = [
   { name: "route", kind: "llm", ms: 41, detail: "simple" },
@@ -22,17 +27,18 @@ const STAGES = [
 ] as const
 
 const REFS = [
-  { n: 1, src: "tutorial/path-params.md", ref: 3, scores: "bm25 11.2 · rerank .95", w: 95, cited: true },
-  { n: 2, src: "tutorial/path-params.md", ref: 5, scores: "bm25 8.6 · rerank .88", w: 88, cited: true },
-  { n: 0, src: "reference/exceptions.md", ref: 1, scores: "dense .61 · rerank .52", w: 52, cited: false },
+  { n: 1, src: "sql/data_types/blob.md", ref: 3, scores: "bm25 11.2 · rerank .95", w: 95, cited: true },
+  { n: 2, src: "sql/data_types/literal_types.md", ref: 5, scores: "bm25 8.6 · rerank .88", w: 88, cited: true },
+  { n: 0, src: "sql/data_types/bitstring.md", ref: 1, scores: "dense .61 · rerank .52", w: 52, cited: false },
 ] as const
 
 const ANSWER: { t: string; c?: number }[] = [
-  { t: "Path parameters are declared with curly braces in the route and received as function arguments" },
+  { t: "A " },
+  { t: "BLOB" },
+  { t: " — X'…' is a hex string literal, so X'CAFE' is the two bytes 202, 254" },
   { t: ".", c: 1 },
-  { t: " Declaring a type — " },
-  { t: "item_id: int" },
-  { t: " — makes FastAPI parse and validate the value, and a non-integer is rejected with a structured error" },
+  { t: " Before DuckDB 2.0 the same literal parsed as the VARCHAR string " },
+  { t: "'xCAFE'" },
   { t: ".", c: 2 },
 ]
 
@@ -73,8 +79,8 @@ export function HeroSurvey() {
     <div className="relative rounded-lg border bg-card shadow-[0_1px_2px_rgba(0,0,0,.05)]">
       {/* header */}
       <div className="label flex h-9 items-center gap-2 overflow-hidden whitespace-nowrap border-b px-4">
-        <span className="text-foreground">Atlas</span><span>·</span><span>sheet</span><b className="font-medium text-foreground">fastapi</b>
-        <span className="hidden sm:inline">· 121 sources</span>
+        <span className="text-foreground">Atlas</span><span>·</span><span>sheet</span><b className="font-medium text-foreground">duckdb</b>
+        <span className="hidden sm:inline">· 226 sources</span>
         <span className="ml-auto inline-flex items-center gap-1.5"><i className="size-1.5 rounded-[1px] bg-good" /> ok</span>
       </div>
 

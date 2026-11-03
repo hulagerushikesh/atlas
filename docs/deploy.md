@@ -109,7 +109,7 @@ image build bakes in:
 Point `QDRANT_URL` / `QDRANT_API_KEY` in `.env` at the cloud cluster, then:
 
 ```bash
-.venv/bin/python scripts/ingest.py --namespace default --glob '**/*.md' data/corpus/fastapi
+.venv/bin/python scripts/ingest.py --namespace duckdb --glob '**/*.md' data/corpus/duckdb
 make deploy-gcp                       # picks up data/index/default/bm25_index.json
 ```
 

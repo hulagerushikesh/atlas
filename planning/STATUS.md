@@ -56,6 +56,58 @@ worse than `concat` — held, and for the mechanism it named. See DECISIONS
 2026-10-17 and 2026-10-18. Cost: **₹12.55** on the 17th, **₹6.94** on the
 18th, **₹19.49** total.
 
+## Demo corpus — swapped 2026-11-03
+
+The live demo corpus is the **DuckDB 2.0** SQL reference and guides: 226 files,
+3,975 chunks, namespace `duckdb`, pin `0f7f0f4e`, MIT. `ROUTER_DOMAIN` and
+`ROUTER_DOMAIN_NAMESPACE` name it in both `.env` and `scripts/deploy_gcp.sh`,
+and those two strings must stay identical or a local eval measures a different
+router from the one production runs.
+
+Why, in one line: the first outside user said Copilot answered the FastAPI demo
+questions just as well, and he was right — those docs are in every model's
+training data. DuckDB 2.0 shipped 2026-10-21, after every current model's
+cutoff, and its pages record behaviour that *changed*, so a model answering
+from memory is confidently wrong rather than merely ignorant. Full reasoning in
+`planning/DECISIONS.md`.
+
+Cost: **Rs.6.21** to index — 470,651 tokens at $0.15/1M for
+`gemini-embedding-001`, measured, 144 s. Worth recording that this was quoted
+at Rs.0.81 beforehand: the estimate used the `text-embedding-3-small` rate of
+$0.02/1M from `src/atlas/cost.py` instead of the Gemini one in the same dict,
+7.7x low. Price an embedding job against `_EMBEDDING_PRICES[OPENAI_EMBEDDING_MODEL]`,
+not against whichever rate comes to mind.
+
+The FastAPI corpus is **not** retired destructively: `fastapi` stays in the
+`scripts/fetch_corpus.py` registry, `atlas_chunks` stays indexed under
+namespace `default`, and `eval_data/fastapi_dataset.json` plus its reports stay
+as measurement history. The 0.7105/1.0000 figures belong to that corpus and
+must not be quoted for this one. `make ingest CORPUS=fastapi NAMESPACE=default`
+rebuilds it.
+
+**Measured 2026-11-03, 16 rows, one run, Rs.5.08** — these are now the quotable
+numbers for the live corpus:
+P 0.5067 · R **1.0000** · F 0.9867 · AR 0.8738 · **AC 0.7736**, Rs.0.20/query
+for the pipeline alone, 7.4 s median per question and 13.7 s at p95.
+Report: `eval_data/reports/duckdb-v1_20261103-213709.json`.
+
+Recall was perfect on every row, so no labelled page was missed; precision is
+low by the same construction as before (mostly one labelled page against a
+fifteen-slot window, so a correct single-page answer scores 0.067). The one
+faithfulness miss is `dq-015`, the deliberately half-answerable row —
+`CREATE SECURE VIEW` is documented, `GRANT` appears nowhere, and the answer
+reached slightly past the pages. `dq-016` refused the out-of-scope question
+correctly.
+
+**Do not read 0.7736 against the old 0.7105 as an improvement.** Different
+questions, different labels, different corpus; `dataset_fingerprint` exists to
+stop exactly that comparison. It is a different exam, not a better score.
+
+The eval target needed fixing to produce this at all: `make eval` did not pass
+`--namespace`, so it ran the DuckDB dataset against `default`. The dataset
+guard caught it and refused for free rather than scoring sixteen zeros and
+reporting them as a retrieval failure — the exact case it was written for.
+
 ## One line
 
 **M2 is done and shipped: https://atlas.hulage.in is live and current** —
