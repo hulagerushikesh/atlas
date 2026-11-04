@@ -134,3 +134,28 @@ export const OPENERS: Record<string, string> = {
 export function openerFor(sheet: string): string | undefined {
   return OPENERS[sheet]
 }
+
+/*
+ * What the reader is told at the empty box, and when the router refuses.
+ *
+ * The first two outside users (2026-11-03) both stalled at exactly these two
+ * states. One typed "heyy", was correctly routed out of scope, and never came
+ * back -- a refusal is the whole of their experience of Atlas. The other
+ * asked one real question of the corpus and then submitted the identical
+ * string three more times in three minutes. Neither had seen the first-visit
+ * card, which shipped that evening; but the card alone would not have saved
+ * them, because dismissing it (or returning a second time) dropped them back
+ * to a single line that named no subject and offered nothing to click.
+ *
+ * So both states now say what this sheet holds and offer one question that
+ * is known to land. `holds` is rendered in front of the server's own
+ * ROUTER_DOMAIN sentence -- the one the classifier actually judged against --
+ * so the console quotes the rule rather than paraphrasing it, and a reader
+ * who disagrees with a refusal can see precisely what was claimed.
+ */
+export const ASK = {
+  empty:
+    "Ask the sheet. The answer appears here as a document with a reference on every claim; the references themselves appear on the right.",
+  holds: "This sheet holds",
+  tryHint: "One question this sheet can answer",
+} as const

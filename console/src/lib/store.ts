@@ -129,6 +129,12 @@ interface AtlasState {
   // the ingest endpoints refuse. The pane uses it to turn the drop zone off
   // *and* to say why, which a 409 arriving after the file is chosen cannot.
   readOnlyBecause: string | null
+  // The same sentence as `readOnlyBecause`, under its own name because the
+  // answer pane makes a different claim with it: not "you cannot write here"
+  // but "this is what the router was told this sheet holds". Null whenever no
+  // description is specific enough to be worth quoting, which is every sheet
+  // except the described one -- so the copy that uses it must degrade.
+  sheetCovers: string | null
   health: Health["status"] | "unreachable" | "checking"
   // run
   run: RunState
@@ -188,6 +194,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   totals: null,
   indexWarning: null,
   readOnlyBecause: null,
+  sheetCovers: null,
   health: "checking",
   run: idleRun(),
   surveyOpen: false,
@@ -222,7 +229,11 @@ export const useAtlas = create<AtlasState>((set, get) => ({
 
   setSheet: (s) => {
     ls.set("atlas_sheet", s)
-    set({ sheet: s })
+    // `sheetCovers` is cleared here and not in `loadSources`, which also runs
+    // after an ingest on the sheet already shown. Held across a *switch* it
+    // would caption the new sheet's name with the old sheet's description for
+    // as long as the fetch takes, which is the one reading of it that is false.
+    set({ sheet: s, sheetCovers: null })
     void get().loadSources()
   },
 
@@ -250,10 +261,15 @@ export const useAtlas = create<AtlasState>((set, get) => ({
         // `writable !== false`, not `writable === true`: an older server
         // omits the field, and an absent answer must mean "as before".
         readOnlyBecause: j.writable === false ? (j.description ?? "a fixed corpus") : null,
+        // No fallback here, unlike the line above: a read-only sheet with no
+        // description can still be *called* a fixed corpus, but there is
+        // nothing to quote as its subject, and the pane must say nothing
+        // rather than something vague.
+        sheetCovers: j.description ?? null,
         sourcesLoading: false,
       })
     } catch {
-      set({ sources: [], totals: null, indexWarning: null, readOnlyBecause: null, sourcesLoading: false })
+      set({ sources: [], totals: null, indexWarning: null, readOnlyBecause: null, sheetCovers: null, sourcesLoading: false })
     }
   },
 

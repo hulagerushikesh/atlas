@@ -620,6 +620,33 @@ daily spend cap, console markdown.
   So the cache bug had been tripling the cost of real traffic, not only test
   traffic — the only outside session Atlas has had is the proof.
 
+  **And then built the fix for it, same day.** The two states both friends
+  stalled in now name their subject. The empty answer pane says *This sheet
+  holds* and then the server's own `ROUTER_DOMAIN` sentence — the exact text
+  the classifier judges against, quoted rather than paraphrased, so the
+  console cannot drift from the rule it is explaining — and offers the
+  sheet's opening question as one button that runs it. The refusal says the
+  same sentence, so a reader who thinks a refusal is wrong can see what was
+  claimed and say which half is at fault, and carries the same button under
+  the OUT OF SCOPE badge rather than above it, because DESIGN §6 puts the
+  verdict directly under the answer and a refusal is still an answer.
+
+  **Almost nothing new had to be written.** The opening question per sheet
+  was already in `glossary.ts` and the description was already in the store,
+  read for the read-only notice in the corpus pane — a pane that does not
+  exist on a phone. Both were one state away from the reader who needed them:
+  the opener was reachable only from the first-visit card, so dismissing that
+  card, or returning a second time, put you back in front of the blank box
+  `friend-1` met. The only new copy is the stem "This sheet holds".
+
+  **What it does not prove.** No outside user has seen either state yet, so
+  this is a fix aimed at a diagnosis, not a measured improvement; and only the
+  described sheet has a description, so on any other sheet the pane still says
+  nothing about the subject and `OPENERS` still carries two sheets by hand.
+  Verified against the real data shapes in a browser, light and dark, at
+  375 px and full width — **and not yet deployed**, so what is live is still
+  the console the friends met.
+
 - 2026-10-26 (uploads are durable now; **₹0**) — **defect 2 of 2 from the
   first real user session is fixed.** A namespace has two halves in two
   places: the dense half in Qdrant, shared by every instance, and the sparse
