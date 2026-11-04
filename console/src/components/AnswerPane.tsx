@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { ArrowUp, Compass } from "lucide-react"
+import { ArrowRight, ArrowUp, Compass } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Kbd } from "@/components/ui/kbd"
@@ -11,6 +11,7 @@ import type { Evidence } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { WhatIsThis } from "@/components/WhatIsThis"
 import { Orientation } from "@/components/Orientation"
+import { ASK, openerFor } from "@/lib/glossary"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
@@ -197,10 +198,43 @@ function StrengthBadge({ s }: { s: Strength }) {
   )
 }
 
+/* ── Signposts ─────────────────────────────────────────────────────────── */
+
+/*
+ * The two things a stalled reader needs, in the two places they stall: the
+ * blank box and a refusal. Shared so the subject of the sheet is worded the
+ * same in both, and so neither can quietly lose it.
+ */
+
+function Holds({ covers, className }: { covers: string; className?: string }) {
+  return (
+    <p className={className}>
+      {ASK.holds} <span className="font-medium text-foreground">{covers}</span>.
+    </p>
+  )
+}
+
+function Opener({ question, onAsk }: { question: string; onAsk: (q: string) => void }) {
+  return (
+    <div className="mt-4">
+      <div className="label mb-1.5">{ASK.tryHint}</div>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => onAsk(question)}
+        className="press h-auto max-w-full justify-start gap-2 whitespace-normal py-1.5 text-left font-sans text-[14px] font-normal leading-snug"
+      >
+        <span className="min-w-0">{question}</span>
+        <ArrowRight className="size-3.5 shrink-0 text-ink-3" />
+      </Button>
+    </div>
+  )
+}
+
 /* ── Pane ──────────────────────────────────────────────────────────────── */
 
 export function AnswerPane() {
-  const { run, sheet, ask, tourOpen } = useAtlas()
+  const { run, sheet, sheetCovers, ask, tourOpen } = useAtlas()
   const [q, setQ] = useState("")
   const [topK, setTopK] = useState(5)
   const [stream, setStream] = useState(true)
@@ -231,6 +265,16 @@ export function AnswerPane() {
     void ask(text, { top_k: topK, stream })
   }
 
+  // A signpost question runs with the same options as a typed one, and lands
+  // in the box too, so the reader can see what was asked and edit it rather
+  // than facing an answer to a question they never wrote down.
+  const opener = openerFor(sheet)
+  const askOpener = (text: string) => {
+    if (run.phase === "running") return
+    setQ(text)
+    void ask(text, { top_k: topK, stream })
+  }
+
   return (
     <section className="flex min-w-0 flex-1 flex-col bg-card">
       <div ref={scrollRef} className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-4 md:px-8">
@@ -246,9 +290,13 @@ export function AnswerPane() {
                 {tourOpen ? (
                   <Orientation />
                 ) : (
-                  <div className="label max-w-[52ch] normal-case leading-relaxed tracking-normal">
+                  <div className="max-w-[52ch]">
                     <Compass className="mb-3 size-5 text-ink-3" strokeWidth={1.5} />
-                    Ask the sheet. The answer appears here as a document with a reference on every claim; the references themselves appear on the right.
+                    <div className="label normal-case leading-relaxed tracking-normal">
+                      <p>{ASK.empty}</p>
+                      {sheetCovers && <Holds covers={sheetCovers} className="mt-2" />}
+                    </div>
+                    {opener && <Opener question={opener} onAsk={askOpener} />}
                   </div>
                 )}
               </motion.div>
@@ -267,7 +315,14 @@ export function AnswerPane() {
                         at the sheet when this renders. A corpus uploaded from the
                         console was refused here on 2026-10-13 while holding exactly
                         the references the old copy said it lacked. */}
-                    <p className="text-ink-2">The question was judged outside what <b className="font-semibold text-foreground">{sheet}</b> covers, before any reference was read. Try another sheet — or, if this sheet does cover it, the corpus description the router was given is wrong.</p>
+                    <p className="text-ink-2">The question was judged outside what <b className="font-semibold text-foreground">{sheet}</b> covers, before any reference was read.</p>
+                    {/* The description is printed rather than described: it is
+                        the exact sentence the classifier was given, so a reader
+                        who thinks the refusal is wrong can see what was claimed
+                        and say which half is at fault. Without it, the advice
+                        below asks them to audit a rule they cannot read. */}
+                    {sheetCovers && <Holds covers={sheetCovers} className="mt-2 text-ink-2" />}
+                    <p className="mt-2 text-ink-2">Try another sheet — or, if this sheet does cover it, the corpus description the router was given is wrong.</p>
                   </div>
                 ) : run.phase === "failed" && run.failure ? (
                   <div className="max-w-[68ch] rounded-[3px] border-l-[3px] border-bad bg-bad-soft px-4 py-3 font-mono text-[13px] leading-relaxed">
@@ -280,6 +335,13 @@ export function AnswerPane() {
                 )}
 
                 {run.strength && <StrengthBadge s={run.strength} />}
+
+                {/* Below the badge, not above it: DESIGN §6 puts the strength
+                    badge directly under the answer, and a refusal is still an
+                    answer. The way out comes after the verdict, not inside it. */}
+                {run.phase === "refused" && opener && run.question !== opener && (
+                  <Opener question={opener} onAsk={askOpener} />
+                )}
 
                 {run.claims.length > 0 && (
                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.15 }} className="mt-4 text-[14px] text-ink-2">

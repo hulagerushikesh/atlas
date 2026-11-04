@@ -1093,10 +1093,30 @@ Newest at the bottom of each section.
   the only outside session Atlas has had.
 
   All six queries cost **$0.0117 ≈ ₹1.05 in total**, so nothing here is a
-  budget question. The cheapest fix for (1) is an example question in the
-  empty state, drawn from the selected sheet, and an out-of-scope answer that
-  says what the sheet *does* cover instead of only what it will not answer.
-  Not started — it is UI work and wants `DESIGN.md` read first.
+  budget question.
+
+  **(1) and (2) are closed, 2026-11-04.** Both states now name their subject
+  and offer a way forward. The empty answer pane says what the sheet holds —
+  quoting the server's own `ROUTER_DOMAIN` sentence, the exact text the
+  classifier judges against, rather than a paraphrase — and offers the sheet's
+  opening question as one button that runs it. The refusal says the same
+  sentence under "This sheet holds", so a reader who disagrees with a refusal
+  can see precisely what was claimed and which half is wrong, and it carries
+  the same button beneath the OUT OF SCOPE badge. The opener was already in
+  `console/src/lib/glossary.ts`; it was reachable only from the first-visit
+  card, so dismissing that card — or returning a second time — put a reader
+  back in front of the blank box friend-1 met. Nothing new was invented to
+  say: the only new copy is the stem "This sheet holds".
+
+  **What this does not fix.** Only the described sheet has a description, so
+  on every other sheet the pane says nothing about the subject and the copy
+  degrades to what it was before; and `OPENERS` carries two sheets by hand, so
+  a sheet someone uploads gets no starter question. Both are the same missing
+  thing — a per-sheet description the server can learn from the corpus rather
+  than be told in an env var. **Still open:** (3) is recorded, not actionable,
+  and the "answer did not read as finished" half of (2) is untested — no
+  outside user has seen either of these states yet, so this is a fix aimed at
+  a diagnosis, not a measured improvement.
 
 ## Ideas (research-backed, see learning/09)
 
