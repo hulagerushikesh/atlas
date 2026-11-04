@@ -600,6 +600,26 @@ daily spend cap, console markdown.
   "current"; it now says plainly that it is history and that the Deploy row is
   the only place in this file that tracks what is live.
 
+  **Then read what the two of them actually typed, which is the finding of the
+  day and is filed in BACKLOG.** `query_classified` records the query text and
+  the router's verdict, so all six outside queries are legible. `friend-1`'s
+  only query, ever, was **`heyy`** — correctly refused as out of scope, and
+  that refusal is the whole of what they have seen of Atlas. `friend-2` asked
+  one genuine FastAPI question and then submitted **the identical string three
+  more times in three minutes**, never a second question. The guard works; the
+  problem is that it is the only thing a first-time user reliably triggers,
+  because the query box says `Ask the sheet…` and offers no example and no
+  statement of what the sheet holds. The explanations that shipped that
+  evening explain the console's regions, not what to ask it. **The bottleneck
+  is not that nobody has arrived — two people did, and the empty box turned
+  both of them around.** All six queries cost ₹1.05 together.
+
+  One side-finding worth keeping: those four identical queries each ran the
+  full pipeline, because at that hour the live revision still predated the
+  cache fix (`48d73b4` went live at 07:25 UTC; a cache hit appears at 07:34).
+  So the cache bug had been tripling the cost of real traffic, not only test
+  traffic — the only outside session Atlas has had is the proof.
+
 - 2026-10-26 (uploads are durable now; **₹0**) — **defect 2 of 2 from the
   first real user session is fixed.** A namespace has two halves in two
   places: the dense half in Qdrant, shared by every instance, and the sparse

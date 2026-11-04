@@ -1048,6 +1048,56 @@ Newest at the bottom of each section.
   can fail — at 99 it reports `FAIL Required test coverage of 99% not
   reached` — because a floor that cannot fail is a comment.
 
+- **(filed 2026-11-04) The first thing an outside user does is not ask a
+  question, and the empty query box does nothing to help them.** Read from
+  `query_classified` in Cloud Logging, which records the query text and the
+  router's verdict. Every query either friend has ever sent, all six, on
+  2026-11-03:
+
+  | time (IST) | query | classified | total_ms | cost |
+  | --- | --- | --- | --- | --- |
+  | 09:40:09 | How does dependency injection work in FastAPI? | simple | 11526 | $0.00294 |
+  | 09:41:42 | what is capital of India | **out_of_scope** | 950 | $0.00018 |
+  | 09:42:08 | How does dependency injection work in FastAPI? | simple | 8824 | $0.00280 |
+  | 09:42:30 | How does dependency injection work in FastAPI? | simple | 8715 | $0.00282 |
+  | 09:42:57 | How does dependency injection work in FastAPI? | simple | 8948 | $0.00284 |
+  | 11:47:16 | **heyy** | **out_of_scope** | 1107 | $0.00017 |
+
+  Three separate findings, in order of how much they cost us:
+
+  **1. `friend-1`'s entire experience of Atlas is one refusal.** Their only
+  query, ever, was `heyy`. The router correctly called it out of scope — "The
+  query is a greeting and does not pertain to the FastAPI documentation" — and
+  that is the whole of what they saw. They have not returned. The query box
+  reads `Ask the sheet…` (`console/src/components/AnswerPane.tsx:306`) and
+  offers no example, no sample question, and no statement of what the selected
+  sheet contains. A greeting is the obvious thing to type into a box that
+  shows a cursor and says nothing. **The guard is working perfectly and that
+  is the problem: it is the only thing most first-time users will ever
+  trigger.** The explanations that deployed that evening do not fix this —
+  they explain the *regions of the console*, not what to ask.
+
+  **2. `friend-2` never asked a second question.** They asked one real
+  question of the corpus and then submitted *the identical string three more
+  times* inside three minutes. Either they were checking whether it was
+  deterministic, or the finished answer did not read as finished. Worth
+  knowing which, and the console gives no signal that distinguishes them.
+
+  **3. Those four identical queries each ran the full pipeline.** No cache
+  hit, four times, ~5,270 prompt tokens apiece. Not a mystery and not open:
+  at 04:10 UTC the live revision was `00035-2s7`, and the cache fix
+  (`48d73b4`, revision `00036-8jn`) only went live at 07:25 UTC the same
+  morning. A cache hit appears in the logs at 07:34 UTC, so the fix works.
+  **Recorded because it is the first real evidence that the bug was costing
+  real money on real traffic, not just in a test** — it tripled the cost of
+  the only outside session Atlas has had.
+
+  All six queries cost **$0.0117 ≈ ₹1.05 in total**, so nothing here is a
+  budget question. The cheapest fix for (1) is an example question in the
+  empty state, drawn from the selected sheet, and an out-of-scope answer that
+  says what the sheet *does* cover instead of only what it will not answer.
+  Not started — it is UI work and wants `DESIGN.md` read first.
+
 ## Ideas (research-backed, see learning/09)
 
 - ~~HyDE retriever behind a config flag~~ built 2026-09-29, off by default,
