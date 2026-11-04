@@ -644,8 +644,35 @@ daily spend cap, console markdown.
   described sheet has a description, so on any other sheet the pane still says
   nothing about the subject and `OPENERS` still carries two sheets by hand.
   Verified against the real data shapes in a browser, light and dark, at
-  375 px and full width — **and not yet deployed**, so what is live is still
-  the console the friends met.
+  375 px and full width.
+
+  **Deployed the same day** — revision `atlas-api-00041-f9v`, image `3290314`,
+  ₹0 (Cloud Build free tier, 2m07s). Confirmed live rather than assumed: the
+  bundle `atlas.hulage.in/app` serves is byte-identical to the committed
+  build, and the empty state on a 375 px viewport of the live site shows the
+  subject and the opener. Rollback is `SKIP_BUILD=1 IMAGE_TAG=3ab3f16`.
+
+  **Then closed the one defect the deploy exposed.** The description is server
+  data, so on a cold load it is unknown until `/namespaces/<sheet>/sources`
+  answers — and the line arrived a beat after the rest of the pane, a visible
+  glimpse of exactly the subjectless box this work set out to remove. The last
+  description is now remembered per sheet in `localStorage` under
+  `atlas_covers:<sheet>`, seeded into the store before the first paint, and
+  overwritten by the fetch. Two things fell out of building it:
+
+  - **the 4s client timeout on `getSources` was a silent hole.** On a
+    connection slow enough to trip it the catch branch set `sheetCovers` to
+    null, so the phone this line exists for was the one device that could
+    never see it. The catch now keeps the remembered sentence and clears only
+    the counts, which are the part that actually goes stale on an ingest.
+  - **proved without timing games.** With the stub API stopped altogether the
+    line still renders, which can only happen if it was there before any
+    fetch; an undescribed sheet still shows nothing, so nothing leaks across
+    sheets.
+
+  What this does not fix: a reader whose first-ever visit is on a slow
+  connection still has nothing remembered to show, and the first-visit card
+  is what covers them. Per-sheet descriptions are still the missing idea.
 
 - 2026-10-26 (uploads are durable now; **₹0**) — **defect 2 of 2 from the
   first real user session is fixed.** A namespace has two halves in two
