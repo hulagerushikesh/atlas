@@ -1,4 +1,4 @@
-# Status — 2026-10-31 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
+# Status — 2026-11-04 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
 
 **Every commit SHA in this file predates 2026-10-31.** The history was
 rewritten that day to carry a single author, so `09dc3d3`, `9e032df`,
@@ -30,12 +30,14 @@ its own.
 
 **M5 is live.** Deployed 2026-10-24 over three revisions — `00027-4rp`
 (image `83638af`, the first to carry `PATCH /keys/{key_id}`, the key dialog
-and the run export), `00028-tsk` (`a923354`), and **`atlas-api-00029-rgj`,
-current**, which rolled `83638af` again with `SKIP_BUILD=1` and therefore
+and the run export), `00028-tsk` (`a923354`), and **`atlas-api-00029-rgj`**,
+which rolled `83638af` again with `SKIP_BUILD=1` and therefore
 shares `00027-4rp`'s digest `sha256:831ebea…` exactly. Superseded since: `00030-ddz`
-rolled `83638af` again on 2026-10-25, and **`atlas-api-00031-lv6` (image
-`a15c3d1`) is current** as of 2026-10-26 — the first revision whose
-streaming path checks faithfulness. Verified against the
+rolled `83638af` again on 2026-10-25, and `atlas-api-00031-lv6` (image
+`a15c3d1`) was current as of 2026-10-26 — the first revision whose
+streaming path checks faithfulness. **Nine revisions have followed it; the
+Deploy row below is the only place in this file that says what is live, and
+this paragraph is M5's history, not the present.** Verified against the
 live service at ₹0: `/health` ok with Qdrant at 718 ms, `/keys` and
 `PATCH /keys/1` both 403 without the admin secret, `/query` 401 without a
 key, `/app` serving `console-DfTREPwH.js` — the bundle with the export
@@ -215,7 +217,7 @@ criterion in the whole roadmap is M1's resume-bullets line, which is yours.
 | Landing | Rebuilt in the same app, served at `/` | 2475b45 |
 | Quality gate | ruff + mypy clean, **856 tests** green locally (CI runs the same target with no corpus on disk, so the one listing-staleness guard skips there and says so; the other two dataset guards run, off a tracked file listing. Last confirmed green: run `40296485709` on `80a599f`), 94.17% cov. **CI since 2026-10-10, green since 2026-10-12** (`.github/workflows/ci.yml`): runs the three make targets on a pinned `ubuntu-26.04` / Python 3.11, plus the console's `npm run lint` and `npm run build`, plus a check that the committed `static/` matches a fresh build. Five claims, each `if: always()` so one failure does not hide the rest | `make lint typecheck test` |
 | Corpus | Full FastAPI docs: 155 markdown files, ingested into `atlas_default` + `data/index/default/bm25_index.json` | fetch with `--max-files 1000` |
-| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00035-2s7**, image `09dc3d3` — read back off the live service 2026-10-31, not from memory, and `git diff 09dc3d3..HEAD -- src/ data/index/` is empty, so the two halves agree. It is the first revision in which an ingest drops the stale cached answers for the corpus it wrote to; `/health` answered 200 in 1.4 s with qdrant ok and redis `disabled`, which is the documented shape — the L1 cache stays per-process, so with `--max-instances 2` the other instance can still serve a stale answer until the 1 h TTL. It followed **00034-g2t**/`9e032df`, which carries the landing page's corrected numbers and followed `00033-hst`/`f0ca32e`, which made the BM25 index a cache rebuilt from Qdrant, and `00032-6xx`/`80a599f`, which made `default` read-only over HTTP; that one followed `00031-lv6`/`a15c3d1`, the first revision whose streaming path checks faithfulness, which in turn replaced `00030-ddz`/`83638af`, deployed 2026-10-25 to clear an uploaded PDF from the per-instance sparse index — same image as `00029-rgj`; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
+| Deploy | **LIVE and current: https://atlas.hulage.in** (Cloud Run rev **00040-vwd**, image `3ab3f16` — read back off the live service 2026-11-04, not from memory, and `git diff 3ab3f16..HEAD -- src/ data/index/` is empty, so the two halves agree; everything on `main` since is documentation, which the image does not copy. It is the first revision that explains each part of the console inside the console, from the single glossary in `console/src/lib/glossary.ts`; `/health` answered 200 in 1.1 s with qdrant ok at 718 ms and redis `disabled`, the documented shape. It followed **00039-pkg**/`ab87c9f`, which swapped the demo corpus to the DuckDB 2.0 docs, and `00038-dm2` — **a duplicate of that same deploy, run twice by accident the same minute; its image was rebuilt and the `ab87c9f` tag moved to the second build, orphaning the first digest.** Before those, `00037-pd7` and `00036-8jn` both carried `48d73b4`, which made the cache serve the path a real query takes. `00035-2s7`/`09dc3d3` held the line from 2026-10-31 — the first revision in which an ingest drops the stale cached answers for the corpus it wrote to; the L1 cache is still per-process, so with `--max-instances 2` the other instance can serve a stale answer until the 1 h TTL. It followed **00034-g2t**/`9e032df`, which carries the landing page's corrected numbers and followed `00033-hst`/`f0ca32e`, which made the BM25 index a cache rebuilt from Qdrant, and `00032-6xx`/`80a599f`, which made `default` read-only over HTTP; that one followed `00031-lv6`/`a15c3d1`, the first revision whose streaming path checks faithfulness, which in turn replaced `00030-ddz`/`83638af`, deployed 2026-10-25 to clear an uploaded PDF from the per-instance sparse index — same image as `00029-rgj`; `00027-4rp` the same day was the first revision carrying all of M5, **startup probe on `/warm`**, Vercel rewrite, Let's Encrypt cert); keep-warm `*/10` **on `/warm`** (verified 2026-10-21, GET, ENABLED); budget ₹200/mo. Production reads **Secret Manager, not `.env`** — and `:latest` resolves when a revision is created, so adding a secret version does nothing until a `gcloud run services update` forces a new one | `docs/deploy.md`, `scripts/deploy_gcp.sh`, `proxy/` |
 | Latency & cost budget | **Agreed 2026-10-08 (`planning/BUDGET.md`) and enforced in code 2026-10-09.** `comparator.compare()` measures warm p50/p95 and run cost against ceilings *and* regression allowances, and withholds "Overall winner" on a breach | `6f8f039`; BUDGET.md |
 | LLM provider | Gemini via OpenAI-compatible endpoint, verified: embed 1536-d, JSON chat, streaming | `OPENAI_BASE_URL`, 2026-09-20 |
 
@@ -585,6 +587,18 @@ daily spend cap, console markdown.
   `total_queries: 0` recorded until now, and `friend-1` shows 1 the same day.
   Both arrived *before* the in-product explanations deployed that evening, so
   neither has seen the explained console yet.
+
+  **This file's own header and Deploy row were four days and five revisions
+  stale, and are corrected in the same pass.** The Deploy row claimed
+  `00035-2s7`/`09dc3d3` from 2026-10-31; the live revision is `00040-vwd`,
+  image `3ab3f16`, read back off the service rather than from memory. The five
+  in between are now named, including the one worth remembering: **`00038-dm2`
+  and `00039-pkg` are the same deploy run twice by accident**, a minute apart,
+  which rebuilt the image and moved the `ab87c9f` tag to the second build —
+  the first digest is still in Artifact Registry with no tag pointing at it.
+  Separately, the M5 paragraph near the top still called a 2026-10-26 revision
+  "current"; it now says plainly that it is history and that the Deploy row is
+  the only place in this file that tracks what is live.
 
 - 2026-10-26 (uploads are durable now; **₹0**) — **defect 2 of 2 from the
   first real user session is fixed.** A namespace has two halves in two
