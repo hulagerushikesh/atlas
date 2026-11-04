@@ -186,15 +186,38 @@ export function applyTheme(t: "" | "light" | "dark") {
   document.documentElement.classList.toggle("dark", dark)
 }
 
+/*
+ * The last description seen for a sheet, remembered so the answer pane can say
+ * what the sheet holds at first paint.
+ *
+ * The sentence comes from the server, so on a cold load it is not known until
+ * `/namespaces/<sheet>/sources` answers -- and the line used to appear a beat
+ * after the rest of the pane, which on a slow connection is a glimpse of
+ * exactly the subjectless box this whole change set out to remove. Seeding
+ * from the last answer for *this* sheet makes the line present immediately for
+ * anyone who has been here before; the fetch then overwrites it with the truth,
+ * including overwriting it with nothing.
+ *
+ * Keyed per sheet and never shared between them: the one false reading to
+ * avoid is captioning one sheet with another sheet's subject. A description
+ * that changed on the server since the last visit is shown for the length of
+ * one fetch and then corrected -- a stale sentence about the right sheet,
+ * which is the smaller wrong of the two.
+ */
+const coversKey = (sheet: string) => `atlas_covers:${sheet}`
+const rememberedCovers = (sheet: string): string | null => ls.get(coversKey(sheet)) || null
+
+const initialSheet = ls.get("atlas_sheet") || DEFAULT_SHEET
+
 export const useAtlas = create<AtlasState>((set, get) => ({
-  sheet: ls.get("atlas_sheet") || DEFAULT_SHEET,
+  sheet: initialSheet,
   sheets: [],
   sources: [],
   sourcesLoading: true,
   totals: null,
   indexWarning: null,
   readOnlyBecause: null,
-  sheetCovers: null,
+  sheetCovers: rememberedCovers(initialSheet),
   health: "checking",
   run: idleRun(),
   surveyOpen: false,
@@ -229,11 +252,12 @@ export const useAtlas = create<AtlasState>((set, get) => ({
 
   setSheet: (s) => {
     ls.set("atlas_sheet", s)
-    // `sheetCovers` is cleared here and not in `loadSources`, which also runs
+    // `sheetCovers` is replaced here and not in `loadSources`, which also runs
     // after an ingest on the sheet already shown. Held across a *switch* it
     // would caption the new sheet's name with the old sheet's description for
     // as long as the fetch takes, which is the one reading of it that is false.
-    set({ sheet: s, sheetCovers: null })
+    // What replaces it is the new sheet's own remembered sentence, or nothing.
+    set({ sheet: s, sheetCovers: rememberedCovers(s) })
     void get().loadSources()
   },
 
@@ -252,8 +276,14 @@ export const useAtlas = create<AtlasState>((set, get) => ({
 
   loadSources: async () => {
     set({ sourcesLoading: true })
+    // Captured before the await so the description is remembered against the
+    // sheet it describes, even if the reader switches sheets mid-flight.
+    const asked = get().sheet
     try {
-      const j = await getSources(get().sheet)
+      const j = await getSources(asked)
+      // Written on success only. A fetch that failed says nothing about what
+      // the sheet holds, so it must not erase what the last good one knew.
+      ls.set(coversKey(asked), j.description ?? "")
       set({
         sources: j.sources,
         totals: { sources: j.total_sources, chunks: j.total_chunks },
@@ -269,7 +299,14 @@ export const useAtlas = create<AtlasState>((set, get) => ({
         sourcesLoading: false,
       })
     } catch {
-      set({ sources: [], totals: null, indexWarning: null, readOnlyBecause: null, sheetCovers: null, sourcesLoading: false })
+      // Counts are cleared, the subject is not. Source and chunk totals go
+      // stale the moment an ingest lands, so a fetch that failed must not keep
+      // asserting them; the description is a fixed property of the sheet that
+      // changes only when the server is reconfigured. Dropping it here would
+      // mean a reader on a connection slow enough to trip the 4s timeout --
+      // the phone this line exists for -- sees no subject at all, which is
+      // worse than the stale-by-one-deploy sentence they saw last time.
+      set({ sources: [], totals: null, indexWarning: null, readOnlyBecause: null, sheetCovers: rememberedCovers(asked), sourcesLoading: false })
     }
   },
 
