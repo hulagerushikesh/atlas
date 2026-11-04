@@ -547,6 +547,45 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-11-04 (the drain's cost, measured; **₹0**) — the free option (c) from
+  BACKLOG's 2026-10-23 filing, run against production. Both halves of that
+  diagnosis still hold: the live service carries no `cpu-throttling`
+  annotation, and `atlas_shutdown` has still never been logged. **The drain
+  has never run. It has also never been needed.**
+
+  Over the whole retained log window — 2026-10-07 to 2026-11-03, with Cloud
+  Run logs reaching back to 2026-09-23, so every query this service has
+  served bar a two-week gap that has since expired — the logs hold **53
+  successful POST /query responses** (plus 2 × 422, which never reach the
+  handler, and 1 × 500), split **47 `query_complete` + 5 `query_cache_hit`**.
+  Firestore holds **58 lifetime across 5 keys**, of which the `demo` key's 2
+  predate the window.
+
+  **56 counted against 53 served — more, not fewer, and that direction is
+  the whole result.** A dropped background write can only make the counter
+  smaller than the logs, and the counter has no second increment path, so it
+  cannot inflate; the +3 is the expired gap. `usage_log_failed` has fired
+  **0** times. Not one write is missing.
+
+  Worth keeping is *why* zero rather than small: the exposure was never
+  proportional to traffic. The loss window is the few hundred ms between
+  `spawn()` and the Firestore round trip landing, and SIGTERM only arrives
+  after Cloud Run has watched an instance idle for minutes. **63 instance
+  starts in 30 days**, so ~62 terminations, every one of them long after the
+  last spawned write had completed. `drain()` protects a race that needs a
+  termination mid-response — a deploy under load, which Atlas has never had.
+
+  So (a) always-allocated CPU and (b) the synchronous write stay unpriced and
+  unwritten, `cost / query` in BUDGET.md rests on real numbers, and `drain()`
+  stays as it is: correct, free, dormant. Re-run the reconcile if Atlas ever
+  takes sustained traffic — the conclusion is about the load, not the code.
+
+  **Found while counting, and it is the better news: the second friend has
+  used Atlas.** `friend-2` shows **5 queries on 2026-11-03**, against the
+  `total_queries: 0` recorded until now, and `friend-1` shows 1 the same day.
+  Both arrived *before* the in-product explanations deployed that evening, so
+  neither has seen the explained console yet.
+
 - 2026-10-26 (uploads are durable now; **₹0**) — **defect 2 of 2 from the
   first real user session is fixed.** A namespace has two halves in two
   places: the dense half in Qdrant, shared by every instance, and the sparse

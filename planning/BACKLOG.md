@@ -1178,6 +1178,53 @@ Newest at the bottom of each section.
   (c) first — it is the only one that produces a number, and the other two
   are only worth pricing once the number is known.
 
+  **Measured 2026-11-04, Rs.0 — the number is zero, and (a) and (b) are
+  therefore not worth pricing.** Both halves of the diagnosis still hold:
+  the live service carries no `cpu-throttling` annotation (only `maxScale`
+  and `startup-cpu-boost`), and `atlas_shutdown` has still never been
+  logged. The drain has never run. What the reconcile shows is that it has
+  never needed to.
+
+  The ledger, over the whole retained log window (2026-10-07 → 2026-11-03;
+  Cloud Run logs go back to 2026-09-23, so the window covers every query
+  this service has served except the gap below):
+
+  | source | count |
+  | --- | --- |
+  | `request_complete` POST /query, status 200 | 53 |
+  | …plus 422 (validation, never reaches the handler) | 2 |
+  | …plus 500 | 1 |
+  | `query_complete` (pipeline ran) | 47 |
+  | `query_cache_hit` (served from cache) | 5 |
+  | Firestore `total_queries`, summed over 5 keys | 58 |
+  | …of which the `demo` key, last used 2026-09-23 | 2 |
+
+  **Firestore counts 56 for the window against 53 successful responses —
+  more, not fewer.** That direction is the whole result. A dropped
+  background write can only make the counter *smaller* than the logs; the
+  counter has no second increment path, so it cannot inflate. The +3 is
+  queries from 2026-09-23 → 2026-10-07 that have aged out of Cloud Logging
+  but are still in the lifetime counters. Not one write is missing.
+
+  `usage_log_failed` has fired **0** times, and no background task has
+  logged a failure, so nothing was lost loudly either.
+
+  Why zero rather than small, which is the part worth keeping: the exposure
+  was never proportional to traffic. The loss window is the few hundred
+  milliseconds between `spawn()` and the Firestore round trip completing,
+  and SIGTERM only arrives after Cloud Run has watched an instance sit idle
+  for minutes. **63 instance starts in 30 days**, so roughly 62
+  terminations, and every one of them happened long after the last spawned
+  write had already landed. The drain protects a race that only exists on
+  a termination arriving mid-response — a deploy under load, which this
+  service has never had.
+
+  So the counters are trustworthy as they stand, `cost / query` in
+  BUDGET.md rests on real numbers, and nothing changes. (a) stays unpriced,
+  (b) stays unwritten, and `drain()` stays where it is: correct, free, and
+  dormant. Re-run this reconcile if Atlas ever takes sustained traffic —
+  the conclusion is about the load, not about the code.
+
 ## Nice to have
 
 - `make demo` — seed a tiny corpus and open the console.
