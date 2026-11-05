@@ -11,7 +11,7 @@ import type { Evidence } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { WhatIsThis } from "@/components/WhatIsThis"
 import { Orientation } from "@/components/Orientation"
-import { ASK, openerFor } from "@/lib/glossary"
+import { AGAIN, ASK, openerFor } from "@/lib/glossary"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
@@ -214,6 +214,16 @@ function Holds({ covers, className }: { covers: string; className?: string }) {
   )
 }
 
+/*
+ * Said where the answer is, not only in the survey bar at the bottom, which
+ * already carried `· cached` in mono 11 beside the timings. That row is a
+ * data row for someone auditing a run; this is the sentence a reader needs
+ * while deciding whether asking again will tell them anything new.
+ */
+function SameAnswer() {
+  return <p className="mt-2 font-mono text-[11px] leading-relaxed text-ink-3">{AGAIN.sameAnswer}</p>
+}
+
 function Opener({ question, onAsk }: { question: string; onAsk: (q: string) => void }) {
   return (
     <div className="mt-4">
@@ -268,6 +278,15 @@ export function AnswerPane() {
   // A signpost question runs with the same options as a typed one, and lands
   // in the box too, so the reader can see what was asked and edit it rather
   // than facing an answer to a question they never wrote down.
+  // Whether the box is holding a question that has already been answered.
+  // `failed` is deliberately not settled: a run that broke should be asked
+  // again, and telling that reader it is "asked already" would be false
+  // about the only state where re-asking is the fix. A refusal is settled --
+  // the router answered, and asking the identical thing will refuse it the
+  // same way.
+  const settled = run.phase === "done" || run.phase === "refused"
+  const asked = settled && q.trim().length > 0 && q.trim() === run.question
+
   const opener = openerFor(sheet)
   const askOpener = (text: string) => {
     if (run.phase === "running") return
@@ -336,6 +355,8 @@ export function AnswerPane() {
 
                 {run.strength && <StrengthBadge s={run.strength} />}
 
+                {settled && run.cached && <SameAnswer />}
+
                 {/* Below the badge, not above it: DESIGN §6 puts the strength
                     badge directly under the answer, and a refusal is still an
                     answer. The way out comes after the verdict, not inside it. */}
@@ -373,7 +394,7 @@ export function AnswerPane() {
           <Button
             type="submit" size="icon-sm" disabled={!q.trim() || run.phase === "running"}
             className="press absolute bottom-2 right-2 rounded-[4px]"
-            aria-label="Ask"
+            aria-label={asked ? "Ask again" : "Ask"}
           >
             <ArrowUp className="size-4" />
           </Button>
@@ -386,7 +407,14 @@ export function AnswerPane() {
           <label className="inline-flex items-center gap-1.5">
             <Switch checked={stream} onCheckedChange={setStream} className="scale-90" /> stream
           </label>
-          <span className="ml-auto hidden items-center gap-1 sm:inline-flex"><Kbd>/</Kbd> focus · <Kbd>↵</Kbd> ask</span>
+          {/* Carried without the `sm:` gate the keyboard hint has: the hint is
+              useless on a phone, and the phone is where a long answer is most
+              easily scrolled away from and the box most easily read as
+              unsent. */}
+          {asked && <span className="ml-auto text-ink-3">{AGAIN.asked}</span>}
+          <span className={cn("hidden items-center gap-1 sm:inline-flex", !asked && "ml-auto")}>
+            <Kbd>/</Kbd> focus · <Kbd>↵</Kbd> {asked ? AGAIN.again : "ask"}
+          </span>
         </div>
       </form>
     </section>
