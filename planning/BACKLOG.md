@@ -179,6 +179,29 @@ Newest at the bottom of each section.
   surviving instance until it recycles. Clearing an uploaded document today
   means deleting from Qdrant *and* rolling a revision.
 
+- **(filed 2026-11-05) `top_k` is not in the cache key, so changing it and
+  asking the same question again silently returns the old depth.** The key is
+  `atlas:query:<hash(namespace)>:<hash(query)>` (`src/atlas/api/cache.py:16`)
+  and nothing else, while `top_k` is a per-request option sitting in the
+  console's composer row next to the question box. Ask something, raise
+  `top_k` from 5 to 20, ask it again inside the hour and on the same
+  instance: the answer, the evidence and the timings are the first run's, and
+  nothing says the setting was ignored. A reader exploring how retrieval
+  depth changes an answer — the one reason that control is exposed at all —
+  gets a flat "nothing changes" and no way to tell it from a finding.
+
+  Found 2026-11-05 while reading the cache to make sure the console's new
+  "stored answer" line was true. That line is the only reason this is now
+  visible rather than silent, and it is not a fix.
+
+  Two candidate fixes, not chosen: fold the options that change the result
+  into the key (correct, costs hit rate on the common case where nobody
+  touches `top_k`), or bypass the cache when the request's options differ
+  from the defaults (keeps the hit rate, but the cache then can't serve the
+  reader who deliberately re-asks at the same depth). Either needs the hit
+  rate measured first — 5 hits in the whole retained log window is not a
+  number to trade away blind.
+
 ## Debts
 
 - ~~**`/namespaces/{ns}/sources` can advertise documents the vector store does
@@ -1117,6 +1140,26 @@ Newest at the bottom of each section.
   and the "answer did not read as finished" half of (2) is untested — no
   outside user has seen either of these states yet, so this is a fix aimed at
   a diagnosis, not a measured improvement.
+
+  **(2) has a mechanism now, built 2026-11-05.** The timestamps rule out the
+  two readings first assumed: 22 and 27 seconds between submissions, each run
+  finished in ~9 s before the next began, and the send button is disabled
+  while a run is in flight — so neither an impatient second Enter nor a new
+  thought. What is left is the composer. It keeps the question after a
+  submit, which is right, but nothing in it separates *not sent yet* from
+  *sent, answered, and the answer is what you are scrolling*; a question
+  under a live send button reads as unsent, and re-asking costs one keypress.
+  The row beneath the box now reads **asked already** with the Enter hint
+  changed to **ask again** (carried without the `sm:` gate the keyboard hint
+  has — the phone is where the answer is longest), and a response the server
+  marks cached says so under the strength badge rather than only as
+  `· cached` in the survey bar. Both clear on one edited character; neither
+  shows on a failed run, the one state where asking again is the fix.
+
+  **This is still inference, not observation.** It explains why the repeats
+  were byte-identical, which the "did not trust the answer" reading does not,
+  but nobody has been watched using it. The competing reading needs a
+  different fix and stays open.
 
 ## Ideas (research-backed, see learning/09)
 
