@@ -159,3 +159,44 @@ export const ASK = {
   holds: "This sheet holds",
   tryHint: "One question this sheet can answer",
 } as const
+
+/*
+ * What the composer says once the question it is holding has already been
+ * asked, and what a replayed answer says about itself.
+ *
+ * The second outside user (2026-11-03) asked one real question of the corpus
+ * and then submitted the identical string three more times, 22 and 27 seconds
+ * apart. Those gaps rule out both readings that were first assumed: too long
+ * to be an impatient second Enter -- the send button is disabled while a run
+ * is in flight anyway -- and too short to be a new thought. Each run finished
+ * before the next began. They read an answer, then asked for the same one
+ * again, three times.
+ *
+ * The mechanism is the composer. The box keeps the text after a submit, which
+ * is right -- a reader should be able to edit a question and ask it again --
+ * but nothing in it separates "not sent yet" from "sent, answered, and the
+ * answer is the thing you are scrolling". A question still sitting in the box
+ * under a live send button reads as unsent, and re-asking it costs one
+ * keypress.
+ *
+ * So the row beneath the box says the question has been asked, and the Enter
+ * hint names what pressing it would now do. Nothing is blocked: asking twice
+ * to find out whether the answer is stable is a fair thing to want, and
+ * `sameAnswer` is the honest reply to it.
+ */
+export const AGAIN = {
+  /** Shown beneath the box. Lower case: it is a state, not a heading. */
+  asked: "asked already",
+  /** Replaces "ask" in the Enter hint, so the key names its own outcome. */
+  again: "ask again",
+  /*
+   * Printed only when the server marks the response as a cache hit. The key
+   * is the question and the sheet, so this is literally the stored answer
+   * being replayed rather than a fresh run that happened to agree -- which
+   * is exactly the question four identical submissions were asking. It is
+   * not shown otherwise: the cache holds entries for an hour and only in
+   * the process that wrote them, so a second ask can genuinely re-run, and
+   * claiming otherwise would be the one false reading available here.
+   */
+  sameAnswer: "The stored answer to this same question — nothing was re-run.",
+} as const

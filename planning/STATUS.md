@@ -549,6 +549,50 @@ daily spend cap, console markdown.
 
 ## Recent sessions
 
+- 2026-11-05 (the repeated question, and what the composer was saying;
+  **₹0**) — the open half of the 2026-11-03 finding. `friend-2` asked one
+  real question and then submitted the identical string three more times.
+  Re-reading the timestamps settles what it was not: the gaps are **22 and 27
+  seconds**, each run finished in ~9 s before the next began, and the send
+  button is disabled while a run is in flight — so it is not an impatient
+  second Enter, and 25 seconds is too short for a second thought. They read
+  an answer and asked for the same one again, three times.
+
+  **The composer is the mechanism.** The box keeps the question after a
+  submit, which is right — a reader should be able to edit one and ask it
+  again — but nothing in it separates "not sent yet" from "sent, answered,
+  and the answer is the thing you are scrolling". A question still sitting in
+  the box under a live send button reads as unsent, and re-asking it costs
+  one keypress. The row beneath the box now says **asked already** and the
+  Enter hint reads **ask again**. That note is deliberately carried without
+  the `sm:` gate the keyboard hint has: the hint is useless on a phone, and
+  the phone is where the answer is longest and the box most easily read as
+  unsent. Editing one character takes both away.
+
+  **And a replayed answer now says so where the answer is.** A cache hit
+  already carried `· cached` in the survey bar's mono row along the bottom —
+  a data row for someone auditing a run, not an answer to "will asking again
+  tell me anything new". Under the strength badge it now reads *The stored
+  answer to this same question — nothing was re-run*, printed only when the
+  server marks the response cached: the cache is per-process with a 1 h TTL,
+  so a second ask can genuinely re-run, and claiming otherwise would be the
+  one false reading available here. Neither note appears on a failed run,
+  which is the single state where asking again is the fix.
+
+  **What this does not prove.** The mechanism is inferred from six log lines
+  and two timestamp gaps, not observed — no outside user has seen the change,
+  and the competing reading (the answer did not read as finished, so they
+  asked for a better one) would need a different fix. Verified against a stub
+  that mimics the real cache key: first ask not cached, identical second ask
+  cached, one edited character clears both notes, an unreachable server shows
+  neither, and the notes render at 375 px.
+
+  **Found while reading the cache to write that sentence, and filed in
+  BACKLOG:** the cache key is the question and the sheet and nothing else, so
+  changing `top_k` and asking the same question again returns the first
+  answer at the old depth, with no sign the setting was ignored. The new line
+  at least makes the replay visible where it used to be silent.
+
 - 2026-11-04 (the drain's cost, measured; **₹0**) — the free option (c) from
   BACKLOG's 2026-10-23 filing, run against production. Both halves of that
   diagnosis still hold: the live service carries no `cpu-throttling`
