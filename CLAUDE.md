@@ -8,10 +8,14 @@ components, copy rules, and a do-not-ship list. Stylesheets that disagree
 with it are bugs.
 
 ## Planning and learning
-`planning/STATUS.md` is where the project stands; read it at session start
-and update it when a milestone moves. `planning/ROADMAP.md` holds the
-milestones. `learning/` is study material for the user — keep it accurate
-when the code it references changes.
+**Read `planning/PLAN.md` first, every session, and follow its section 9
+exactly** — it holds the goal, the current state, the ordered task queue,
+the owner's to-do list, the reply shape and the writing limits. It is the
+only planning file that is current. Do not read `planning/STATUS.md`,
+`DECISIONS.md` or `BACKLOG.md` whole: they are frozen history, about 400 KB
+together — `grep` them for a specific fact. `planning/ROADMAP.md` holds the
+five finished milestones. `learning/` is study material for the user — keep
+it accurate when the code it references changes.
 
 ## Console
 `console/` is a Vite + React + Tailwind + shadcn + Motion app with two pages:

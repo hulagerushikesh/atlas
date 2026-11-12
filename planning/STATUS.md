@@ -1,5 +1,10 @@
 # Status — 2026-11-04 (v0.1.0, 20 of 20, M5 closed and deployed, CI green)
 
+> **Frozen 2026-11-12. This file is history — do not add to it and do not
+> read it whole.** The current state, the plan and the next task are in
+> [PLAN.md](PLAN.md). What is live today is in PLAN.md section 2, not in the
+> Deploy row below. Search this file with `grep` when one old fact is needed.
+
 **Every commit SHA in this file predates 2026-10-31.** The history was
 rewritten that day to carry a single author, so `09dc3d3`, `9e032df`,
 `f0ca32e`, `80a599f`, `a15c3d1`, `83638af` and the rest name commits that

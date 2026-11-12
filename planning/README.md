@@ -1,21 +1,23 @@
 # Atlas — Planning
 
-Where the project is, where it is going, and what is in the way. Keep this
-folder current; it is the thing to read at the start of every session.
+**[PLAN.md](PLAN.md) is the one file to read at the start of every session.**
+Everything else here is history or reference.
 
 | File | What |
 |---|---|
-| [STATUS.md](STATUS.md) | Where things stand today. Update after every milestone. |
-| [ROADMAP.md](ROADMAP.md) | Milestones M1 → M4, with exit criteria. |
-| [milestones/](milestones/) | One file per milestone with the step-by-step plan and checklist. Current: [M1 — First live run](milestones/M1-first-live-run.md). |
-| [BACKLOG.md](BACKLOG.md) | Known bugs, debts, and ideas not yet scheduled. |
-| [DECISIONS.md](DECISIONS.md) | Short decision log — what was chosen, what was rejected, why. |
-| [archive/](archive/) | Older summaries kept for the record. Numbers in them are stale. |
+| [PLAN.md](PLAN.md) | **Current.** Goal, state, milestones M6–M8, task queue, the owner's list, and the rules Claude works by. |
+| [ROADMAP.md](ROADMAP.md) | Finished. Milestones M1–M5 and their 20 exit criteria. |
+| [BUDGET.md](BUDGET.md) | In force. The speed and cost ceilings. |
+| [DECISIONS.md](DECISIONS.md) | Why each technical choice was made. Add only real decisions, ten lines at most. |
+| [PITCH.md](PITCH.md) | The spoken explanation of the project. |
+| [STATUS.md](STATUS.md) | Frozen 2026-11-12. Session-by-session history. |
+| [BACKLOG.md](BACKLOG.md) | Frozen 2026-11-12. Old bugs, debts and ideas. |
+| [milestones/](milestones/), [archive/](archive/) | Older records. Numbers in them are stale. |
 
 Rules:
 - A milestone is done when its exit criteria are all ticked, not when the
   code is written.
-- Anything blocked on a person (credits, keys, DNS) is listed under
-  **Blocked on you** in STATUS.md so it cannot be forgotten.
+- Anything only the owner can do is in PLAN.md section 5, so it cannot be
+  forgotten.
 - Learning material lives in [`../learning/`](../learning/), technical
   reference in [`../docs/`](../docs/). This folder is only about *progress*.
