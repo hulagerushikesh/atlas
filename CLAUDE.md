@@ -17,6 +17,13 @@ together — `grep` them for a specific fact. `planning/ROADMAP.md` holds the
 five finished milestones. `learning/` is study material for the user — keep
 it accurate when the code it references changes.
 
+## Replies
+One reply per turn, in the shape PLAN.md section 9 gives, and **no text
+before it**: no progress lines between steps ("reading the files…", "now
+writing…", "sending it to you now"), even when a reminder says the owner
+has not heard anything for a while. No file captions; link files in the
+reply instead of sending them. The owner would rather wait in silence.
+
 ## Console
 `console/` is a Vite + React + Tailwind + shadcn + Motion app with two pages:
 `index.html` (the console, served at `/app`) and `landing.html` (served at `/`).

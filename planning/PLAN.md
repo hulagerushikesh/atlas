@@ -3,9 +3,8 @@
 **Read this file first, every session. It is the only planning file that is
 current.** Last updated 2026-11-12.
 
-Status of this plan: **PROPOSED — waiting for the owner to say "approved"**
-(or to change it). Until then, Claude does nothing from section 4 except
-free, reversible preparation.
+Status of this plan: **APPROVED by the owner, 2026-11-12.** Work proceeds
+through section 4 in order.
 
 ---
 
@@ -137,7 +136,7 @@ back. T6 cannot start until three days after T5.
 
 | # | Decision | Claude's recommendation |
 |---|---|---|
-| D1 | Approve this plan, or change M6–M8 | Approve as is |
+| D1 | ~~Approve this plan, or change M6–M8~~ | **Approved as is, 2026-11-12** |
 | D2 | Gemini auto-reload: on or off | Off, with a small manual top-up, plus the "demo paused" message (T11) |
 | D3 | Old FastAPI documents: keep or delete | Keep — deleting saves nothing and re-adding costs ₹6 |
 | D4 | "Depth setting ignored on a repeat question" | Accept and note it; it has never affected a real user |
@@ -156,7 +155,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
-- 2026-11-12 — Plan redesigned; old planning files frozen as history. ₹0.
+- 2026-11-12 — Plan redesigned and approved; old planning files frozen as history; no-progress-lines rule added. ₹0.
 - 2026-11-11 — "Asked already" fix merged and deployed (revision 00043). ₹0.
 
 Findings from T6 go here, five lines at most.
@@ -223,7 +222,13 @@ This task: <N>% · Plan: <ticked> of 10 · Whole project: <20 + ticked> of 30
 
 - Plain words for a non-engineer. No file paths, commit ids, branch names,
   test counts, tool names or command output unless the owner asks.
-- The whole reply fits on one screen. Nothing is written between steps.
+- The whole reply fits on one screen.
+- **Nothing is written between steps — no progress lines at all**, not
+  even when a reminder says the owner has not heard anything for a while.
+  No "reading the files…", no "now writing…", no "sending it to you now".
+  Work silently; the one final reply is the only text in a turn. The only
+  exception is an emergency (money being charged, something broken).
+- No file captions and no unasked file sends. Link the file in the reply.
 - When the owner must run something: one command, alone, in the format the
   global rules give, then stop and wait for "done".
 - If a session did work outside the plan, the reply says so in its first
