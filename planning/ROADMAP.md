@@ -1,5 +1,9 @@
 # Roadmap
 
+> **This file is the finished half of the project.** What comes next —
+> milestones M6 to M8, proposed 2026-11-12 — lives in [PLAN.md](PLAN.md),
+> which supersedes the "no M6" paragraph below.
+
 Five milestones. Each has exit criteria; a milestone is not done until every
 one is ticked. Order is fixed — M2 without M1's numbers would deploy something
 unmeasured.

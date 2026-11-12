@@ -1,5 +1,11 @@
 # Backlog
 
+> **Frozen 2026-11-12. Do not add to this file.** Unscheduled ideas now go
+> to the parking lot in [PLAN.md](PLAN.md) section 7, one line each. Three
+> open items here were carried into the plan: the depth setting ignored on a
+> repeated question (PLAN decision D4), a description for every uploaded set
+> of documents, and the changelog "current state" passage (both parked).
+
 Unscheduled work. Move an item into a milestone file when it gets a slot.
 Newest at the bottom of each section.
 
