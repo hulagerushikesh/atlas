@@ -64,7 +64,7 @@ goes into maintenance and stops consuming sessions.
 
 ### M7 — The owner can present it
 
-- [ ] **7.1** A one-page interview sheet: the 12 questions an interviewer
+- [x] **7.1** A one-page interview sheet: the 12 questions an interviewer
       will ask about Atlas, each with a three-sentence answer and the number
       behind it.
 - [ ] **7.2** A public case study, 800 words at most: the problem, three
@@ -103,7 +103,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T5 | Send the invitation in section 5 to five people — **each needs their own key unless D5 says yes** | You | ₹0 | five sent | — |
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
-| T8 | Write the interview sheet | C | ₹0 | `learning/interview-sheet.md` | 7.1 |
+| ~~T8~~ | ~~Write the interview sheet~~ | C | ₹0 | **done 2026-11-13** — `learning/interview-sheet.md`, its numbers checked by tests | 7.1 |
 | T9 | Write the case study; publish on the site | C + You | ₹0 | reachable from the landing page | 7.2 |
 | T10 | Write new resume bullets as text | C | ₹0 | `docs/resume-bullets.md` | 7.3 |
 | T11 | Check what the site does when Gemini refuses for lack of credit; make it say "demo paused" | C | ₹0 | tested without spending | 8.1 (half) |
@@ -111,7 +111,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T8, T10, T11 need nothing from the owner and can be done back to
+T10, T11 need nothing from the owner and can be done back to
 back. T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
@@ -159,6 +159,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-13 — T8 done: interview sheet, 12 questions with answers and numbers; its headline numbers added to the drift test. ₹0.
 - 2026-11-13 — T4 done: README first screen rewritten; README, landing, pitch and tour numbers now checked by tests; pitch's stale FastAPI figures replaced. ₹0.
 - 2026-11-12 — T1 done (recording script). Found the locked door: no visitor can ask without a key → decision D5. ₹0.
 - 2026-11-12 — Plan redesigned and approved; old planning files frozen as history; no-progress-lines rule added. ₹0.

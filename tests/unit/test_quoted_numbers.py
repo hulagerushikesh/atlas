@@ -22,6 +22,7 @@ SOURCE = ROOT / "eval_data/reports/duckdb-v1_20261103-213709.json"
 NUM = r"(\d+(?:\.\d+)?)"
 LANDING = "console/src/landing/Sections.tsx"
 PITCH = "planning/PITCH.md"
+SHEET = "learning/interview-sheet.md"
 
 
 def _headline() -> dict[str, float]:
@@ -100,6 +101,20 @@ QUOTES: list[tuple[str, str, str, str]] = [
     ("docs/try-atlas.md", rf"\*\*Groundedness: {NUM}\*\*", "faithfulness", "2"),
     ("docs/try-atlas.md", rf"on a {NUM}-question\s+set", "questions", "int"),
     ("docs/demo-script.md", rf"about ₹{NUM}", "query_rupees", "2"),
+    # Interview sheet
+    (SHEET, rf"{NUM} labelled questions\.", "questions", "int"),
+    (SHEET, rf"{NUM} s median, ", "median_s", "1"),
+    (SHEET, rf"median, {NUM} s at p95", "p95_s", "1"),
+    (SHEET, rf"recall {NUM}, faithfulness", "recall", "2"),
+    (SHEET, rf"faithfulness {NUM}, relevance", "faithfulness", "2"),
+    (SHEET, rf"relevance {NUM}, precision", "relevance", "2"),
+    (SHEET, rf"precision {NUM},\s+correctness", "precision", "2"),
+    (SHEET, rf"\s+correctness {NUM}\.", "correctness", "2"),
+    (SHEET, rf"\*\*Number:\*\* {NUM} against", "faithfulness", "2"),
+    (SHEET, rf"against {NUM}, in the same run", "correctness", "2"),
+    (SHEET, rf"context precision {NUM}\.", "precision", "2"),
+    (SHEET, rf"₹{NUM} a question", "query_rupees", "2"),
+    (SHEET, rf"₹{NUM} for a full evaluation run", "run_rupees", "2"),
 ]
 
 
