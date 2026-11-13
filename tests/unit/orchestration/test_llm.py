@@ -11,10 +11,12 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from openai import RateLimitError
 
 from atlas.config import OpenAIConfig
 from atlas.interfaces.llm import GenerationRequest, Message
 from atlas.orchestration.llm import OpenAILLMProvider, parse_json_response
+from tests.unit.billing_errors import gemini_429
 
 
 def _config() -> OpenAIConfig:
@@ -102,6 +104,19 @@ class TestOpenAILLMProvider:
             request = GenerationRequest(messages=[Message(role="user", content="q")])
             response = await provider.generate(request)
             assert response.fallback_triggered is True
+
+    @pytest.mark.asyncio
+    async def test_no_fallback_and_no_retry_when_credit_is_gone(
+        self, provider: OpenAILLMProvider
+    ) -> None:
+        # Both models bill one account: a fallback call would fail the same way,
+        # and a retry ladder would only delay the "demo paused" message.
+        mock_create = AsyncMock(side_effect=gemini_429())
+        with patch.object(provider._client.chat.completions, "create", new=mock_create):
+            request = GenerationRequest(messages=[Message(role="user", content="q")])
+            with pytest.raises(RateLimitError):
+                await provider.generate(request)
+        assert mock_create.await_count == 1
 
     @pytest.mark.asyncio
     async def test_no_fallback_on_success(self, provider: OpenAILLMProvider) -> None:

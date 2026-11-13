@@ -79,6 +79,7 @@ from atlas.api.schemas import (
 )
 from atlas.cost import estimate_usage_cost
 from atlas.orchestration.pipeline import EvidenceChunk, PipelineResult, RAGPipeline
+from atlas.retry_policy import is_credit_exhausted
 from atlas.usage import UsageMeter, counted, usage_scope
 
 logger = structlog.get_logger(__name__)
@@ -523,6 +524,8 @@ async def _stream_query(
             "error": _public_error(request_id),
             "stage": stage,
         }
+        if is_credit_exhausted(exc):
+            payload.update(error=DEMO_PAUSED, code="demo_paused")
         if request_id:
             payload["request_id"] = request_id
         yield f"data: {json.dumps(payload)}\n\n"
@@ -810,6 +813,15 @@ def _request_id() -> str:
     return str(value)
 
 
+# Sent instead of the generic failure when the model provider refuses for lack
+# of credit: a billing state, not a fault, and the visitor should be told so.
+DEMO_PAUSED = (
+    "Demo paused: the model provider's prepaid credit has run out, so Atlas "
+    "cannot answer new questions until it is topped up. Questions answered "
+    "before still load."
+)
+
+
 def _public_error(request_id: str) -> str:
     """What a caller is told when the pipeline raises.
 
@@ -963,6 +975,11 @@ async def query(
                 namespace=body.namespace,
                 latency_ms=(time.perf_counter() - t_total) * 1000,
             )
+            if is_credit_exhausted(exc):
+                raise HTTPException(
+                    status_code=503,
+                    detail={"code": "demo_paused", "message": DEMO_PAUSED},
+                ) from exc
             raise HTTPException(
                 status_code=500, detail=_public_error(_request_id())
             ) from exc

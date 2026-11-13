@@ -68,12 +68,40 @@ def _error_fields(exc: RateLimitError) -> tuple[str | None, str | None]:
     )
 
 
+# Gemini's prepaid billing answers a 429 RESOURCE_EXHAUSTED whose only
+# distinguishing mark is this sentence; its `code` is the integer 429.
+_DEPLETED_PHRASES = ("prepayment credits are depleted",)
+
+
+def _is_billing_429(exc: RateLimitError) -> bool:
+    err_type, err_code = _error_fields(exc)
+    if err_type in _FATAL_TYPES or err_code in _FATAL_CODES:
+        return True
+    text = str(exc).lower()
+    return any(phrase in text for phrase in _DEPLETED_PHRASES)
+
+
 def is_retryable_rate_limit(exc: BaseException) -> bool:
     """True for transient throttling; False for quota/billing exhaustion."""
     if not isinstance(exc, RateLimitError):
         return False
-    err_type, err_code = _error_fields(exc)
-    return err_type not in _FATAL_TYPES and err_code not in _FATAL_CODES
+    return not _is_billing_429(exc)
+
+
+def is_credit_exhausted(exc: BaseException) -> bool:
+    """True if the model provider refused because the account has no credit.
+
+    Walks `__cause__`/`__context__`, since the refusal can reach the API
+    layer wrapped by whichever pipeline stage made the call.
+    """
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, RateLimitError) and _is_billing_429(current):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 # ── Qdrant ────────────────────────────────────────────────────────────────────
