@@ -25,7 +25,12 @@ from qdrant_client.http.exceptions import (
     UnexpectedResponse,
 )
 
-from atlas.retry_policy import is_retryable_rate_limit, is_transient_qdrant_error
+from atlas.retry_policy import (
+    is_credit_exhausted,
+    is_retryable_rate_limit,
+    is_transient_qdrant_error,
+)
+from tests.unit.billing_errors import gemini_429
 
 # Verbatim from a live 429 against api.openai.com with no credit remaining.
 REAL_EXHAUSTED_BODY = {
@@ -76,6 +81,37 @@ def test_quota_exhaustion_detected_from_either_field(body: dict[str, Any]) -> No
 )
 def test_genuine_throttling_is_retried(body: dict[str, Any]) -> None:
     assert is_retryable_rate_limit(_rate_limit_error(body)) is True
+
+
+class TestCreditExhaustion:
+    """Gemini's prepaid 429 carries `code` 429 and RESOURCE_EXHAUSTED, the same
+    as per-minute throttling; only the sentence tells them apart."""
+
+    def test_gemini_depleted_credit_is_not_retried(self) -> None:
+        assert is_retryable_rate_limit(gemini_429()) is False
+
+    def test_gemini_depleted_credit_is_recognised(self) -> None:
+        assert is_credit_exhausted(gemini_429()) is True
+
+    def test_gemini_per_minute_throttling_is_still_retried(self) -> None:
+        err = gemini_429("Resource has been exhausted (e.g. check quota).")
+        assert is_retryable_rate_limit(err) is True
+        assert is_credit_exhausted(err) is False
+
+    def test_openai_exhausted_credit_is_recognised(self) -> None:
+        assert is_credit_exhausted(_rate_limit_error(REAL_EXHAUSTED_BODY)) is True
+
+    def test_found_when_a_pipeline_stage_wrapped_it(self) -> None:
+        try:
+            try:
+                raise gemini_429()
+            except RateLimitError as inner:
+                raise RuntimeError("router failed") from inner
+        except RuntimeError as outer:
+            assert is_credit_exhausted(outer) is True
+
+    def test_other_failures_are_not_credit_exhaustion(self) -> None:
+        assert is_credit_exhausted(RuntimeError("qdrant went away")) is False
 
 
 def test_non_rate_limit_errors_are_not_retried() -> None:

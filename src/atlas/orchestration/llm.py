@@ -46,7 +46,7 @@ from tenacity import (
 
 from atlas.config import OpenAIConfig
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, GenerationResponse, Message
-from atlas.retry_policy import is_retryable_rate_limit
+from atlas.retry_policy import is_credit_exhausted, is_retryable_rate_limit
 from atlas.usage import UsageMeter
 
 logger = structlog.get_logger(__name__)
@@ -93,7 +93,8 @@ class OpenAILLMProvider(BaseLLMProvider):
         try:
             return await self._generate_with_model(request, model, fallback_triggered=False)
         except Exception as primary_err:
-            if fallback and fallback != model:
+            # Both models bill the same account, so no credit means no fallback.
+            if fallback and fallback != model and not is_credit_exhausted(primary_err):
                 logger.warning(
                     "llm_primary_failed_using_fallback",
                     primary=model,

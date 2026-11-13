@@ -71,8 +71,17 @@ export function strengthFrom(j: QueryResponse): Strength {
 
 export interface Failure { what: string; why: string; next: string }
 
+// The model provider refused for lack of credit: a paused demo, not a fault.
+export const DEMO_PAUSED: Failure = {
+  what: "Demo paused.",
+  why: "The model provider's prepaid credit has run out, so Atlas cannot write new answers.",
+  next: "Questions answered before still load. Try again later.",
+}
+
 export function failureFrom(e: unknown): Failure {
   const err = e instanceof ApiError ? e : new ApiError(-1, e instanceof Error ? e.message : String(e))
+  const detail = err.detail as { code?: unknown } | undefined
+  if (err.status === 503 && detail?.code === "demo_paused") return DEMO_PAUSED
   if (err.status === 401 || err.status === 403)
     return { what: "Not authorised.", why: "The sheet requires an API key and none was accepted.", next: "Add a key under Settings." }
   if (err.status === 429)
@@ -385,7 +394,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
           for (const st of STAGES) if (get().run.stages[st.name].status === "running") stage(st.name, "failed")
           finish({
             phase: "failed", streaming: false, answer,
-            failure: {
+            failure: ev.code === "demo_paused" ? DEMO_PAUSED : {
               what: `Atlas stopped during ${ev.stage}.`,
               why: ev.error,
               next: "The stages above show how far it got. Re-run the query; if it fails at the same stage, check `make health`.",

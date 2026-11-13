@@ -130,7 +130,8 @@ export type StreamEvent =
   // Sent when the pipeline throws after the first byte. The response is a 200
   // by then — the status line left before the pipeline had a chance to fail —
   // so this event is the only way the failure can reach the client at all.
-  | { type: "error"; error: string; stage: string }
+  // `code` is "demo_paused" when the model provider has no credit left.
+  | { type: "error"; error: string; stage: string; code?: string }
 
 const KEY = "atlas_api_key"
 const BASE = "atlas_api_base"
