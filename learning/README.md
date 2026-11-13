@@ -20,6 +20,7 @@ going. Skim 01 if you already know async Python and FastAPI.
 | 08 | [Production & serving](08-production-and-serving.md) | intermediate | `api/cache.py`, `api/auth.py`, `api/middleware/`, `api/cost.py` |
 | 09 | [Research frontier](09-research-frontier.md) | research | what Atlas could become |
 | — | [Exercises](exercises.md) | all | hands-on tasks against the real code |
+| — | [Interview sheet](interview-sheet.md) | all | the 12 questions an interviewer asks, with answers and numbers |
 | — | [Glossary](glossary.md) | all | terms used across the modules |
 
 ## How to use this
