@@ -67,7 +67,7 @@ from fastapi.responses import StreamingResponse
 from atlas.api.background import spawn
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
 from atlas.api.cache import QueryCache
-from atlas.api.dependencies import get_app_state, get_cache, get_registry
+from atlas.api.dependencies import AppState, get_app_state, get_cache, get_registry
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.api.schemas import (
     CitationResponse,
@@ -845,14 +845,36 @@ def _public_error(request_id: str) -> str:
     )
 
 
+DEMO_CAP = (
+    "Today's questions without a key are used up. They start again at "
+    "midnight UTC; questions answered before still load."
+)
+KEY_REQUIRED = "Without a key, Atlas answers questions about the demo sheet only."
+
+
+def _meter_for(request: Request, app_state: AppState, namespace: str) -> SpendMeter:
+    """The meter this request is charged to; a keyless one only on the demo sheet."""
+    if not getattr(request.state, "demo", False):
+        return app_state.spend
+    if app_state.demo_spend is None or namespace != app_state.demo_namespace:
+        raise HTTPException(status_code=403, detail={
+            "code": "key_required", "message": KEY_REQUIRED,
+            "sheet": app_state.demo_namespace,
+        })
+    return app_state.demo_spend
+
+
 async def _enforce_budget(spend: SpendMeter) -> None:
     """429 with Retry-After until UTC midnight once the daily cap is hit."""
     try:
         await spend.check()
     except BudgetExceeded as exc:
+        detail: str | dict[str, str] = str(exc)
+        if exc.scope == "demo":
+            detail = {"code": "demo_cap", "message": DEMO_CAP}
         raise HTTPException(
             status_code=429,
-            detail=str(exc),
+            detail=detail,
             headers={"Retry-After": str(seconds_until_utc_midnight())},
         ) from exc
 
@@ -872,9 +894,10 @@ async def query(
     Set `namespace` to query a specific corpus (default: "default").
     """
     log = logger.bind(query=body.query[:80], namespace=body.namespace)
+    app_state = get_app_state(request)
+    spend = _meter_for(request, app_state, body.namespace)
     registry = get_registry(request)
     pipeline = registry.get(body.namespace).pipeline
-    app_state = get_app_state(request)
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
@@ -904,7 +927,7 @@ async def query(
                          "X-Namespace": body.namespace,
                          "X-Cache": "hit"},
             )
-        await _enforce_budget(app_state.spend)
+        await _enforce_budget(spend)
         # Half of retrieval is this process's own keyword index, and it is a
         # cache of Qdrant rather than a second copy of record. Reconcile
         # before the pipeline reads it, or a document indexed by the other
@@ -914,7 +937,7 @@ async def query(
         log.info("query_stream_start")
         return StreamingResponse(
             _stream_query(
-                body.query, pipeline, app_state.spend, app_state.chat_model,
+                body.query, pipeline, spend, app_state.chat_model,
                 api_key_id=getattr(request.state, "api_key_id", None),
                 namespace=body.namespace,
                 cache=cache,
@@ -949,7 +972,7 @@ async def query(
     # Cache hits are free, so the cap is checked only once we know we will
     # call the model. Same for the reconcile: a cached answer does not
     # retrieve, so it does not need the keyword index to be current.
-    await _enforce_budget(app_state.spend)
+    await _enforce_budget(spend)
     await registry.reconcile_sparse(body.namespace)
     log.info("query_start")
     t_total = time.perf_counter()
@@ -970,7 +993,7 @@ async def query(
             # spend was real but absent from `/metrics` and from the per-key
             # counters `cost / query` is derived from.
             await _charge(
-                usage, app_state.spend,
+                usage, spend,
                 api_key_id=getattr(request.state, "api_key_id", None),
                 namespace=body.namespace,
                 latency_ms=(time.perf_counter() - t_total) * 1000,
@@ -994,7 +1017,7 @@ async def query(
     # prompt/completion in there: it was once passed "total", which no
     # dashboard could separate from a sum over the other two.
     api_key_id = getattr(request.state, "api_key_id", None)
-    await _charge(usage, app_state.spend, api_key_id=api_key_id,
+    await _charge(usage, spend, api_key_id=api_key_id,
                   namespace=body.namespace, latency_ms=timings.total_ms)
 
     # Fire-and-forget: cache (never block the response). The per-key usage

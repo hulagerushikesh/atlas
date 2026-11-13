@@ -261,6 +261,11 @@ class BudgetConfig(BaseSettings):
     # (per-instance, so it resets on a Cloud Run cold start). "firestore" makes
     # it durable without a Redis. See atlas.api.spendstore.
     store: Literal["auto", "memory", "redis", "firestore"] = "auto"
+    # Keyless questions about one sheet, with their own daily cap inside the
+    # one above. Off unless both are set. See atlas.api.middleware.auth_mw.
+    demo_namespace: str = ""
+    demo_usd: float = 0.0
+    demo_rpm: int = 3
 
 
 class APIConfig(BaseSettings):
