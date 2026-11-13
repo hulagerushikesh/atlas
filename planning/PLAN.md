@@ -98,8 +98,8 @@ parking lot in section 7 as one line, and the session moves on.
 |---|---|---|---|---|---|
 | ~~T1~~ | ~~Write the 90-second recording script and shot list~~ | C | ₹0 | **done 2026-11-12** — `docs/demo-script.md` | — |
 | T2 | Record the screen following the script; share the file | You | ₹0.20 | video file exists | — |
-| T3 | Put the video on README + landing; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1 |
-| T4 | Rewrite the README first screen; add the numbers check to the tests | C | ₹0 | tests fail if a quoted number is stale | 6.2 |
+| T3 | Put the video on README + landing, plus one still from it as the README screenshot; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1, 6.2 |
+| ~~T4~~ | ~~Rewrite the README first screen; add the numbers check to the tests~~ | C | ₹0 | **done 2026-11-13** — 42 quotes checked; the screenshot comes with T3 | — |
 | T5 | Send the invitation in section 5 to five people — **each needs their own key unless D5 says yes** | You | ₹0 | five sent | — |
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
@@ -111,7 +111,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T1, T4, T8, T10, T11 need nothing from the owner and can be done back to
+T8, T10, T11 need nothing from the owner and can be done back to
 back. T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
@@ -159,6 +159,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-13 — T4 done: README first screen rewritten; README, landing, pitch and tour numbers now checked by tests; pitch's stale FastAPI figures replaced. ₹0.
 - 2026-11-12 — T1 done (recording script). Found the locked door: no visitor can ask without a key → decision D5. ₹0.
 - 2026-11-12 — Plan redesigned and approved; old planning files frozen as history; no-progress-lines rule added. ₹0.
 - 2026-11-11 — "Asked already" fix merged and deployed (revision 00043). ₹0.

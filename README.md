@@ -1,17 +1,24 @@
-# Atlas — Agentic RAG Platform
+# Atlas
 
-A production-grade, self-improving retrieval-augmented generation system for
-enterprise knowledge bases. Built as a portfolio centerpiece demonstrating
-clean architecture, type safety, full observability, and reproducible evaluation.
+Ask a question about a set of documents. Atlas answers with a number on
+every sentence pointing to the exact passage it came from, shows the
+passages it looked at and rejected, and then grades its own answer:
+how far is it actually backed by those passages?
 
-**Live:** [atlas.hulage.in](https://atlas.hulage.in) — console at
-[/app](https://atlas.hulage.in/app), OpenAPI at
-[/docs](https://atlas.hulage.in/docs). Cloud Run with scale-to-zero, so the
-first request after an idle spell waits ~15 s for the container.
+**Live at [atlas.hulage.in](https://atlas.hulage.in).** The demo documents
+are the DuckDB 2.0 manual, released after today's AI models were trained, so
+an answer cannot come from a model's memory. Asking a question needs an
+access key for now — [the tour](docs/try-atlas.md) says how to get one.
+
+Measured on 16 labelled questions, 2026-11-03 ([full results](#results)):
+
+| Answers match the reference | Claims backed by a passage | Cost per question |
+|---|---|---|
+| **0.77** | **0.99** | **₹0.20** |
 
 **New here?** [`docs/try-atlas.md`](docs/try-atlas.md) is a ten-minute guided
-tour for someone who has never seen the project — what to ask, what to look
-at, and what the verdict badge actually means.
+tour — what to ask, what to look at, and what the verdict badge means. The
+first question after a quiet spell waits about 15 s while the server wakes.
 
 ---
 
