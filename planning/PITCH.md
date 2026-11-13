@@ -2,11 +2,10 @@
 
 How to explain Atlas to another engineer, in prose, out loud.
 
-**The numbers below go stale.** Last checked against `planning/STATUS.md`
-on 2026-10-29. Before quoting any of them, check that file for the current
-figures and
-`planning/ROADMAP.md` for what is actually done — a pitch that quotes a
-number the project has moved past is worse than one that quotes none.
+**The headline numbers are checked by the test suite** against the
+2026-11-03 evaluation of the live DuckDB 2.0 corpus, so they cannot drift
+unnoticed. The before-and-after figures inside the stories (0.778 → 0.900,
+0.9378 → 0.8778) are history from the earlier FastAPI question set.
 
 ---
 
@@ -71,17 +70,17 @@ and the union never formed. **The bug was the mechanism**, and I would never
 have known without an eval harness to run the comparison through.
 
 **The number that actually matters.** The eval set runs five metrics. Three
-of them look great: context recall 0.94, groundedness 1.000, answer relevance
-0.84. The other two do not, and both belong in the pitch. Context precision is
-**0.47** — more than half of what retrieval hands the generator is noise, and
+of them look great: context recall 1.00, groundedness 0.99, answer relevance
+0.87. The other two do not, and both belong in the pitch. Context precision is
+**0.51** — about half of what retrieval hands the generator is noise, and
 the only reason that is survivable is the cross-encoder rerank sitting
 downstream of it. The fifth is answer correctness, scored against a
-human-written reference, and it reads **0.71**. Groundedness at a perfect 1.000 and
-correctness at 0.71 **in the same column is the entire point of running the
-fifth metric.** Every sentence the system produced was traceable to text it
-had actually retrieved — and roughly a quarter of the substance still did not
-survive the trip. One of the failures was a cited, grounded, confidently wrong
-answer about a Python version. That is the gap I keep pointing at: most RAG
+human-written reference, and it reads **0.77**. Groundedness at 0.99 and
+correctness at 0.77 **in the same column is the entire point of running the
+fifth metric.** Nearly every sentence the system produced was traceable to
+text it had actually retrieved — and roughly a quarter of the substance still
+did not survive the trip. On the earlier FastAPI set, one failure was a cited,
+grounded, confidently wrong answer about a Python version. That is the gap I keep pointing at: most RAG
 projects measure groundedness, see 1.0, and conclude they have solved
 hallucination. Groundedness tells you the model did not invent anything. It
 tells you nothing about whether the right thing was retrieved in the first
@@ -102,8 +101,8 @@ exactly the requests that went wrong. And a citation was leaking the server's
 temp directory path to the browser. None of these are findable by unit tests,
 because every unit involved was behaving correctly.
 
-**What it is and is not.** 842 tests, 94% coverage against a floor the build
-defends, CI running the whole gate on every push, about 25 paise per query,
+**What it is and is not.** A large test suite with a coverage floor the build
+defends, CI running the whole gate on every push, about ₹0.20 a question,
 and a spend counter that matched the actual invoice to four decimal places. It
 is **not** a product with users — it is a deployed, measured system, and I
 would rather say that plainly than dress it up. The line to lead with: *most
@@ -118,7 +117,7 @@ It reads a pile of documents and answers questions about them, and every
 sentence it writes comes with a receipt showing which paragraph it came from.
 The hard part is not getting an answer — it is knowing when the answer is
 wrong, because a wrong one sounds exactly as confident as a right one. So I
-measure that: roughly 71% of the substance matches a human-written reference.
+measure that: roughly 77% of the substance matches a human-written reference.
 Most people building these never check, which is why they all sound like they
 are at 100%.
 
@@ -130,9 +129,9 @@ are at 100%.
 > questions with a citation on every claim. The part I care about is that it
 > grades itself: it scores whether the retrieved context was even sufficient
 > before answering, then checks every sentence of the answer against that
-> context. It is live, it is about 25 paise a question, and I can tell you its
-> accuracy number — 0.71 against reference answers — while its groundedness is
-> a perfect 1.0. That gap is the interesting part, and almost nobody measures
+> context. It is live, it is about ₹0.20 a question, and I can tell you its
+> accuracy number — 0.77 against reference answers — while its groundedness is
+> 0.99. That gap is the interesting part, and almost nobody measures
 > it."
 
 ---
@@ -177,9 +176,11 @@ work does someone have to answer "is this answer grounded?" today.** Not
 The first question every engineer asks. Answer it by conceding the obvious
 point first — the concession is what makes the rest believable.
 
-**On a public, well-documented subject, Copilot is as right as Atlas and
-faster.** FastAPI is in every model's training data. A pitch that claims
-better answers about FastAPI is dead on contact with the first follow-up.
+**On a public subject a model was trained on, Copilot is as right as Atlas
+and faster.** A pitch that claims better answers about such a subject is dead
+on contact with the first follow-up. The live corpus is chosen to be the
+exception: DuckDB 2.0 shipped after the models' training, so asked what
+`X'CAFE'` produces, a model answers from memory and is wrong.
 
 The difference is not the answer. It is that the answer can be audited —
 and that changes what the system is allowed to be used for.
@@ -209,7 +210,7 @@ and that changes what the system is allowed to be used for.
 3. **A second model checks the first.** After generation a separate
    faithfulness pass asks whether each claim is supported by the retrieved
    text, and returns Supported / Mixed / Weak / Unsupported. It is measured,
-   not asserted: 1.0000 faithfulness and 0.7105 answer correctness on a
+   not asserted: 0.9867 faithfulness and 0.7736 answer correctness on a
    sixteen-question labelled set.
 
 4. **It can refuse.** A bounded corpus makes "out of scope" a real answer.
@@ -233,7 +234,7 @@ and that changes what the system is allowed to be used for.
 
 ### When it is actually the right tool
 
-Not for FastAPI. For when the answer must be defensible to a third party
+Not for documents a model already knows. For when the answer must be defensible to a third party
 (audit, compliance, a support rep quoting policy); when the corpus is
 private and in no training set, so confabulation is the default failure;
 when being wrong is expensive rather than annoying; or when you must *prove*
@@ -252,12 +253,12 @@ Stay on the right side of these when the follow-ups come.
 - **No users.** Say "built and deployed", never "people use it".
 - **One corpus live.** Multi-corpus works and is tested; the public instance
   serves one.
-- **0.71 is a real number on 16 questions.** Small set. Say "sixteen
+- **0.77 is a real number on 16 questions.** Small set. Say "sixteen
   questions" if pressed — it is honest, and it is more than most can say.
-- **Context precision is 0.47.** Never say "the metrics all look good" —
+- **Context precision is 0.51.** Never say "the metrics all look good" —
   three of five do. Retrieval hands the generator more noise than signal and
   the rerank is what saves it; say that before someone finds it in the report.
 - **Never say "it never hallucinates."** Say "every claim is traceable to a
-  source, and it scores 1.000 on that — but traceable is not the same as
+  source, and it scores 0.99 on that — but traceable is not the same as
   correct, which is why I measure both." That distinction *is* the
   differentiator; lead with it rather than hiding it.

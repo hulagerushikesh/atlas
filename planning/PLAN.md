@@ -36,6 +36,7 @@ Half A was the old roadmap. Half B is this plan.
 | Code health | 892 automated tests, all passing on GitHub |
 | Real use | **No question of any kind has reached the live site since 3 Nov.** The two invited friends sent 6 questions that day and never returned. |
 | Money runway | Gemini prepaid balance was **₹161.51** when last seen (~4 Nov), auto-reload **off**. At ₹0 the site stops answering. |
+| **The locked door** | **A visitor cannot ask anything without a personal key from the owner, pasted into Settings.** The landing page says "Open the console" and does not mention it. Anyone arriving from the README, the resume or the landing page meets "Not authorised". Found 2026-11-12; see decision D5. |
 
 **The honest read.** The build finished on 24 Oct. Every session since has
 been repair and polish with no milestone behind it — four changes shipped
@@ -95,11 +96,11 @@ parking lot in section 7 as one line, and the session moves on.
 
 | ID | Task | Who | Cost | Done when | Ticks |
 |---|---|---|---|---|---|
-| T1 | Write the 90-second recording script and shot list | C | ₹0 | script is in `docs/demo-script.md` | — |
+| ~~T1~~ | ~~Write the 90-second recording script and shot list~~ | C | ₹0 | **done 2026-11-12** — `docs/demo-script.md` | — |
 | T2 | Record the screen following the script; share the file | You | ₹0.20 | video file exists | — |
-| T3 | Put the video on README + landing; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1 |
-| T4 | Rewrite the README first screen; add the numbers check to the tests | C | ₹0 | tests fail if a quoted number is stale | 6.2 |
-| T5 | Send the invitation in section 5 to five people | You | ₹0 | five sent | — |
+| T3 | Put the video on README + landing, plus one still from it as the README screenshot; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1, 6.2 |
+| ~~T4~~ | ~~Rewrite the README first screen; add the numbers check to the tests~~ | C | ₹0 | **done 2026-11-13** — 42 quotes checked; the screenshot comes with T3 | — |
+| T5 | Send the invitation in section 5 to five people — **each needs their own key unless D5 says yes** | You | ₹0 | five sent | — |
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
 | T8 | Write the interview sheet | C | ₹0 | `learning/interview-sheet.md` | 7.1 |
@@ -110,13 +111,15 @@ parking lot in section 7 as one line, and the session moves on.
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T1, T4, T8, T10, T11 need nothing from the owner and can be done back to
+T8, T10, T11 need nothing from the owner and can be done back to
 back. T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
 
 - [ ] **O1 — Send the invitation (T5).** Five people, any mix of engineers
-      and friends. Paste this:
+      and friends. **Wait for decision D5 first:** as things stand each
+      person also needs a key from you and the line "open Settings, paste
+      this key", or the suggested question will refuse them. Paste this:
 
       > I built a tool that answers questions about a technical manual and
       > shows you exactly where each sentence came from, plus how much to
@@ -140,6 +143,7 @@ back. T6 cannot start until three days after T5.
 | D2 | Gemini auto-reload: on or off | Off, with a small manual top-up, plus the "demo paused" message (T11) |
 | D3 | Old FastAPI documents: keep or delete | Keep — deleting saves nothing and re-adding costs ₹6 |
 | D4 | "Depth setting ignored on a repeat question" | Accept and note it; it has never affected a real user |
+| **D5** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
 
 Write the answer in the table when decided. Claude never decides these.
 
@@ -155,6 +159,8 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-13 — T4 done: README first screen rewritten; README, landing, pitch and tour numbers now checked by tests; pitch's stale FastAPI figures replaced. ₹0.
+- 2026-11-12 — T1 done (recording script). Found the locked door: no visitor can ask without a key → decision D5. ₹0.
 - 2026-11-12 — Plan redesigned and approved; old planning files frozen as history; no-progress-lines rule added. ₹0.
 - 2026-11-11 — "Asked already" fix merged and deployed (revision 00043). ₹0.
 
