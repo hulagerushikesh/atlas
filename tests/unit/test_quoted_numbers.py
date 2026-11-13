@@ -23,6 +23,7 @@ NUM = r"(\d+(?:\.\d+)?)"
 LANDING = "console/src/landing/Sections.tsx"
 PITCH = "planning/PITCH.md"
 SHEET = "learning/interview-sheet.md"
+RESUME = "docs/resume-bullets.md"
 
 
 def _headline() -> dict[str, float]:
@@ -115,6 +116,15 @@ QUOTES: list[tuple[str, str, str, str]] = [
     (SHEET, rf"context precision {NUM}\.", "precision", "2"),
     (SHEET, rf"₹{NUM} a question", "query_rupees", "2"),
     (SHEET, rf"₹{NUM} for a full evaluation run", "run_rupees", "2"),
+    # Resume bullets
+    (RESUME, rf"{NUM} groundedness", "faithfulness", "2"),
+    (RESUME, rf"groundedness {NUM}", "faithfulness", "2"),
+    (RESUME, rf"{NUM} (?:answer )?correctness", "correctness", "2"),
+    (RESUME, rf"{NUM} labelled\s+questions", "questions", "int"),
+    (RESUME, rf"recall {NUM}\)", "recall", "2"),
+    (RESUME, rf"{NUM} s median", "median_s", "1"),
+    (RESUME, rf"about ₹{NUM} \(~", "query_rupees", "2"),
+    (RESUME, rf"live, ₹{NUM} a\s+question", "query_rupees", "2"),
 ]
 
 
