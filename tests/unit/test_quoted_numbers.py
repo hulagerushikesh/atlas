@@ -24,6 +24,7 @@ LANDING = "console/src/landing/Sections.tsx"
 PITCH = "planning/PITCH.md"
 SHEET = "learning/interview-sheet.md"
 RESUME = "docs/resume-bullets.md"
+CASE = "docs/case-study.md"
 
 
 def _headline() -> dict[str, float]:
@@ -125,6 +126,17 @@ QUOTES: list[tuple[str, str, str, str]] = [
     (RESUME, rf"{NUM} s median", "median_s", "1"),
     (RESUME, rf"about ₹{NUM} \(~", "query_rupees", "2"),
     (RESUME, rf"live, ₹{NUM} a\s+question", "query_rupees", "2"),
+    # Case study
+    (CASE, rf"harness runs {NUM} labelled questions", "questions", "int"),
+    (CASE, rf"On {NUM} labelled questions", "questions", "int"),
+    (CASE, rf"\(recall {NUM}\)", "recall", "2"),
+    (CASE, rf"faithfulness is {NUM}:", "faithfulness", "2"),
+    (CASE, rf"hand-written references is\s+{NUM}\.", "correctness", "2"),
+    (CASE, rf"Context precision is {NUM}\.", "precision", "2"),
+    (CASE, rf"{NUM} s median end to end", "median_s", "1"),
+    (CASE, rf"end to end, {NUM} s at p95", "p95_s", "1"),
+    (CASE, rf"About ₹{NUM} a question", "query_rupees", "2"),
+    (CASE, rf"evaluation run costs ₹{NUM}\.", "run_rupees", "2"),
 ]
 
 
