@@ -9,6 +9,7 @@ import { store as ls } from "@/lib/api"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 export const GITHUB = "https://github.com/hulagerushikesh/atlas"
+const CASE_STUDY = `${GITHUB}/blob/main/docs/case-study.md`
 
 /* ── Reveal ────────────────────────────────────────────────────────────── */
 
@@ -49,6 +50,7 @@ export function Nav() {
         <nav className="label hidden items-center gap-5 md:flex">
           <a href="#how" className="transition-colors hover:text-foreground">How it works</a>
           <a href="#notes" className="transition-colors hover:text-foreground">Field notes</a>
+          <a href={CASE_STUDY} target="_blank" rel="noreferrer" className="transition-colors hover:text-foreground">Case study</a>
           <a href="#start" className="transition-colors hover:text-foreground">Quick start</a>
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
@@ -181,6 +183,10 @@ export function FieldNotes() {
           </Reveal>
         ))}
       </div>
+      <p className="mt-10 text-[15.5px] text-ink-2">
+        Three decisions the measurements reversed, and what it costs to run:{" "}
+        <a href={CASE_STUDY} target="_blank" rel="noreferrer" className="text-blue underline underline-offset-4 hover:text-foreground">read the case study</a>.
+      </p>
     </section>
   )
 }
@@ -306,6 +312,7 @@ export function Footer() {
         <nav className="label ml-auto flex gap-5">
           <a href="/app" className="transition-colors hover:text-foreground">Console</a>
           <a href="/docs" className="transition-colors hover:text-foreground">API docs</a>
+          <a href={CASE_STUDY} className="transition-colors hover:text-foreground" target="_blank" rel="noreferrer">Case study</a>
           <a href={GITHUB} className="transition-colors hover:text-foreground" target="_blank" rel="noreferrer">GitHub</a>
         </nav>
       </div>

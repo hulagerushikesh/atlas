@@ -28,7 +28,7 @@ Half A was the old roadmap. Half B is this plan.
 | | |
 |---|---|
 | Live site | https://atlas.hulage.in — console at `/app` |
-| Live version | revision `atlas-api-00043-74g`, deployed 2026-11-11, carries every merged change |
+| Live version | revision `atlas-api-00044-k8c`, deployed 2026-11-13, carries every merged change up to T11 |
 | Demo documents | DuckDB 2.0 manual — 226 pages, 3,975 passages |
 | Measured quality | finds the right page **16 of 16**; answers stick to the pages **0.99**; answers correct **0.77** (16 test questions, 2026-11-03) |
 | Cost | **₹0** while idle · about **₹0.20** per question · ₹6 per full test run |
@@ -67,7 +67,7 @@ goes into maintenance and stops consuming sessions.
 - [x] **7.1** A one-page interview sheet: the 12 questions an interviewer
       will ask about Atlas, each with a three-sentence answer and the number
       behind it.
-- [ ] **7.2** A public case study, 800 words at most: the problem, three
+- [x] **7.2** A public case study, 800 words at most: the problem, three
       decisions the measurements overturned, what it costs to run.
 - [x] **7.3** Fresh resume bullets with today's numbers, written here as
       text for the owner to paste (the resume lives in another project).
@@ -104,14 +104,14 @@ parking lot in section 7 as one line, and the session moves on.
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
 | ~~T8~~ | ~~Write the interview sheet~~ | C | ₹0 | **done 2026-11-13** — `learning/interview-sheet.md`, its numbers checked by tests | 7.1 |
-| T9 | Write the case study; publish on the site | C + You | ₹0 | reachable from the landing page | 7.2 |
+| ~~T9~~ | ~~Write the case study; publish on the site~~ | C + You | ₹0 | **done 2026-11-13** — `docs/case-study.md`, linked from the landing page after your next deploy | 7.2 |
 | ~~T10~~ | ~~Write new resume bullets as text~~ | C | ₹0 | **done 2026-11-13** — `docs/resume-bullets.md`, its numbers checked by tests | 7.3 |
-| ~~T11~~ | ~~Check what the site does when Gemini refuses for lack of credit; make it say "demo paused"~~ | C | ₹0 | **done 2026-11-13** — tested with a built refusal; live after your next deploy | 8.1 (half) |
+| ~~T11~~ | ~~Check what the site does when Gemini refuses for lack of credit; make it say "demo paused"~~ | C | ₹0 | **done 2026-11-13** — tested with a built refusal; live since 2026-11-13 | 8.1 (half) |
 | T12 | Check the prepaid balance; decide auto-reload | You | your call | decision written in section 6 | 8.1 |
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T9 is next for Claude; T13 needs a yes on its cost first. T6 cannot start until three days after T5.
+T14 (the defect part) is next for Claude; T13 needs a yes on its cost first. T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
 
@@ -159,6 +159,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-13 — T11 deployed and checked live; T9 done: case study, its numbers checked by tests, linked from the landing page. ₹0.
 - 2026-11-13 — T11 done: no credit → "Demo paused" instead of the generic failure, no retries or fallback; needs a deploy to go live. ₹0.
 - 2026-11-13 — T10 done: resume bullets (four, two swap-ins, one-liner) with their numbers added to the drift test. ₹0.
 - 2026-11-13 — T8 done: interview sheet, 12 questions with answers and numbers; its headline numbers added to the drift test. ₹0.
