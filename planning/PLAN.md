@@ -28,7 +28,7 @@ Half A was the old roadmap. Half B is this plan.
 | | |
 |---|---|
 | Live site | https://atlas.hulage.in — console at `/app` |
-| Live version | revision `atlas-api-00044-k8c`, deployed 2026-11-13, carries every merged change up to T11 |
+| Live version | revision `atlas-api-00045-pbm`, deployed 2026-11-13, carries every merged change up to T9 |
 | Demo documents | DuckDB 2.0 manual — 226 pages, 3,975 passages |
 | Measured quality | finds the right page **16 of 16**; answers stick to the pages **0.99**; answers correct **0.77** (16 test questions, 2026-11-03) |
 | Cost | **₹0** while idle · about **₹0.20** per question · ₹6 per full test run |
@@ -100,18 +100,19 @@ parking lot in section 7 as one line, and the session moves on.
 | T2 | Record the screen following the script; share the file | You | ₹0.20 | video file exists | — |
 | T3 | Put the video on README + landing, plus one still from it as the README screenshot; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1, 6.2 |
 | ~~T4~~ | ~~Rewrite the README first screen; add the numbers check to the tests~~ | C | ₹0 | **done 2026-11-13** — 42 quotes checked; the screenshot comes with T3 | — |
+| T15 | Let visitors ask the demo sheet without a key, ₹10/day cap | C + You | ≤₹10/day | live; a keyless question answered | — |
 | T5 | Send the invitation in section 5 to five people — **each needs their own key unless D5 says yes** | You | ₹0 | five sent | — |
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
 | ~~T8~~ | ~~Write the interview sheet~~ | C | ₹0 | **done 2026-11-13** — `learning/interview-sheet.md`, its numbers checked by tests | 7.1 |
-| ~~T9~~ | ~~Write the case study; publish on the site~~ | C + You | ₹0 | **done 2026-11-13** — `docs/case-study.md`, linked from the landing page after your next deploy | 7.2 |
+| ~~T9~~ | ~~Write the case study; publish on the site~~ | C + You | ₹0 | **done 2026-11-13** — `docs/case-study.md`, linked from the landing page, live since 2026-11-13 | 7.2 |
 | ~~T10~~ | ~~Write new resume bullets as text~~ | C | ₹0 | **done 2026-11-13** — `docs/resume-bullets.md`, its numbers checked by tests | 7.3 |
 | ~~T11~~ | ~~Check what the site does when Gemini refuses for lack of credit; make it say "demo paused"~~ | C | ₹0 | **done 2026-11-13** — tested with a built refusal; live since 2026-11-13 | 8.1 (half) |
 | T12 | Check the prepaid balance; decide auto-reload | You | your call | decision written in section 6 | 8.1 |
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T14 (the defect part) is next for Claude; T13 needs a yes on its cost first. T6 cannot start until three days after T5.
+T15 is built (server, console wording, visitor guide, deploy settings); it waits on your push, merge and deploy, then one live keyless question (~₹0.20); T13 approved (<₹1/month). T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
 
@@ -140,9 +141,9 @@ T14 (the defect part) is next for Claude; T13 needs a yes on its cost first. T6 
 |---|---|---|
 | D1 | ~~Approve this plan, or change M6–M8~~ | **Approved as is, 2026-11-12** |
 | D2 | Gemini auto-reload: on or off | Off, with a small manual top-up, plus the "demo paused" message (T11) |
-| D3 | Old FastAPI documents: keep or delete | Keep — deleting saves nothing and re-adding costs ₹6 |
-| D4 | "Depth setting ignored on a repeat question" | Accept and note it; it has never affected a real user |
-| **D5** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
+| D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
+| D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
+| ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
 
 Write the answer in the table when decided. Claude never decides these.
 
@@ -159,6 +160,8 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-14 — T15 finished in code: console wording, visitor guide and README, deploy settings (₹10/day, 3 a minute). ₹0.
+- 2026-11-13 — D3 keep, D4 accept, D5 yes, T13 approved; T15 server half built and tested (off until deploy settings added). ₹0.
 - 2026-11-13 — T11 deployed and checked live; T9 done: case study, its numbers checked by tests, linked from the landing page. ₹0.
 - 2026-11-13 — T11 done: no credit → "Demo paused" instead of the generic failure, no retries or fallback; needs a deploy to go live. ₹0.
 - 2026-11-13 — T10 done: resume bullets (four, two swap-ins, one-liner) with their numbers added to the drift test. ₹0.

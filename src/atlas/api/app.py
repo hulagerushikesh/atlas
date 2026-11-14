@@ -111,6 +111,15 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     registry = NamespaceRegistry(shared)
 
     redis_client = await connect_redis(settings)
+    spend = SpendMeter(
+        budget_usd=settings.budget.daily_usd,
+        backend=build_spend_backend(
+            settings.budget.store,
+            redis_client=redis_client,
+            firestore_project=settings.auth_firestore_project or None,
+        ),
+    )
+    demo_on = bool(settings.budget.demo_namespace) and settings.budget.demo_usd > 0
 
     app.state.atlas = AppState(
         registry=registry,
@@ -121,17 +130,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_model=shared.settings.openai.embedding_model,
         chat_model=shared.settings.openai.primary_model,
         ingest=settings.ingest,
-        spend=SpendMeter(
-            budget_usd=settings.budget.daily_usd,
-            backend=build_spend_backend(
-                settings.budget.store,
-                redis_client=redis_client,
-                firestore_project=settings.auth_firestore_project or None,
-            ),
-        ),
+        spend=spend,
+        demo_namespace=settings.budget.demo_namespace if demo_on else "",
+        demo_spend=SpendMeter(
+            budget_usd=settings.budget.demo_usd, backend=spend.backend,
+            scope="demo", parent=spend,
+        ) if demo_on else None,
     )
     if settings.budget.daily_usd > 0:
         logger.info("daily_budget_enabled", usd=settings.budget.daily_usd)
+    if demo_on:
+        logger.info("keyless_demo_enabled", namespace=settings.budget.demo_namespace,
+                    usd=settings.budget.demo_usd, rpm=settings.budget.demo_rpm)
 
     # Load the cross-encoder behind the server rather than in front of it.
     # The import alone is 12.41 s of a 36.9 s cold start, and only /query
@@ -201,7 +211,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(TracingMiddleware)
     app.add_middleware(PrometheusMiddleware)
-    app.add_middleware(APIKeyMiddleware, enabled=cfg.auth_enabled)
+    app.add_middleware(APIKeyMiddleware, enabled=cfg.auth_enabled, demo_rpm=cfg.budget.demo_rpm)
 
     # Landing page at /
     import pathlib as _pl

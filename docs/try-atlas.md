@@ -49,12 +49,15 @@ assistant you already use. The difference is the product.
 
 Open **<https://atlas.hulage.in/app>**.
 
-The console loads without a key. Asking a question needs one, because every
-question costs real money in model calls. Ask Rushikesh for a key — it looks
-like `atlas_…`.
+You can ask questions about the DuckDB sheet without a key. Every question
+costs real money in model calls, so keyless questions share a small daily
+allowance (about ₹10, roughly 50 questions) and each visitor can ask 3 a
+minute. When the allowance is used up, the console says so; it starts again
+at midnight UTC.
 
-Then: **Settings** (the gear, top right) → paste the key into **API key** →
-Save.
+For other sheets, or to skip the allowance, ask Rushikesh for a key — it
+looks like `atlas_…`. Then: **Settings** (the gear, top right) → paste the
+key into **API key** → Save.
 
 > **First request is slow.** The service scales to zero when idle, so the
 > first query after a quiet spell waits ~12 s for the container and the

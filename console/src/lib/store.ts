@@ -80,8 +80,15 @@ export const DEMO_PAUSED: Failure = {
 
 export function failureFrom(e: unknown): Failure {
   const err = e instanceof ApiError ? e : new ApiError(-1, e instanceof Error ? e.message : String(e))
-  const detail = err.detail as { code?: unknown } | undefined
+  const detail = err.detail as { code?: unknown; sheet?: unknown } | undefined
   if (err.status === 503 && detail?.code === "demo_paused") return DEMO_PAUSED
+  // Refusals of keyless questions: the server allows them on one sheet only.
+  if (detail?.code === "key_required")
+    return { what: "This sheet needs a key.", why: `Without a key, Atlas answers questions about sheet "${String(detail.sheet ?? "duckdb")}" only.`, next: "Switch to that sheet, or add a key under Settings." }
+  if (detail?.code === "demo_cap")
+    return { what: "Today's free questions are used up.", why: "Questions without a key share a small daily allowance, and it has run out.", next: "It starts again at midnight UTC. Questions answered before still load." }
+  if (detail?.code === "demo_rate")
+    return { what: "Too many questions in a minute.", why: "Without a key, each visitor can ask a few questions a minute.", next: "Wait a minute and ask again." }
   if (err.status === 401 || err.status === 403)
     return { what: "Not authorised.", why: "The sheet requires an API key and none was accepted.", next: "Add a key under Settings." }
   if (err.status === 429)

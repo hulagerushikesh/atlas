@@ -32,9 +32,10 @@ logger = structlog.get_logger(__name__)
 class BudgetExceeded(Exception):
     """Raised by SpendMeter.check() when today's spend has reached the cap."""
 
-    def __init__(self, spent_usd: float, budget_usd: float) -> None:
+    def __init__(self, spent_usd: float, budget_usd: float, scope: str = "") -> None:
         self.spent_usd = spent_usd
         self.budget_usd = budget_usd
+        self.scope = scope
         super().__init__(
             f"daily budget exhausted: ${spent_usd:.4f} of ${budget_usd:.2f} spent today (UTC)"
         )
@@ -51,11 +52,18 @@ def seconds_until_utc_midnight() -> int:
 
 
 class SpendMeter:
-    """Per-UTC-day USD accumulator with an optional hard cap."""
+    """Per-UTC-day USD accumulator with an optional hard cap.
 
-    def __init__(self, budget_usd: float = 0.0, backend: SpendBackend | None = None) -> None:
+    A `scope` meter keeps its own total under a prefixed day key and passes
+    every charge and check on to `parent`, so a sub-cap can never lift the cap.
+    """
+
+    def __init__(self, budget_usd: float = 0.0, backend: SpendBackend | None = None,
+                 *, scope: str = "", parent: SpendMeter | None = None) -> None:
         self._budget = max(0.0, budget_usd)
         self._backend: SpendBackend = backend or MemorySpendBackend()
+        self._scope = scope
+        self._parent = parent
         # Mirror of what this process has charged today. The backend is the
         # truth; the mirror is what the cap falls back on when the backend is
         # unreachable, so an outage in the counter cannot uncap the spend.
@@ -67,8 +75,15 @@ class SpendMeter:
         return self._budget
 
     @property
+    def backend(self) -> SpendBackend:
+        return self._backend
+
+    @property
     def enabled(self) -> bool:
         return self._budget > 0
+
+    def _key(self) -> str:
+        return f"{self._scope}-{self._day}" if self._scope else self._day
 
     def _roll_day(self) -> None:
         today = _today()
@@ -79,7 +94,7 @@ class SpendMeter:
     async def today_usd(self) -> float:
         self._roll_day()
         try:
-            return await self._backend.total(self._day)
+            return await self._backend.total(self._key())
         except Exception as exc:
             logger.warning("spend_meter_read_failed", error=str(exc))
             return self._local
@@ -88,19 +103,24 @@ class SpendMeter:
         """Record spend; returns the new daily total."""
         if usd <= 0:
             return await self.today_usd()
+        if self._parent is not None:
+            await self._parent.add(usd)
         self._roll_day()
         self._local += usd
         try:
-            return await self._backend.add(self._day, usd)
+            return await self._backend.add(self._key(), usd)
         except Exception as exc:
             logger.warning("spend_meter_write_failed", error=str(exc))
             return self._local
 
     async def check(self) -> None:
         """Raise BudgetExceeded if today's spend has reached the cap."""
+        if self._parent is not None:
+            await self._parent.check()
         if not self.enabled:
             return
         spent = await self.today_usd()
         if spent >= self._budget:
-            logger.warning("daily_budget_exhausted", spent_usd=spent, budget_usd=self._budget)
-            raise BudgetExceeded(spent, self._budget)
+            logger.warning("daily_budget_exhausted", spent_usd=spent, budget_usd=self._budget,
+                           scope=self._scope or "all")
+            raise BudgetExceeded(spent, self._budget, self._scope)

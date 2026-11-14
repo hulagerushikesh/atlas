@@ -42,6 +42,10 @@ class AppState:
     embedding_model: str   # surfaced for cost estimation in routes
     chat_model: str = "unknown"
     spend: SpendMeter = field(default_factory=SpendMeter)
+    # Keyless questions are allowed on this sheet only, charged to demo_spend
+    # (which also charges `spend`). Empty means every question needs a key.
+    demo_namespace: str = ""
+    demo_spend: SpendMeter | None = None
     # Carried here rather than read from get_settings() in the route, so a test
     # can confine or unconfine one app without touching process-wide state.
     ingest: IngestConfig = field(default_factory=IngestConfig)
