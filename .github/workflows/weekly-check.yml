@@ -39,7 +39,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OWNER: ${{ github.repository_owner }}
+        # Assigned and mentioned so the owner is emailed even when not watching
+        # the repo (the first test alert opened an issue but sent no email).
         run: |
           test -s report.md || echo "**The weekly check itself crashed.** See the run log." > report.md
-          printf '\nRun log: %s\n' "$RUN_URL" >> report.md
-          gh issue create --title "Weekly check failed $(date -u +%F)" --body-file report.md
+          printf '\nRun log: %s\n\ncc @%s\n' "$RUN_URL" "$OWNER" >> report.md
+          gh issue create --title "Weekly check failed $(date -u +%F)" --body-file report.md --assignee "$OWNER"
