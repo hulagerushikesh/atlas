@@ -112,7 +112,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T15 is live, so T5 (invitations) is unblocked for you; T13 is next for Claude (approved, <₹1/month). T6 cannot start until three days after T5.
+T15 is live, so T5 (invitations) is unblocked for you. T13 is built (every Monday, one real question, ≈₹0.87/month, an issue + email only on failure); it is done when the owner's test alert arrives after merge. T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
 
@@ -160,6 +160,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-14 — T13 built: Monday check of pages, health and one real cited question; opens an issue only on failure; test alert waits on merge. ₹0.
 - 2026-11-14 — T15 deployed and checked live: keyless DuckDB question answered, cited, faithful; other sheets and uploads still refused. ₹0.20.
 - 2026-11-14 — T15 finished in code: console wording, visitor guide and README, deploy settings (₹10/day, 3 a minute). ₹0.
 - 2026-11-13 — D3 keep, D4 accept, D5 yes, T13 approved; T15 server half built and tested (off until deploy settings added). ₹0.

@@ -1,0 +1,45 @@
+name: weekly-check
+
+# Asks the live site one real question every Monday (~₹0.20) and opens an
+# issue only when something is wrong; GitHub emails the owner about it.
+# GitHub turns schedules off after 60 days without a commit, and emails first.
+
+on:
+  schedule:
+    - cron: "30 3 * * 1" # Monday 03:30 UTC = 09:00 India
+  workflow_dispatch:
+    inputs:
+      test_alert:
+        description: "Fail on purpose to prove the alert arrives (asks nothing, ₹0)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency: weekly-check
+
+jobs:
+  check:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Check the live site
+        run: python3 scripts/weekly_check.py --report report.md ${{ inputs.test_alert && '--test-alert' || '' }}
+
+      - name: Open an issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          test -s report.md || echo "**The weekly check itself crashed.** See the run log." > report.md
+          printf '\nRun log: %s\n' "$RUN_URL" >> report.md
+          gh issue create --title "Weekly check failed $(date -u +%F)" --body-file report.md
