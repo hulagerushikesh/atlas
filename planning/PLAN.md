@@ -77,11 +77,11 @@ goes into maintenance and stops consuming sessions.
 - [ ] **8.1** Money runway is known and safe: balance checked, auto-reload
       decided, and when the balance is gone the site says "demo paused"
       in plain words instead of failing.
-- [ ] **8.2** A weekly automatic check, costing under ₹1 a month, that
+- [x] **8.2** A weekly automatic check, costing under ₹1 a month, that
       contacts the owner only when something is wrong.
-- [ ] **8.3** Loose ends closed: old Gemini key revoked · old FastAPI
-      documents kept or deleted · the "depth setting ignored on a repeat
-      question" defect fixed or accepted · this file marked "maintenance".
+- [ ] **8.3** Loose ends closed: old Gemini key revoked (O4) · ~~old FastAPI
+      documents kept or deleted~~ (kept, D3) · ~~the "depth setting ignored on a repeat
+      question" defect fixed or accepted~~ (accepted, D4) · this file marked "maintenance" (last, once everything else is ticked).
 
 ### The stop rule
 
@@ -109,10 +109,10 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T10~~ | ~~Write new resume bullets as text~~ | C | ₹0 | **done 2026-11-13** — `docs/resume-bullets.md`, its numbers checked by tests | 7.3 |
 | ~~T11~~ | ~~Check what the site does when Gemini refuses for lack of credit; make it say "demo paused"~~ | C | ₹0 | **done 2026-11-13** — tested with a built refusal; live since 2026-11-13 | 8.1 (half) |
 | T12 | Check the prepaid balance; decide auto-reload | You | your call | decision written in section 6 | 8.1 |
-| T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
-| T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
+| ~~T13~~ | ~~Build the weekly health check~~ | C | <₹1/month | **done 2026-11-14** — every Monday 09:00 India, ≈₹0.87/month; the test alert reached the owner's inbox | 8.2 |
+| T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through — two struck 2026-11-14; left: O4, then "maintenance" last | 8.3 |
 
-T15 is live, so T5 (invitations) is unblocked for you. T13 is built (every Monday, one real question, ≈₹0.87/month, an issue + email only on failure); it is done when the owner's test alert arrives after merge. T6 cannot start until three days after T5.
+Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on revoking the old key (O4). T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -160,6 +160,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-14 — T13 done: second test alert emailed the owner; T14 two of four struck (D3, D4); every Claude task now waits on the owner. ₹0.
 - 2026-11-14 — T13 test alert opened an issue but no email (owner not watching the repo); alerts now assign and mention the owner. ₹0.
 - 2026-11-14 — T13 built: Monday check of pages, health and one real cited question; opens an issue only on failure; test alert waits on merge. ₹0.
 - 2026-11-14 — T15 deployed and checked live: keyless DuckDB question answered, cited, faithful; other sheets and uploads still refused. ₹0.20.
