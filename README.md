@@ -7,8 +7,8 @@ how far is it actually backed by those passages?
 
 **Live at [atlas.hulage.in](https://atlas.hulage.in).** The demo documents
 are the DuckDB 2.0 manual, released after today's AI models were trained, so
-an answer cannot come from a model's memory. Asking a question needs an
-access key for now — [the tour](docs/try-atlas.md) says how to get one.
+an answer cannot come from a model's memory. Questions about it need no key,
+within a small daily allowance; [the tour](docs/try-atlas.md) has the details.
 
 Measured on 16 labelled questions, 2026-11-03 ([full results](#results)):
 
