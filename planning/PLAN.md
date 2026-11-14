@@ -28,7 +28,7 @@ Half A was the old roadmap. Half B is this plan.
 | | |
 |---|---|
 | Live site | https://atlas.hulage.in — console at `/app` |
-| Live version | revision `atlas-api-00045-pbm`, deployed 2026-11-13, carries every merged change up to T9 |
+| Live version | revision `atlas-api-00046-htz`, deployed 2026-11-14, carries every merged change up to T15 |
 | Demo documents | DuckDB 2.0 manual — 226 pages, 3,975 passages |
 | Measured quality | finds the right page **16 of 16**; answers stick to the pages **0.99**; answers correct **0.77** (16 test questions, 2026-11-03) |
 | Cost | **₹0** while idle · about **₹0.20** per question · ₹6 per full test run |
@@ -100,7 +100,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T2 | Record the screen following the script; share the file | You | ₹0.20 | video file exists | — |
 | T3 | Put the video on README + landing, plus one still from it as the README screenshot; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1, 6.2 |
 | ~~T4~~ | ~~Rewrite the README first screen; add the numbers check to the tests~~ | C | ₹0 | **done 2026-11-13** — 42 quotes checked; the screenshot comes with T3 | — |
-| T15 | Let visitors ask the demo sheet without a key, ₹10/day cap | C + You | ≤₹10/day | live; a keyless question answered | — |
+| ~~T15~~ | ~~Let visitors ask the demo sheet without a key, ₹10/day cap~~ | C + You | ≤₹10/day | **done 2026-11-14** — live; a keyless question answered with 4 citations, faithfulness 1.0, ₹0.20 | — |
 | T5 | Send the invitation in section 5 to five people — **each needs their own key unless D5 says yes** | You | ₹0 | five sent | — |
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
@@ -112,7 +112,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T13 | Build the weekly health check | C | <₹1/month | one test alert received | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through | 8.3 |
 
-T15 is built (server, console wording, visitor guide, deploy settings); it waits on your push, merge and deploy, then one live keyless question (~₹0.20); T13 approved (<₹1/month). T6 cannot start until three days after T5.
+T15 is live, so T5 (invitations) is unblocked for you. T13 is built (every Monday, one real question, ≈₹0.87/month, an issue + email only on failure); it is done when the owner's test alert arrives after merge. T6 cannot start until three days after T5.
 
 ## 5. The owner's list — things only you can do
 
@@ -160,6 +160,8 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-14 — T13 built: Monday check of pages, health and one real cited question; opens an issue only on failure; test alert waits on merge. ₹0.
+- 2026-11-14 — T15 deployed and checked live: keyless DuckDB question answered, cited, faithful; other sheets and uploads still refused. ₹0.20.
 - 2026-11-14 — T15 finished in code: console wording, visitor guide and README, deploy settings (₹10/day, 3 a minute). ₹0.
 - 2026-11-13 — D3 keep, D4 accept, D5 yes, T13 approved; T15 server half built and tested (off until deploy settings added). ₹0.
 - 2026-11-13 — T11 deployed and checked live; T9 done: case study, its numbers checked by tests, linked from the landing page. ₹0.
