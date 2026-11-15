@@ -101,7 +101,7 @@ parking lot in section 7 as one line, and the session moves on.
 | T3 | Put the video on README + landing, plus one still from it as the README screenshot; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1, 6.2 |
 | ~~T4~~ | ~~Rewrite the README first screen; add the numbers check to the tests~~ | C | ₹0 | **done 2026-11-13** — 42 quotes checked; the screenshot comes with T3 | — |
 | ~~T15~~ | ~~Let visitors ask the demo sheet without a key, ₹10/day cap~~ | C + You | ≤₹10/day | **done 2026-11-14** — live; a keyless question answered with 4 citations, faithfulness 1.0, ₹0.20 | — |
-| T5 | Send the invitation in section 5 to five people — **each needs their own key unless D5 says yes** | You | ₹0 | five sent | — |
+| T5 | Send the invitation in section 5 to five people — **no key needed** (T15 is live) | You | ₹0 | five sent | — |
 | T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
 | ~~T8~~ | ~~Write the interview sheet~~ | C | ₹0 | **done 2026-11-13** — `learning/interview-sheet.md`, its numbers checked by tests | 7.1 |
@@ -117,9 +117,8 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 ## 5. The owner's list — things only you can do
 
 - [ ] **O1 — Send the invitation (T5).** Five people, any mix of engineers
-      and friends. **Wait for decision D5 first:** as things stand each
-      person also needs a key from you and the line "open Settings, paste
-      this key", or the suggested question will refuse them. Paste this:
+      and friends. **Ready now:** no key needed, the demo sheet answers
+      anyone (₹10/day cap). Paste this:
 
       > I built a tool that answers questions about a technical manual and
       > shows you exactly where each sentence came from, plus how much to
@@ -127,7 +126,7 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
       > suggested question, then ask one of your own about DuckDB. Tell me
       > the first thing that confused you — that is the only feedback I need.
 
-- [ ] **O2 — Record the 90-second video (T2)** once Claude gives the script.
+- [ ] **O2 — Record the 90-second video (T2).** The script is ready: `docs/demo-script.md`.
 - [ ] **O3 — Check the Gemini prepaid balance and decide auto-reload (T12).**
 - [ ] **O4 — Revoke the old Gemini key.** Already proven safe to revoke.
 - [ ] **O5 — Put the new Gemini key into sextant** (separate project,
@@ -160,6 +159,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-15 — Owner list brought up to date: invitations need no key, video script ready; nothing else unblocked. ₹0.
 - 2026-11-14 — T13 done: second test alert emailed the owner; T14 two of four struck (D3, D4); every Claude task now waits on the owner. ₹0.
 - 2026-11-14 — T13 test alert opened an issue but no email (owner not watching the repo); alerts now assign and mention the owner. ₹0.
 - 2026-11-14 — T13 built: Monday check of pages, health and one real cited question; opens an issue only on failure; test alert waits on merge. ₹0.
