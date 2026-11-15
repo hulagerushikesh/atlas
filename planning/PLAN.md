@@ -118,13 +118,30 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 
 - [ ] **O1 — Send the invitation (T5).** Five people, any mix of engineers
       and friends. **Ready now:** no key needed, the demo sheet answers
-      anyone (₹10/day cap). Paste this:
+      anyone (₹10/day cap; about 3 questions a minute per visitor). Send by
+      WhatsApp, LinkedIn or email, or post once on LinkedIn. Paste this:
 
-      > I built a tool that answers questions about a technical manual and
-      > shows you exactly where each sentence came from, plus how much to
-      > trust it. Two minutes: open https://atlas.hulage.in/app, press the
-      > suggested question, then ask one of your own about DuckDB. Tell me
-      > the first thing that confused you — that is the only feedback I need.
+      > Hey! I built a tool called Atlas that answers questions about a
+      > technical manual (DuckDB, a database tool). It shows exactly which
+      > page each sentence came from, and how much to trust the answer.
+      > Could you try it for 2 minutes? No sign-up needed.
+      >
+      > 1. Open https://atlas.hulage.in/app
+      > 2. Press the suggested question on the screen.
+      > 3. Then try one or two of these, or ask your own:
+      >    • How do I read a CSV file in DuckDB?
+      >    • Does DuckDB support CREATE TRIGGER?
+      >    • Can a DuckDB schema contain another schema?
+      >    • How do you list the triggers in a DuckDB database?
+      >    • How do I send every DuckDB change into Kafka? (a trick question:
+      >      the manual doesn't cover it, so it should say so instead of
+      >      making something up)
+      > 4. Click the little numbers in the answer to see the page it came from.
+      >
+      > Then just tell me the first thing that confused you. That's the only
+      > feedback I need 🙂
+
+      Afterwards: forward any replies to Claude and say the date you sent it.
 
 - [ ] **O2 — Record the 90-second video (T2).** The script is ready: `docs/demo-script.md`.
 - [ ] **O3 — Check the Gemini prepaid balance and decide auto-reload (T12).**
@@ -159,6 +176,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-15 — Invitation rewritten for non-engineers: five example questions, including one trick question. ₹0.
 - 2026-11-15 — Owner list brought up to date: invitations need no key, video script ready; nothing else unblocked. ₹0.
 - 2026-11-14 — T13 done: second test alert emailed the owner; T14 two of four struck (D3, D4); every Claude task now waits on the owner. ₹0.
 - 2026-11-14 — T13 test alert opened an issue but no email (owner not watching the repo); alerts now assign and mention the owner. ₹0.
