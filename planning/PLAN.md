@@ -35,7 +35,7 @@ Half A was the old roadmap. Half B is this plan.
 | Speed | about 7 s typical, 14 s slow case; first visit after idle waits ~15 s |
 | Code health | 892 automated tests, all passing on GitHub |
 | Real use | **No question of any kind has reached the live site since 3 Nov.** The two invited friends sent 6 questions that day and never returned. |
-| Money runway | Gemini prepaid balance was **₹161.51** when last seen (~4 Nov), auto-reload **off**. At ₹0 the site stops answering. |
+| Money runway | Gemini prepaid balance was **₹161.51** when last seen (~4 Nov), auto-reload **on** (AutoPay, owner's decision 2026-11-18), so the site no longer stops at ₹0; visitor spend is held by the ₹10/day cap. |
 | **The locked door** | **A visitor cannot ask anything without a personal key from the owner, pasted into Settings.** The landing page says "Open the console" and does not mention it. Anyone arriving from the README, the resume or the landing page meets "Not authorised". Found 2026-11-12; see decision D5. |
 
 **The honest read.** The build finished on 24 Oct. Every session since has
@@ -108,7 +108,7 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T9~~ | ~~Write the case study; publish on the site~~ | C + You | ₹0 | **done 2026-11-13** — `docs/case-study.md`, linked from the landing page, live since 2026-11-13 | 7.2 |
 | ~~T10~~ | ~~Write new resume bullets as text~~ | C | ₹0 | **done 2026-11-13** — `docs/resume-bullets.md`, its numbers checked by tests | 7.3 |
 | ~~T11~~ | ~~Check what the site does when Gemini refuses for lack of credit; make it say "demo paused"~~ | C | ₹0 | **done 2026-11-13** — tested with a built refusal; live since 2026-11-13 | 8.1 (half) |
-| T12 | Check the prepaid balance; decide auto-reload | You | your call | decision written in section 6 | 8.1 |
+| T12 | Check the prepaid balance; decide auto-reload | You | your call | decision written in section 6 — **auto-reload decided 2026-11-18 (on)**; left: look at the balance once | 8.1 |
 | ~~T13~~ | ~~Build the weekly health check~~ | C | <₹1/month | **done 2026-11-14** — every Monday 09:00 India, ≈₹0.87/month; the test alert reached the owner's inbox | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through — two struck 2026-11-14; left: O4, then "maintenance" last | 8.3 |
 
@@ -144,8 +144,11 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
       Afterwards: forward any replies to Claude and say the date you sent it.
 
 - [ ] **O2 — Record the 90-second video (T2).** The script is ready: `docs/demo-script.md`.
-- [ ] **O3 — Check the Gemini prepaid balance and decide auto-reload (T12).**
-- [ ] **O4 — Revoke the old Gemini key.** Already proven safe to revoke.
+- [ ] **O3 — Look at the Gemini prepaid balance once (T12).** Auto-reload is
+      decided: on (AutoPay). Planned for the weekend of 21–22 Nov.
+- [ ] **O4 — Revoke the old Gemini key.** Atlas no longer uses it, but another
+      project still does: move that project to the new key first (O5), then
+      revoke. Planned for the weekend of 21–22 Nov.
 - [ ] **O5 — Put the new Gemini key into sextant** (separate project,
       separate session).
 - [ ] **O6 — Five recovery-code files in Downloads:** save to a password
@@ -156,7 +159,8 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 | # | Decision | Claude's recommendation |
 |---|---|---|
 | D1 | ~~Approve this plan, or change M6–M8~~ | **Approved as is, 2026-11-12** |
-| D2 | Gemini auto-reload: on or off | Off, with a small manual top-up, plus the "demo paused" message (T11) |
+| D2 | ~~Gemini auto-reload: on or off~~ | **Decided 2026-11-18: on** (AutoPay). Claude had recommended off |
+| D6 | **What comes after M8?** Options: **(a)** two small first-visit fixes, ₹0: the daily-cap message says "demo paused until tomorrow" instead of "wait a minute", and the ~15 s wait after idle is measured to find where it goes (every page already wakes the same server, so the cause is unknown) · **(b)** M9: raise "answers correct" from 0.77 to 0.85 on a 40-question test set, about ₹30 of test runs · **(c)** a second public manual so Atlas is not DuckDB-only, a few ₹, priced before starting · **(d)** visitors try one small document of their own, capped — biggest, riskiest | **(a) now, before the weekend visits; then (b) after T6**, unless the findings point elsewhere. 0.77 is the number an interviewer will push on |
 | D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
 | D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
 | ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
@@ -176,6 +180,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-18 — Invitation not sent yet, friends will try 21–22 Nov; D2 decided (AutoPay on); O4 waits on another project; next-milestone options written as D6. ₹0.
 - 2026-11-15 — Invitation rewritten for non-engineers: five example questions, including one trick question. ₹0.
 - 2026-11-15 — Owner list brought up to date: invitations need no key, video script ready; nothing else unblocked. ₹0.
 - 2026-11-14 — T13 done: second test alert emailed the owner; T14 two of four struck (D3, D4); every Claude task now waits on the owner. ₹0.
