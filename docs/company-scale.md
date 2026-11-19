@@ -19,6 +19,33 @@ cache misses that all read the same two paragraphs of the health policy.
 The question text is the wrong thing to remember. **What repeats is the
 evidence — which passages an answer needs.**
 
+## 1b. How the answer cache works today
+
+1. A question arrives. Its text is cleaned (since S0: invisible characters,
+   look-alike letters, spacing, case and end punctuation ignored) and turned
+   into a short fingerprint, prefixed by the sheet it was asked about.
+2. **Memory first:** each server keeps the last 256 answers in its own
+   memory. A match is returned in about a millisecond, at no cost.
+3. **Shared store second:** a Redis copy shared by all servers, kept for one
+   hour. Supported in the code, **switched off live**.
+4. **Miss:** the full pipeline runs (four model calls, 8–11 s, ≈₹0.18). Only
+   a finished answer that passed its faithfulness check is stored; a failed
+   or half-streamed answer never is.
+5. **Forgetting:** the oldest unused answer drops out when 256 is full;
+   anything older than an hour expires; adding a document to a sheet drops
+   every saved answer for that sheet.
+
+What it cannot do: match a reworded question, share between the two live
+servers, or forget only the answers a changed paragraph affects.
+
+**Proposed (S3): reuse by evidence.** Search runs first, because it is cheap
+(one embedding, ≈₹0.0001). If the top passages largely match a stored
+answer's passages *and* the two questions are close in meaning, the stored
+answer is a candidate. A small check ("does this answer fit this
+question?", ≈₹0.02) confirms it before it is served; only a miss pays the
+full ≈₹0.18. Entries point at passages, so a changed passage drops exactly
+the answers that read it, and a reader must be allowed every cited passage.
+
 ## 2. Assumed load (to size the problem, not a forecast)
 
 | Input | Value |
@@ -93,7 +120,7 @@ The worry is right in spirit, but storage is not the binding constraint:
 |---|---|---|---|
 | S0 | Clean question text before the cache lookup (Unicode NFKC, strip invisible characters, collapse spaces) | ₹0 | tonight's two misses become hits in a test |
 | S1 | Record, per answer, the IDs of the passages it used and a fingerprint of that set — no question text | ₹0 | visible in logs |
-| S2 | Measure reuse: rewrite the 40 test questions three ways each; see how often paraphrases pull the same passages | ≈ ₹2–3 (search only) | a "would have reused" % |
+| ~~S2~~ | Measure reuse: rewrite the 16 test questions three ways each; see how often paraphrases pull the same passages | ≈ ₹0.01 (search only) | **done 2026-11-19, section 7** |
 | S3 | If S2 is worth it: an **evidence-keyed answer cache** — key = passage-set fingerprint + corpus version; reuse only when the new question is close in meaning to the stored one, and only for readers allowed every cited passage | ₹0 to build | paraphrase hit rate measured live |
 | S4 | Per-document permissions | ₹0 | a reader without access gets "not found", even from the cache |
 | S5 | Precompute per-passage work once at ingest (short summaries) so answers read less text; check the provider's discount for repeated prompt text | priced first | tokens per answer down, quality unchanged |
@@ -101,8 +128,40 @@ The worry is right in spirit, but storage is not the binding constraint:
 S0 is a real-user fix and fits the plan now. S1–S5 together are a new
 milestone and need the owner to open it.
 
-## 7. What this note does not claim
+## 7. Measured 2026-11-19 (S2)
 
-No number above is measured at scale. The reuse rate, the skew of passage
-use and the cost saving are all unknown until S1–S2 run. Atlas today serves
+16 questions (the test set's 15 in-scope ones plus the invitation's CSV
+question), each reworded three ways — casual, bare keywords, long with
+context — searched against the live sheet. No answers generated; ≈₹0.01.
+Negative control: the 120 pairs of *different* originals.
+
+| Rule for "same evidence" | Rewordings caught | Different questions wrongly matched |
+|---|---|---|
+| Exact same top-5 passages (a plain fingerprint key) | 12.5% | 0 of 120 |
+| Same top passage | 46% | 1 of 120 |
+| 4 of top 5 shared | 46% | 1 of 120 |
+| 3 of top 5 shared | 71% | 3 of 120 |
+| **3 of 5 shared + questions close in meaning (≥ 0.85)** | **69%** | **1 of 120** |
+| 3 of 5 shared + meaning ≥ 0.90 | 50% | 0 of 120 |
+
+What it says:
+- **An exact passage fingerprint is too strict** — rewording shuffles the
+  ranking, so only 1 in 8 would be caught. Overlap, not identity, is the key.
+- **Passages alone are not safe.** "Install and load an extension in one
+  statement?" and "Is new syntax available right after LOAD?" share three
+  passages and read as similar, yet need different answers. That is why S3
+  needs the fit check before serving.
+- **Rewording changes what the answer reads.** In 14 of 48 rewordings fewer
+  than 3 of the top 5 passages survived, so answers to one question can
+  differ by phrasing — a quality issue in its own right.
+
+Report: `eval_data/reports/paraphrase-reuse_*.json`; rerun with
+`scripts/measure_evidence_reuse.py`.
+
+## 8. What this note does not claim
+
+Section 7 is measured, but small: 16 questions, rewordings written by Claude
+rather than by real employees, one technical manual. How often real people
+re-ask something already answered is still unknown until the S1 logs run
+live, so the cost saving is still an estimate. Atlas today serves
 one public manual to a handful of visitors.
