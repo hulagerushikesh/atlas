@@ -78,6 +78,7 @@ from atlas.api.schemas import (
     TokenUsage,
 )
 from atlas.cost import estimate_usage_cost
+from atlas.ingestion.hashing import hash_text
 from atlas.orchestration.pipeline import EvidenceChunk, PipelineResult, RAGPipeline
 from atlas.retry_policy import is_credit_exhausted
 from atlas.usage import UsageMeter, counted, usage_scope
@@ -125,6 +126,21 @@ def _evidence_response(
             citation=citation_by_chunk.get(chunk.chunk_id),
         ))
     return out
+
+
+# The grader judges this many passages; two questions that agree on them are
+# candidates for one shared answer (S1 of docs/company-scale.md).
+_EVIDENCE_TOP = 5
+
+
+def _evidence_fields(chunk_ids: list[str]) -> dict[str, Any]:
+    """Which passages an answer read, as IDs and an order-free fingerprint of
+    the top five. IDs only, never text, so the line stays safe to keep."""
+    return {
+        "evidence_ids": chunk_ids,
+        "evidence_fp": hash_text("|".join(sorted(chunk_ids[:_EVIDENCE_TOP])))
+        if chunk_ids else None,
+    }
 
 
 def _stage_timings(stage_ms: dict[str, float], total_ms: float) -> StageTimings:
@@ -566,6 +582,7 @@ async def _stream_query(
         "query_complete",
         stream=True,
         failed=False,
+        **_evidence_fields(capture.retrieved_chunk_ids),
         total_ms=total_ms,
         prompt_tokens=sum(u.prompt_tokens for u in usage.by_model.values()),
         completion_tokens=sum(u.completion_tokens for u in usage.by_model.values()),
@@ -907,7 +924,8 @@ async def query(
         # the keyword index to be current.
         cached_payload = await cache.get(body.query, body.namespace)
         if cached_payload is not None:
-            log.info("query_cache_hit", stream=True)
+            log.info("query_cache_hit", stream=True,
+                     **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
             _log_cache_hit(request, body.namespace)
             return StreamingResponse(
                 _replay_stream(cached_payload),
@@ -963,7 +981,8 @@ async def query(
     # them and a corpus answered from before its newest document for an hour.
     cached_payload = await cache.get(body.query, body.namespace)
     if cached_payload is not None:
-        log.info("query_cache_hit")
+        log.info("query_cache_hit",
+                 **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
         response = QueryResponse.model_validate(cached_payload)
         response.cached = True
         _log_cache_hit(request, body.namespace)
@@ -1048,6 +1067,7 @@ async def query(
         stream=False,
         classification=result.classification,
         chunks=len(result.retrieved_chunks),
+        **_evidence_fields([c.chunk_id for c in result.retrieved_chunks]),
         faithful=result.is_faithful,
         total_ms=timings.total_ms,
         prompt_tokens=response.token_usage.prompt_tokens,

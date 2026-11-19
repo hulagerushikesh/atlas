@@ -19,6 +19,9 @@ from fastapi.testclient import TestClient
 
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
 from atlas.cost import estimate_usage_cost
+from atlas.interfaces.document import ChunkMetadata, DocumentType
+from atlas.interfaces.retriever import RetrievedChunk
+from atlas.orchestration.pipeline import RetrievalPass
 from atlas.usage import ModelUsage, UsageMeter
 
 
@@ -624,3 +627,61 @@ class TestAnAttributedQueryIsCountedOnceAndDoesNotCrash:
         calls = self._records(client, monkeypatch)
         assert calls[0]["prompt_tokens"] == 1200
         assert calls[0]["completion_tokens"] == 40
+
+
+class TestTheCompletionLogNamesItsEvidence:
+    """S1 of docs/company-scale.md: each answer logs which passages it read
+    (IDs and a fingerprint of the top five, never text), so how often
+    differently worded questions need the same evidence can be counted."""
+
+    @staticmethod
+    def _chunks(ids: list[str]) -> list[RetrievedChunk]:
+        return [
+            RetrievedChunk(
+                chunk_id=cid, content="x", score=0.0,
+                metadata=ChunkMetadata(
+                    doc_id="d1", source="doc.md", doc_type=DocumentType.MARKDOWN,
+                    chunk_index=i, start_char=0, end_char=1,
+                ),
+            )
+            for i, cid in enumerate(ids)
+        ]
+
+    def test_standard_path_logs_ids_and_an_order_free_fingerprint(
+        self, client: TestClient
+    ) -> None:
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        fps = []
+        for order in (["a", "b", "c", "d", "e", "f"], ["e", "d", "c", "b", "a", "z"]):
+            pipeline.run.return_value.retrieved_chunks = self._chunks(order)
+            with structlog.testing.capture_logs() as logs:
+                client.post("/query", json={"query": f"q {order[0]}"})
+            done = [e for e in logs if e.get("event") == "query_complete"][0]
+            assert done["evidence_ids"] == order
+            fps.append(done["evidence_fp"])
+        # Same top five in another order, different sixth: one fingerprint.
+        assert fps[0] == fps[1]
+
+    def test_streaming_path_logs_the_same_fields(self, client: TestClient) -> None:
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline._retrieve_all.return_value = RetrievalPass(
+            chunks=self._chunks(["a", "b"]), evidence=[]
+        )
+        with structlog.testing.capture_logs() as logs, client.stream(
+            "POST", "/query", json={"query": "q", "stream": True}
+        ) as resp:
+            for _ in resp.iter_lines():
+                pass
+        done = [e for e in logs if e.get("event") == "query_complete"][0]
+        assert done["evidence_ids"] == ["a", "b"]
+        assert done["evidence_fp"]
+        assert "query" not in done  # no question text on the evidence line
+
+    def test_a_cache_hit_logs_the_fingerprint_it_reused(self, client: TestClient) -> None:
+        pipeline = client.app.state.atlas.registry.get("default").pipeline
+        pipeline.run.return_value.retrieved_chunks = self._chunks(["a", "b"])
+        client.post("/query", json={"query": "same question"})
+        with structlog.testing.capture_logs() as logs:
+            client.post("/query", json={"query": "same question"})
+        hit = [e for e in logs if e.get("event") == "query_cache_hit"]
+        assert hit and hit[0]["evidence_ids"] == ["a", "b"]

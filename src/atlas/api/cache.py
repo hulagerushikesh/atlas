@@ -58,6 +58,8 @@ Design rationale:
 from __future__ import annotations
 
 import json
+import re
+import unicodedata
 from collections import OrderedDict
 from typing import Any
 
@@ -66,6 +68,17 @@ import structlog
 from atlas.ingestion.hashing import hash_text
 
 logger = structlog.get_logger(__name__)
+
+_SPACES = re.compile(r"\s+")
+
+
+def normalise_question(text: str) -> str:
+    """What the cache compares. The first real visit paid twice because WhatsApp
+    prefixed a pasted question with an invisible U+2060; format characters
+    (category Cf), look-alikes, spacing, case and end punctuation are ignored."""
+    folded = unicodedata.normalize("NFKC", text)
+    visible = "".join(ch for ch in folded if unicodedata.category(ch) != "Cf")
+    return _SPACES.sub(" ", visible).strip().casefold().rstrip("?.! ")
 
 
 class QueryCache:
@@ -88,7 +101,7 @@ class QueryCache:
         return f"atlas:query:{hash_text(namespace)}:"
 
     def _make_key(self, query: str, namespace: str = "default") -> str:
-        return f"{self._ns_prefix(namespace)}{hash_text(query.lower().strip())}"
+        return f"{self._ns_prefix(namespace)}{hash_text(normalise_question(query))}"
 
     async def get(self, query: str, namespace: str = "default") -> dict[str, Any] | None:
         key = self._make_key(query, namespace)
