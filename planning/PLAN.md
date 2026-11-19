@@ -79,7 +79,7 @@ goes into maintenance and stops consuming sessions.
       in plain words instead of failing.
 - [x] **8.2** A weekly automatic check, costing under ₹1 a month, that
       contacts the owner only when something is wrong.
-- [ ] **8.3** Loose ends closed: old Gemini key revoked (O4) · ~~old FastAPI
+- [ ] **8.3** Loose ends closed: ~~old Gemini key revoked (O4)~~ (revoked 2026-11-19) · ~~old FastAPI
       documents kept or deleted~~ (kept, D3) · ~~the "depth setting ignored on a repeat
       question" defect fixed or accepted~~ (accepted, D4) · this file marked "maintenance" (last, once everything else is ticked).
 
@@ -110,9 +110,9 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T11~~ | ~~Check what the site does when Gemini refuses for lack of credit; make it say "demo paused"~~ | C | ₹0 | **done 2026-11-13** — tested with a built refusal; live since 2026-11-13 | 8.1 (half) |
 | T12 | Check the prepaid balance; decide auto-reload | You | your call | decision written in section 6 — **auto-reload decided 2026-11-18 (on)**; left: look at the balance once | 8.1 |
 | ~~T13~~ | ~~Build the weekly health check~~ | C | <₹1/month | **done 2026-11-14** — every Monday 09:00 India, ≈₹0.87/month; the test alert reached the owner's inbox | 8.2 |
-| T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through — two struck 2026-11-14; left: O4, then "maintenance" last | 8.3 |
+| T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through — three struck (O4 on 2026-11-19); left: "maintenance", last, once everything else is ticked | 8.3 |
 
-Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on revoking the old key (O4). T12 is yours too.
+Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked (only "maintenance" is left). T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -146,11 +146,10 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 - [ ] **O2 — Record the 90-second video (T2).** The script is ready: `docs/demo-script.md`.
 - [ ] **O3 — Look at the Gemini prepaid balance once (T12).** Auto-reload is
       decided: on (AutoPay). Planned for the weekend of 21–22 Nov.
-- [ ] **O4 — Revoke the old Gemini key.** Atlas no longer uses it, but another
-      project still does: move that project to the new key first (O5), then
-      revoke. Planned for the weekend of 21–22 Nov.
-- [ ] **O5 — Put the new Gemini key into sextant** (separate project,
-      separate session).
+- [x] **O4 — Revoke the old Gemini key.** **Done 2026-11-19**; the live site
+      answered a real question afterwards.
+- [x] **O5 — Put the new Gemini key into sextant.** **Done by the owner
+      before 2026-11-19.**
 - [ ] **O6 — Five recovery-code files in Downloads:** save to a password
       manager, then delete them.
 
@@ -180,6 +179,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-19 — Owner revoked the old Gemini key; live check answered a real question afterwards ($0.0021); laptop key still works. ₹0.18.
 - 2026-11-18 — Invitation not sent yet, friends will try 21–22 Nov; D2 decided (AutoPay on); O4 waits on another project; next-milestone options written as D6. ₹0.
 - 2026-11-15 — Invitation rewritten for non-engineers: five example questions, including one trick question. ₹0.
 - 2026-11-15 — Owner list brought up to date: invitations need no key, video script ready; nothing else unblocked. ₹0.
