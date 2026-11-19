@@ -19,7 +19,8 @@ So the goal has two halves:
 | Half | Meaning | State |
 |---|---|---|
 | **A. It works, and that is measured** | built, tested, live, costs known | **Done** — 20 of 20 |
-| **B. It is seen and understood** | strangers get it in two minutes; the owner can present it; it stays alive without attention | **Not started** — 0 of 10 |
+| **B. It is seen and understood** | strangers get it in two minutes; the owner can present it; it stays alive without attention | **In progress** — see section 3 |
+| **C. Ready for a 10,000-person company** (M9, opened 2026-11-19) | reuse evidence instead of question text; per-document permissions | **In progress** — see M9 |
 
 Half A was the old roadmap. Half B is this plan.
 
@@ -82,6 +83,24 @@ goes into maintenance and stops consuming sessions.
 - [ ] **8.3** Loose ends closed: ~~old Gemini key revoked (O4)~~ (revoked 2026-11-19) · ~~old FastAPI
       documents kept or deleted~~ (kept, D3) · ~~the "depth setting ignored on a repeat
       question" defect fixed or accepted~~ (accepted, D4) · this file marked "maintenance" (last, once everything else is ticked).
+
+### M9 — Ready for a 10,000-person company (opened by the owner 2026-11-19, D7)
+
+Design and numbers: `docs/company-scale.md`. Measure before building.
+
+- [ ] **9.1** A pasted question with hidden characters (WhatsApp) reuses the
+      earlier answer instead of paying again. Built and tested 2026-11-19;
+      ticked when live.
+- [ ] **9.2** Every answer's log line names the passages it read (IDs and a
+      fingerprint, no text). Built 2026-11-19; ticked when live.
+- [x] **9.3** Reuse measured on 48 rewordings of 16 questions, ≈₹0.01:
+      **69% would reuse, 1 of 120 unrelated pairs would match wrongly**
+      (rule: 3 of top 5 passages shared and the questions close in meaning).
+- [ ] **9.4** Evidence-based reuse built behind a switch, off by default,
+      with a cheap "does this stored answer fit this question" check; live
+      reuse and wrong-reuse rates read from the 9.2 logs.
+- [ ] **9.5** Per-document permissions: a reader without access to a
+      passage never sees it, including through reused answers.
 
 ### The stop rule
 
@@ -160,6 +179,7 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 | D1 | ~~Approve this plan, or change M6–M8~~ | **Approved as is, 2026-11-12** |
 | D2 | ~~Gemini auto-reload: on or off~~ | **Decided 2026-11-18: on** (AutoPay). Claude had recommended off |
 | D6 | **What comes after M8?** Options: **(a)** two small first-visit fixes, ₹0: the daily-cap message says "demo paused until tomorrow" instead of "wait a minute", and the ~15 s wait after idle is measured to find where it goes (every page already wakes the same server, so the cause is unknown) · **(b)** M9: raise "answers correct" from 0.77 to 0.85 on a 40-question test set, about ₹30 of test runs · **(c)** a second public manual so Atlas is not DuckDB-only, a few ₹, priced before starting · **(d)** visitors try one small document of their own, capped — biggest, riskiest | **(a) now, before the weekend visits; then (b) after T6**, unless the findings point elsewhere. 0.77 is the number an interviewer will push on |
+| ~~D7~~ **Decided 2026-11-19: yes, M9 opened** | **Open M9 "Ready for a 10,000-person company"?** Reuse the evidence an answer needs instead of the exact question text, then per-document permissions. Steps S1–S5 and costs in `docs/company-scale.md` | **Yes, measure first:** S1–S2 (≈ ₹3) decide whether S3 is worth building; S4 (permissions) is the blocker for any real company either way. S0 (clean pasted text) is a real-user fix and needs no decision |
 | D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
 | D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
 | ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
@@ -179,6 +199,8 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-19 — D7 yes, M9 opened (plan now 15 boxes, project 35): pasted-text fix and passage logging built, not live; reuse measured, 69% of rewordings / 1 of 120 wrong; ≈₹0.01.
+- 2026-11-19 — First real visit: owner and one friend asked 12 questions (the invitation's five plus the suggested one); findings below; owner set the company-scale lens, design note written, D7 added. ₹1.25 of visitor questions, ₹0 for reading them.
 - 2026-11-19 — Owner revoked the old Gemini key; live check answered a real question afterwards ($0.0021); laptop key still works. ₹0.18.
 - 2026-11-18 — Invitation not sent yet, friends will try 21–22 Nov; D2 decided (AutoPay on); O4 waits on another project; next-milestone options written as D6. ₹0.
 - 2026-11-15 — Invitation rewritten for non-engineers: five example questions, including one trick question. ₹0.
@@ -199,6 +221,12 @@ Write the answer in the table when decided. Claude never decides these.
 - 2026-11-11 — "Asked already" fix merged and deployed (revision 00043). ₹0.
 
 Findings from T6 go here, five lines at most.
+
+- 2026-11-19 (early read: one friend + owner, about 20:20 India): 12 questions, **12 answered, 0 errors**; 9 fresh answers took 8–11 s, every one fully backed by the manual; 3 repeats came back instantly.
+- The Kafka trick question was declined in about 1 s both times, even when pasted with its hint text.
+- No wait on first open: the server was already awake. The ~10 s per answer is the answer itself, not a wake-up.
+- Small: text copied from WhatsApp carries an invisible character, so two repeats were answered and paid again (≈₹0.35); the tab icon is missing on every page.
+- Not seen in logs: the answer wording, and what confused anyone — that needs the friend's own words.
 
 ---
 
@@ -226,6 +254,10 @@ Findings from T6 go here, five lines at most.
   or in tracked files, work on a branch, no Claude credit lines, nothing
   left running).
 - Never touch another project from an Atlas session.
+- **Think at company scale** (owner, 2026-11-19): judge every design as if
+  Atlas served a 10,000-person company — permissions, freshness, privacy,
+  shared state, cost per team, ingestion volume. Measure before building.
+  Reference: `docs/company-scale.md`.
 
 ### Writing limits — these stop the files growing again
 
@@ -257,7 +289,7 @@ Completed **<task ID and plain name>** and pushed <where> / nothing pushed.
 
 **<Nothing needed from you. / The one thing needed from you.>**
 
-This task: <N>% · Plan: <ticked> of 10 · Whole project: <20 + ticked> of 30
+This task: <N>% · Plan: <ticked> of 15 · Whole project: <20 + ticked> of 35
 ```
 
 - Plain words for a non-engineer. No file paths, commit ids, branch names,

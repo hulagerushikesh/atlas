@@ -222,3 +222,31 @@ class TestNamespaceScoping:
         pattern = redis.keys.call_args[0][0]
         assert pattern.startswith("atlas:query:")
         assert "*" not in pattern.removesuffix("*")
+
+
+class TestPastedQuestionsShareAnEntry:
+    """S0 of docs/company-scale.md: the first real visit paid twice for the
+    same question because the WhatsApp copy carried an invisible U+2060."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "pasted",
+        [
+            "⁠Does DuckDB support CREATE TRIGGER?",   # WhatsApp word joiner
+            "Does​ DuckDB support CREATE TRIGGER?",   # zero-width space
+            "﻿Does DuckDB support CREATE TRIGGER?",   # byte-order mark
+            "Does DuckDB  support\nCREATE TRIGGER ?",  # nbsp, double space, newline
+            "does duckdb support create trigger",          # case, no question mark
+            "Ｄoes DuckDB support CREATE TRIGGER?",         # full-width letter
+        ],
+    )
+    async def test_variant_hits_the_original(self, pasted: str) -> None:
+        cache = QueryCache()
+        await cache.set("Does DuckDB support CREATE TRIGGER?", {"answer": "yes"})
+        assert await cache.get(pasted) is not None
+
+    @pytest.mark.asyncio
+    async def test_a_different_question_still_misses(self) -> None:
+        cache = QueryCache()
+        await cache.set("Does DuckDB support CREATE TRIGGER?", {"answer": "yes"})
+        assert await cache.get("Does DuckDB support CREATE VIEW?") is None

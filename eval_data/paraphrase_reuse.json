@@ -1,0 +1,70 @@
+{
+  "name": "paraphrase-reuse",
+  "description": "S2 of docs/company-scale.md. Each group is one question as asked in the test set or the invitation, plus three rewordings the way different people would type it: casual, terse keywords, and long with context. Used only to measure whether rewordings retrieve the same passages; no answers are generated.",
+  "groups": [
+    {"id": "dq-001", "original": "What type does the literal X'CAFE' produce in DuckDB?", "paraphrases": [
+      "if I write X'CAFE' in duckdb what do I get back",
+      "duckdb hex literal X'' type",
+      "I'm migrating some old queries that use X'CAFE' style literals — in DuckDB 2.0, what data type does that expression evaluate to?"]},
+    {"id": "dq-002", "original": "What type does the literal B'0101' produce in DuckDB?", "paraphrases": [
+      "what does B'0101' turn into in duckdb",
+      "duckdb B'' literal bit string type",
+      "Our analysts write B'0101' in a few reports; which DuckDB type does that literal become, and is it a string or something else?"]},
+    {"id": "dq-003", "original": "Does DuckDB support CREATE TRIGGER, and what events can a trigger fire on?", "paraphrases": [
+      "can I make triggers in duckdb? when do they run",
+      "duckdb triggers supported events",
+      "We rely on triggers in Postgres for audit rows. If we move to DuckDB, can we still create triggers, and on which kinds of changes would they fire?"]},
+    {"id": "dq-004", "original": "Is there a single statement that installs a DuckDB extension and loads it at the same time?", "paraphrases": [
+      "can I install and load an extension in one go in duckdb",
+      "duckdb install load extension one statement",
+      "Right now my setup script runs INSTALL and then LOAD for each DuckDB extension. Is there one command that does both at once?"]},
+    {"id": "dq-005", "original": "Can a DuckDB schema contain another schema?", "paraphrases": [
+      "can schemas be nested in duckdb",
+      "duckdb nested schema",
+      "I want to organise tables as team.project.table with a schema inside a schema. Does DuckDB allow a schema to live inside another schema?"]},
+    {"id": "dq-006", "original": "How do you read the value of a session variable inside a DuckDB query?", "paraphrases": [
+      "I set a variable in duckdb, how do I use it in a select",
+      "duckdb getvariable session variable",
+      "After running SET VARIABLE in a DuckDB session, what's the way to reference that variable's value from inside a later SQL query?"]},
+    {"id": "dq-007", "original": "Which parser does DuckDB use by default, and how do you turn the PEG parser on?", "paraphrases": [
+      "what parser does duckdb run by default, how to switch to PEG",
+      "duckdb default parser enable peg",
+      "I read that DuckDB has a new PEG-based parser. Is it already the default one, and if not, what setting turns it on?"]},
+    {"id": "dq-008", "original": "Does DuckDB still need the ICU library to work with named time zones?", "paraphrases": [
+      "do I still need ICU for time zones in duckdb",
+      "duckdb icu extension time zone names",
+      "Our container image is minimal and doesn't ship the ICU extension. Can DuckDB still handle named time zones like Asia/Kolkata without it?"]},
+    {"id": "dq-009", "original": "How can you find out which columns of a DuckDB table are generated columns?", "paraphrases": [
+      "how do I see which columns are generated in a duckdb table",
+      "duckdb list generated columns",
+      "Someone added computed columns to a table and I need to audit them. Which DuckDB query tells me which columns are generated rather than stored?"]},
+    {"id": "dq-010", "original": "Which statement should you use to inspect a table's schema in DuckDB, and what is wrong with the alternative?", "paraphrases": [
+      "best way to look at a table's columns in duckdb, DESCRIBE or SHOW?",
+      "duckdb describe vs show table",
+      "When I want to check the column names and types of a DuckDB table, should I use DESCRIBE or the other command, and what's the catch with the one I shouldn't use?"]},
+    {"id": "dq-011", "original": "How do you list the triggers that exist in a DuckDB database?", "paraphrases": [
+      "how can I see all triggers in my duckdb db",
+      "duckdb show triggers list",
+      "Before a migration I want an inventory of every trigger defined in our DuckDB database. How do I get that list?"]},
+    {"id": "dq-012", "original": "Can a DuckDB STRUCT type be empty, and is there anything about empty structs that still fails?", "paraphrases": [
+      "are empty structs allowed in duckdb",
+      "duckdb empty struct limitations",
+      "A pipeline sometimes produces a STRUCT with no fields. Does DuckDB accept that, and are there operations on an empty struct that still error?"]},
+    {"id": "dq-013", "original": "If a string containing an IANA time zone name is cast to a TIMESTAMP WITHOUT TIME ZONE in DuckDB, does it raise an error?", "paraphrases": [
+      "what happens if I cast '2024-01-01 10:00 Europe/Paris' to timestamp in duckdb",
+      "duckdb cast string with time zone name to timestamp error",
+      "Some of our source strings have a zone name like America/New_York at the end. When DuckDB casts those to a plain TIMESTAMP, does it fail or quietly do something?"]},
+    {"id": "dq-014", "original": "After you LOAD a DuckDB extension that adds new SQL syntax, is that syntax available straight away?", "paraphrases": [
+      "I loaded an extension with new syntax in duckdb but can I use it immediately",
+      "duckdb extension new syntax after load",
+      "We load a DuckDB extension that adds graph query syntax. Does the new syntax work as soon as LOAD finishes, or is there another step?"]},
+    {"id": "dq-015", "original": "How do I create a view that hides its underlying data, and grant specific users permission to read it?", "paraphrases": [
+      "how to make a view in duckdb and give only some users access",
+      "duckdb create view grant permissions users",
+      "For compliance, I want a DuckDB view that exposes only some columns, and I want only certain people to be able to read it. How is that set up?"]},
+    {"id": "inv-csv", "original": "How do I read a CSV file in DuckDB?", "paraphrases": [
+      "how to load a csv into duckdb",
+      "duckdb read_csv",
+      "I've got an export from our CRM as a .csv file. What's the simplest way to query it with DuckDB?"]}
+  ]
+}
