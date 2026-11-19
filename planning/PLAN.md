@@ -179,6 +179,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-19 — First real visit: owner and one friend asked 12 questions (the invitation's five plus the suggested one); findings below. ₹1.25 of visitor questions, ₹0 for reading them.
 - 2026-11-19 — Owner revoked the old Gemini key; live check answered a real question afterwards ($0.0021); laptop key still works. ₹0.18.
 - 2026-11-18 — Invitation not sent yet, friends will try 21–22 Nov; D2 decided (AutoPay on); O4 waits on another project; next-milestone options written as D6. ₹0.
 - 2026-11-15 — Invitation rewritten for non-engineers: five example questions, including one trick question. ₹0.
@@ -199,6 +200,12 @@ Write the answer in the table when decided. Claude never decides these.
 - 2026-11-11 — "Asked already" fix merged and deployed (revision 00043). ₹0.
 
 Findings from T6 go here, five lines at most.
+
+- 2026-11-19 (early read: one friend + owner, about 20:20 India): 12 questions, **12 answered, 0 errors**; 9 fresh answers took 8–11 s, every one fully backed by the manual; 3 repeats came back instantly.
+- The Kafka trick question was declined in about 1 s both times, even when pasted with its hint text.
+- No wait on first open: the server was already awake. The ~10 s per answer is the answer itself, not a wake-up.
+- Small: text copied from WhatsApp carries an invisible character, so two repeats were answered and paid again (≈₹0.35); the tab icon is missing on every page.
+- Not seen in logs: the answer wording, and what confused anyone — that needs the friend's own words.
 
 ---
 
