@@ -160,6 +160,7 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 | D1 | ~~Approve this plan, or change M6–M8~~ | **Approved as is, 2026-11-12** |
 | D2 | ~~Gemini auto-reload: on or off~~ | **Decided 2026-11-18: on** (AutoPay). Claude had recommended off |
 | D6 | **What comes after M8?** Options: **(a)** two small first-visit fixes, ₹0: the daily-cap message says "demo paused until tomorrow" instead of "wait a minute", and the ~15 s wait after idle is measured to find where it goes (every page already wakes the same server, so the cause is unknown) · **(b)** M9: raise "answers correct" from 0.77 to 0.85 on a 40-question test set, about ₹30 of test runs · **(c)** a second public manual so Atlas is not DuckDB-only, a few ₹, priced before starting · **(d)** visitors try one small document of their own, capped — biggest, riskiest | **(a) now, before the weekend visits; then (b) after T6**, unless the findings point elsewhere. 0.77 is the number an interviewer will push on |
+| D7 | **Open M9 "Ready for a 10,000-person company"?** Reuse the evidence an answer needs instead of the exact question text, then per-document permissions. Steps S1–S5 and costs in `docs/company-scale.md` | **Yes, measure first:** S1–S2 (≈ ₹3) decide whether S3 is worth building; S4 (permissions) is the blocker for any real company either way. S0 (clean pasted text) is a real-user fix and needs no decision |
 | D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
 | D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
 | ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
@@ -179,7 +180,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
-- 2026-11-19 — First real visit: owner and one friend asked 12 questions (the invitation's five plus the suggested one); findings below. ₹1.25 of visitor questions, ₹0 for reading them.
+- 2026-11-19 — First real visit: owner and one friend asked 12 questions (the invitation's five plus the suggested one); findings below; owner set the company-scale lens, design note written, D7 added. ₹1.25 of visitor questions, ₹0 for reading them.
 - 2026-11-19 — Owner revoked the old Gemini key; live check answered a real question afterwards ($0.0021); laptop key still works. ₹0.18.
 - 2026-11-18 — Invitation not sent yet, friends will try 21–22 Nov; D2 decided (AutoPay on); O4 waits on another project; next-milestone options written as D6. ₹0.
 - 2026-11-15 — Invitation rewritten for non-engineers: five example questions, including one trick question. ₹0.
@@ -233,6 +234,10 @@ Findings from T6 go here, five lines at most.
   or in tracked files, work on a branch, no Claude credit lines, nothing
   left running).
 - Never touch another project from an Atlas session.
+- **Think at company scale** (owner, 2026-11-19): judge every design as if
+  Atlas served a 10,000-person company — permissions, freshness, privacy,
+  shared state, cost per team, ingestion volume. Measure before building.
+  Reference: `docs/company-scale.md`.
 
 ### Writing limits — these stop the files growing again
 
