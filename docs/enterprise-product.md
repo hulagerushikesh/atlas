@@ -5,6 +5,9 @@ solo portfolio project that builds the basics well. The owner wants it built
 and judged as an **enterprise-grade product** a company would buy. The
 portfolio value comes from that, not the other way round.
 
+**Approved by the owner 2026-11-20 (D8):** phases E1–E6 below are now
+milestones in `planning/PLAN.md`; E1's design is `docs/e1-identity.md`.
+
 This note is the product owner's and staff engineer's view: who it is for,
 what a company would demand, where today's code stands against each demand
 (checked in the code, not remembered), and the order in which to close the
