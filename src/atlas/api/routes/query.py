@@ -64,6 +64,8 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from atlas.api import tenancy
+from atlas.api.authz import authorize
 from atlas.api.background import spawn
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
 from atlas.api.cache import QueryCache
@@ -463,6 +465,7 @@ async def _stream_query(
     api_key_id: str | None = None,
     namespace: str = "default",
     cache: QueryCache | None = None,
+    cache_key: str | None = None,
 ) -> AsyncIterator[str]:
     """Stream the answer, and charge the daily cap for the whole request.
 
@@ -570,7 +573,7 @@ async def _stream_query(
     # stored — see `_StreamCapture`.
     if cache is not None and capture.complete:
         spawn(
-            cache.set(query, _cache_entry(capture, usage, total_ms), namespace),
+            cache.set(query, _cache_entry(capture, usage, total_ms), cache_key or namespace),
             name="cache_set_stream",
         )
 
@@ -912,9 +915,16 @@ async def query(
     """
     log = logger.bind(query=body.query[:80], namespace=body.namespace)
     app_state = get_app_state(request)
+    # Before the access check, so a visitor naming another sheet still hears
+    # that it needs a key rather than that it does not exist.
     spend = _meter_for(request, app_state, body.namespace)
+    ws = await authorize(request, body.namespace, "read")
+    # Cached answers are keyed by workspace id, not name: two organisations
+    # may both have a "docs", and must never be served each other's answers.
+    cache_key = ws.id
+    corpus = tenancy.registry_namespace(ws)
     registry = get_registry(request)
-    pipeline = registry.get(body.namespace).pipeline
+    pipeline = registry.get(corpus).pipeline
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
@@ -922,7 +932,7 @@ async def query(
         # the non-streaming path checks it there: a hit calls no model, so it
         # owes the cap nothing, and it retrieves nothing, so it does not need
         # the keyword index to be current.
-        cached_payload = await cache.get(body.query, body.namespace)
+        cached_payload = await cache.get(body.query, cache_key)
         if cached_payload is not None:
             log.info("query_cache_hit", stream=True,
                      **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
@@ -951,14 +961,14 @@ async def query(
         # before the pipeline reads it, or a document indexed by the other
         # instance is missing from the keyword half of every search this one
         # serves. Within the TTL this is free; see `reconcile_sparse`.
-        await registry.reconcile_sparse(body.namespace)
+        await registry.reconcile_sparse(corpus)
         log.info("query_stream_start")
         return StreamingResponse(
             _stream_query(
                 body.query, pipeline, spend, app_state.chat_model,
                 api_key_id=getattr(request.state, "api_key_id", None),
                 namespace=body.namespace,
-                cache=cache,
+                cache=cache, cache_key=cache_key,
             ),
             media_type="text/event-stream",
             # Was "skipped-streaming", which stopped being true on
@@ -979,7 +989,7 @@ async def query(
     # Glued on it was inside the hash, so no amount of string work could find
     # one corpus's entries again -- which is why an ingest could not invalidate
     # them and a corpus answered from before its newest document for an hour.
-    cached_payload = await cache.get(body.query, body.namespace)
+    cached_payload = await cache.get(body.query, cache_key)
     if cached_payload is not None:
         log.info("query_cache_hit",
                  **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
@@ -992,7 +1002,7 @@ async def query(
     # call the model. Same for the reconcile: a cached answer does not
     # retrieve, so it does not need the keyword index to be current.
     await _enforce_budget(spend)
-    await registry.reconcile_sparse(body.namespace)
+    await registry.reconcile_sparse(corpus)
     log.info("query_start")
     t_total = time.perf_counter()
 
@@ -1051,7 +1061,7 @@ async def query(
     # the whole block was dead in tests. Pinned now by a test that sets the
     # key id on the request scope.
     spawn(
-        cache.set(body.query, response.model_dump(), body.namespace),
+        cache.set(body.query, response.model_dump(), cache_key),
         name="cache_set",
     )
 

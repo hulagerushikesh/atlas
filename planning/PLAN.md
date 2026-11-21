@@ -1,7 +1,7 @@
 # Atlas — the plan
 
 **Read this file first, every session. It is the only planning file that is
-current.** Last updated 2026-11-12.
+current.** Last updated 2026-11-20.
 
 Status of this plan: **APPROVED by the owner, 2026-11-12.** Work proceeds
 through section 4 in order.
@@ -11,8 +11,13 @@ through section 4 in order.
 ## 1. What Atlas is for
 
 Atlas answers questions about a set of documents, shows the exact passages
-each claim came from, and says how far to trust its own answer. It is the
-owner's portfolio centrepiece for a senior software-engineering job search.
+each claim came from, and says how far to trust its own answer.
+
+**Since 2026-11-20 (owner):** Atlas is built and judged as an
+**enterprise-grade product** a company of thousands would buy, not a solo
+project that does the basics well; its portfolio value follows from that.
+Product, gaps and phases: `docs/enterprise-product.md`; **D8 approved
+2026-11-20**: phases E1–E6 are milestones in section 3.
 
 So the goal has two halves:
 
@@ -20,7 +25,7 @@ So the goal has two halves:
 |---|---|---|
 | **A. It works, and that is measured** | built, tested, live, costs known | **Done** — 20 of 20 |
 | **B. It is seen and understood** | strangers get it in two minutes; the owner can present it; it stays alive without attention | **In progress** — see section 3 |
-| **C. Ready for a 10,000-person company** (M9, opened 2026-11-19) | reuse evidence instead of question text; per-document permissions | **In progress** — see M9 |
+| **C. An enterprise product** (M9 2026-11-19; E1–E6 2026-11-20, D8) | sign-in and organisations, document permissions, a connector, governance, scale, quality loop | **In progress** — see M9 and E1–E6 |
 
 Half A was the old roadmap. Half B is this plan.
 
@@ -96,11 +101,48 @@ Design and numbers: `docs/company-scale.md`. Measure before building.
 - [x] **9.3** Reuse measured on 48 rewordings of 16 questions, ≈₹0.01:
       **69% would reuse, 1 of 120 unrelated pairs would match wrongly**
       (rule: 3 of top 5 passages shared and the questions close in meaning).
-- [ ] **9.4** Evidence-based reuse built behind a switch, off by default,
-      with a cheap "does this stored answer fit this question" check; live
-      reuse and wrong-reuse rates read from the 9.2 logs.
-- [ ] **9.5** Per-document permissions: a reader without access to a
-      passage never sees it, including through reused answers.
+- ~~9.4~~ evidence-based reuse → moved to **E2.5** (D8: behind permissions).
+- ~~9.5~~ per-document permissions → became **E2.1–E2.4** (D8).
+
+### E1–E6 — An enterprise product (approved by the owner 2026-11-20, D8)
+
+Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`.
+
+**E1 Identity and tenancy** — two organisations cannot see each other's anything.
+- [x] **E1.1** Organisations, workspaces, users, roles and service accounts
+      stored; every request carries "who is asking"; today's keys keep working.
+- [x] **E1.2** Every route checks it; listings private; isolation suite in CI.
+- [ ] **E1.3** Google sign-in, invitations, a members page in the console.
+- [ ] **E1.4** Live: migrated and deployed; a second organisation is refused live.
+
+**E2 Document permissions** — a reader never receives a passage they cannot open.
+- [ ] **E2.1** Allowed groups on every passage; filter inside both searches.
+- [ ] **E2.2** Cache, source listings and citations respect it.
+- [ ] **E2.3** Delete a document, and its cached answers with it.
+- [ ] **E2.4** Adversarial suite (cached and reworded questions) passes live.
+- [ ] **E2.5** Evidence-based reuse (old 9.4), permission-aware, behind a switch.
+
+**E3 First connector** (choice settled by the owner's five conversations, O8).
+- [ ] **E3.1** Google Drive folder synced into a workspace.
+- [ ] **E3.2** Edits, deletions and Drive sharing followed.
+- [ ] **E3.3** A deleted or unshared page stops being answered within 15 min, measured.
+
+**E4 Governance**
+- [ ] **E4.1** Append-only audit record with a retention setting.
+- [ ] **E4.2** Question text out of general logs.
+- [ ] **E4.3** Budget per workspace with a hard cap.
+- [ ] **E4.4** Admin console: sources, members, usage, spend.
+
+**E5 Scale and reliability**
+- [ ] **E5.1** Keyword search inside the database; servers hold no state.
+- [ ] **E5.2** Shared answer cache across servers.
+- [ ] **E5.3** Uptime and speed targets; 50 questions a second load test (≈₹50–150, priced first).
+- [ ] **E5.4** Backup with a timed restore drill; request tracing.
+
+**E6 Quality loop**
+- [ ] **E6.1** Thumbs up/down and "wrong source" in the console.
+- [ ] **E6.2** Unanswered-questions report for knowledge owners.
+- [ ] **E6.3** 40-question set, release blocked on a drop, answers correct ≥0.85 (≈₹30).
 
 ### The stop rule
 
@@ -131,7 +173,14 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T13~~ | ~~Build the weekly health check~~ | C | <₹1/month | **done 2026-11-14** — every Monday 09:00 India, ≈₹0.87/month; the test alert reached the owner's inbox | 8.2 |
 | T14 | Close the loose ends in 8.3 | C + You | ₹0 | all four struck through — three struck (O4 on 2026-11-19); left: "maintenance", last, once everything else is ticked | 8.3 |
 
-Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked (only "maintenance" is left). T12 is yours too.
+| ~~T16~~ | ~~E1 design: model, sign-in, enforcement points, migration~~ | C | ₹0 | **done 2026-11-20** — `docs/e1-identity.md` | — |
+| ~~T17~~ | ~~Build E1.1: tenancy store, principal on every request, migration~~ | C | ₹0 | **done 2026-11-21** — gate green; nothing enforced yet, so every key behaves as before | E1.1 |
+| ~~T18~~ | ~~Build E1.2: route policy table, checks everywhere, isolation suite~~ | C | ₹0 | **done 2026-11-21** — isolation suite green on the laptop; CI runs it on push. Not live until T21 | E1.2 |
+| T19 | Create the Google sign-in client id (O7) | You | ₹0 | id in `.env` and Secret Manager | — |
+| T20 | Build E1.3: Google sign-in, invitations, members page | C | ₹0 | browser-checked | E1.3 |
+| T21 | Run the migration; deploy; live check with a second organisation | C + You | ₹0 | refused live | E1.4 |
+
+T19 is next and is yours: T20 cannot start without the Google client id. Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -171,6 +220,11 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
       before 2026-11-19.**
 - [ ] **O6 — Five recovery-code files in Downloads:** save to a password
       manager, then delete them.
+- [ ] **O7 — Google sign-in client id (T19), ₹0.** Needed only when T20
+      starts; Claude will give the steps then.
+- [ ] **O8 — Five short conversations before E3** with people who run
+      internal tools: where docs live, how people find answers, what would
+      stop their security team, what they would pay per user per month.
 
 ## 6. Decisions waiting on you
 
@@ -180,6 +234,7 @@ Every Claude task is now waiting on the owner: T3 on the video (T2), T6 on the i
 | D2 | ~~Gemini auto-reload: on or off~~ | **Decided 2026-11-18: on** (AutoPay). Claude had recommended off |
 | D6 | **What comes after M8?** Options: **(a)** two small first-visit fixes, ₹0: the daily-cap message says "demo paused until tomorrow" instead of "wait a minute", and the ~15 s wait after idle is measured to find where it goes (every page already wakes the same server, so the cause is unknown) · **(b)** M9: raise "answers correct" from 0.77 to 0.85 on a 40-question test set, about ₹30 of test runs · **(c)** a second public manual so Atlas is not DuckDB-only, a few ₹, priced before starting · **(d)** visitors try one small document of their own, capped — biggest, riskiest | **(a) now, before the weekend visits; then (b) after T6**, unless the findings point elsewhere. 0.77 is the number an interviewer will push on |
 | ~~D7~~ **Decided 2026-11-19: yes, M9 opened** | **Open M9 "Ready for a 10,000-person company"?** Reuse the evidence an answer needs instead of the exact question text, then per-document permissions. Steps S1–S5 and costs in `docs/company-scale.md` | **Yes, measure first:** S1–S2 (≈ ₹3) decide whether S3 is worth building; S4 (permissions) is the blocker for any real company either way. S0 (clean pasted text) is a real-user fix and needs no decision |
+| ~~D8~~ **Decided 2026-11-20: yes, approved** | **Adopt the enterprise phases E1–E6** in `docs/enterprise-product.md` as the plan after M9's first three boxes? Order: identity and organisations → document permissions → Google Drive connector → audit and team budgets → scale and reliability → quality loop. Evidence reuse (9.4) moves behind permissions. Each phase becomes a milestone with its exit test; the footer's denominator grows when approved | **Yes, and start E1 now.** Every later piece (permissions, budgets, audit) needs "who is asking", which does not exist today. Do the five short conversations in section 6 of that note before E3 picks a connector |
 | D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
 | D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
 | ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
@@ -198,6 +253,11 @@ Write the answer in the table when decided. Claude never decides these.
 - The daily spend cap's refusal reads "rate limited, wait a minute" in the console; it lasts until midnight UTC
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-21 — T18 done: every route checks who is asking against a policy table; set lists private; answers cached per workspace; a failed access check refuses; isolation suite (two organisations, every route, both ways) green. Unmigrated keys keep the public sets only. Not live. ₹0.
+- 2026-11-21 — T17 done: organisations, workspaces, users, roles and service accounts stored (laptop and live stores); every request carries who is asking; re-runnable migration with a dry run; not live, nothing enforced yet. ₹0.
+- 2026-11-20 — D8 approved: E1–E6 added as milestones (plan 36 boxes, project 56), 9.4/9.5 folded into E2; E1 design written (T16). ₹0.
+- 2026-11-20 — Owner reframed Atlas as an enterprise product; gap review against the code (4 blockers: identity, tenancy, document permissions, connector + delete) and phases E1–E6 written; D8 added. ₹0.
 
 - 2026-11-19 — D7 yes, M9 opened (plan now 15 boxes, project 35): pasted-text fix and passage logging built, not live; reuse measured, 69% of rewordings / 1 of 120 wrong; ≈₹0.01.
 - 2026-11-19 — First real visit: owner and one friend asked 12 questions (the invitation's five plus the suggested one); findings below; owner set the company-scale lens, design note written, D7 added. ₹1.25 of visitor questions, ₹0 for reading them.
@@ -258,6 +318,10 @@ Findings from T6 go here, five lines at most.
   Atlas served a 10,000-person company — permissions, freshness, privacy,
   shared state, cost per team, ingestion volume. Measure before building.
   Reference: `docs/company-scale.md`.
+- **Work as a staff engineer on a product** (owner, 2026-11-20): engineering,
+  system design, product owner and analyst together. Ask who uses it, who
+  buys it, what blocks a pilot, and what proves it, before what to code.
+  Reference: `docs/enterprise-product.md`.
 
 ### Writing limits — these stop the files growing again
 
@@ -289,7 +353,7 @@ Completed **<task ID and plain name>** and pushed <where> / nothing pushed.
 
 **<Nothing needed from you. / The one thing needed from you.>**
 
-This task: <N>% · Plan: <ticked> of 15 · Whole project: <20 + ticked> of 35
+This task: <N>% · Plan: <ticked> of 36 · Whole project: <20 + ticked> of 56
 ```
 
 - Plain words for a non-engineer. No file paths, commit ids, branch names,

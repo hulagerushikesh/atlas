@@ -523,7 +523,9 @@ class TestAnIngestDropsTheStaleAnswers:
     ) -> None:
         _indexer(client)
         cache = client.app.state.atlas.cache
-        asyncio.run(cache.set("what is in my notes?", {"answer": "nothing yet"}, "notes"))
+        # Cached answers are keyed by workspace id (E1.2), not by name.
+        asyncio.run(cache.set("what is in my notes?", {"answer": "nothing yet"},
+                              "ws_public_notes"))
 
         client.post(
             "/ingest/upload",
@@ -531,14 +533,15 @@ class TestAnIngestDropsTheStaleAnswers:
             data={"namespace": "notes"},
         )
 
-        assert asyncio.run(cache.get("what is in my notes?", "notes")) is None
+        assert asyncio.run(cache.get("what is in my notes?", "ws_public_notes")) is None
 
     def test_an_upload_leaves_other_corpora_alone(self, client: TestClient) -> None:
         # Each surviving entry cost a full paid pipeline run. Writing to one
         # corpus is not a reason to re-buy another's answers.
         _indexer(client)
         cache = client.app.state.atlas.cache
-        asyncio.run(cache.set("what is a dependency?", {"answer": "fastapi"}, "default"))
+        asyncio.run(cache.set("what is a dependency?", {"answer": "fastapi"},
+                              "ws_public_default"))
 
         client.post(
             "/ingest/upload",
@@ -546,7 +549,7 @@ class TestAnIngestDropsTheStaleAnswers:
             data={"namespace": "notes"},
         )
 
-        kept = asyncio.run(cache.get("what is a dependency?", "default"))
+        kept = asyncio.run(cache.get("what is a dependency?", "ws_public_default"))
         assert kept is not None and kept["answer"] == "fastapi"
 
     def test_the_path_endpoint_invalidates_too(
@@ -559,12 +562,12 @@ class TestAnIngestDropsTheStaleAnswers:
             return_value=_result()
         )
         cache = client.app.state.atlas.cache
-        asyncio.run(cache.set("q", {"answer": "stale"}, "default"))
+        asyncio.run(cache.set("q", {"answer": "stale"}, "ws_public_default"))
 
         resp = client.post("/ingest", json={"path": str(f)})
 
         assert resp.status_code == 200
-        assert asyncio.run(cache.get("q", "default")) is None
+        assert asyncio.run(cache.get("q", "ws_public_default")) is None
 
     def test_an_ingest_that_wrote_nothing_keeps_the_cache(
         self, client: TestClient
@@ -577,7 +580,7 @@ class TestAnIngestDropsTheStaleAnswers:
             AsyncMock(return_value=_result(docs=0, chunks=0, tokens=0))
         )
         cache = client.app.state.atlas.cache
-        asyncio.run(cache.set("q", {"answer": "still correct"}, "notes"))
+        asyncio.run(cache.set("q", {"answer": "still correct"}, "ws_public_notes"))
 
         client.post(
             "/ingest/upload",
@@ -585,5 +588,5 @@ class TestAnIngestDropsTheStaleAnswers:
             data={"namespace": "notes"},
         )
 
-        kept = asyncio.run(cache.get("q", "notes"))
+        kept = asyncio.run(cache.get("q", "ws_public_notes"))
         assert kept is not None and kept["answer"] == "still correct"

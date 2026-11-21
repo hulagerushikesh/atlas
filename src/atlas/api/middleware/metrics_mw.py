@@ -21,6 +21,11 @@ Design rationale:
 
     /metrics itself is excluded from latency tracking to avoid
     self-referential noise.
+
+    The `path` label is the route's template (`/namespaces/{namespace}/sources`),
+    not the URL. /metrics is public, and the URL carries workspace names, so a
+    raw path label told anyone which sets every organisation has. It also kept
+    the label set unbounded: one series per name anyone ever typed.
 """
 
 from __future__ import annotations
@@ -73,6 +78,8 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
         response: Response = await call_next(request)  # type: ignore[operator]
 
         if path != "/metrics":
+            route = request.scope.get("route")
+            path = getattr(route, "path", None) or "unmatched"
             duration = time.perf_counter() - start
             REQUEST_COUNT.labels(
                 method=request.method, path=path, status=response.status_code

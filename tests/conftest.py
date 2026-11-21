@@ -7,10 +7,23 @@ Fixtures are ordered from most-primitive (raw data) to most-composed
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
+from atlas.api import tenancy
 from atlas.interfaces.document import Chunk, ChunkMetadata, Document, DocumentType
 from atlas.interfaces.retriever import RetrievalResult, RetrievedChunk
+
+
+@pytest.fixture(autouse=True)
+def _tenancy_in_tmp(tmp_path_factory: pytest.TempPathFactory) -> None:
+    # The middleware resolves a principal on every keyed request; without this
+    # it would read the repo's own data/atlas.db.
+    store = tenancy.configure_tenancy(
+        "sqlite", sqlite_path=tmp_path_factory.mktemp("tenancy") / "t.db"
+    )
+    asyncio.run(store.init())
 
 # ── Sample data ──────────────────────────────────────────────────────────────
 

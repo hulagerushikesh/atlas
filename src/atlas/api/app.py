@@ -105,6 +105,10 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.auth_store, firestore_project=settings.auth_firestore_project or None
     )
     await auth_db.init_db()
+    from atlas.api import tenancy
+    await tenancy.configure_tenancy(
+        settings.auth_store, firestore_project=settings.auth_firestore_project or None
+    ).init()
 
     # Build shared (cross-namespace) components once
     shared = SharedComponents(settings)

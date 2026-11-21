@@ -35,6 +35,8 @@ from pathlib import Path
 import structlog
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
+from atlas.api import tenancy
+from atlas.api.authz import authorize
 from atlas.api.budget import BudgetExceeded, seconds_until_utc_midnight
 from atlas.api.dependencies import get_app_state, get_registry
 from atlas.api.schemas import (
@@ -130,7 +132,11 @@ async def ingest(
     it safe to call /ingest on a watch loop.
     """
     app_state = get_app_state(request)
-    _writable(body.namespace, get_registry(request).settings.router)
+    # Before anything else: a caller who may not write here learns nothing
+    # about the server's files or the corpus by trying.
+    ws = await authorize(request, body.namespace, "write")
+    corpus = tenancy.registry_namespace(ws)
+    _writable(corpus, get_registry(request).settings.router)
     # Confinement before existence: a 404 on a path outside the root would
     # answer "does this file exist on the server?" for any path at all.
     path = _confined(Path(body.path), app_state.ingest.root)
@@ -150,8 +156,8 @@ async def ingest(
     # Adopt whatever the vector store already holds before adding to it. The
     # sparse index is written back to this container's disk in full, so
     # indexing on top of a stale copy persists the gap instead of closing it.
-    await registry.reconcile_sparse(body.namespace)
-    indexer = registry.get(body.namespace).indexer
+    await registry.reconcile_sparse(corpus)
+    indexer = registry.get(corpus).indexer
     logger.info("ingest_request", path=body.path, namespace=body.namespace, glob=body.glob)
     start = time.perf_counter()
 
@@ -186,7 +192,7 @@ async def ingest(
     # was written, so an idempotent re-ingest stays free in both senses: no
     # re-embed, and no paid pipeline runs to refill a cache that was correct.
     if result.documents_processed:
-        await app_state.cache.invalidate_namespace(body.namespace)
+        await app_state.cache.invalidate_namespace(ws.id)
 
     logger.info(
         "ingest_complete",
@@ -236,7 +242,9 @@ async def ingest_upload(
     # Before the budget check and before a byte is read: a write that cannot
     # be accepted should not spend, and should not make the caller wait for
     # an upload first.
-    _writable(namespace, get_registry(request).settings.router)
+    ws = await authorize(request, namespace, "write")
+    corpus = tenancy.registry_namespace(ws)
+    _writable(corpus, get_registry(request).settings.router)
 
     try:
         await app_state.spend.check()
@@ -308,8 +316,8 @@ async def ingest_upload(
         registry = get_registry(request)
         # Same reason as `/ingest`: write on top of the vector store's
         # contents, not on top of one container's partial view of them.
-        await registry.reconcile_sparse(namespace)
-        indexer = registry.get(namespace).indexer
+        await registry.reconcile_sparse(corpus)
+        indexer = registry.get(corpus).indexer
         logger.info("ingest_upload_request", namespace=namespace,
                     files=len(accepted), bytes=total)
         start = time.perf_counter()
@@ -332,7 +340,7 @@ async def ingest_upload(
         embedding_tokens=result.total_tokens,
     ))
     if result.documents_processed:
-        await app_state.cache.invalidate_namespace(namespace)
+        await app_state.cache.invalidate_namespace(ws.id)
 
     logger.info(
         "ingest_upload_complete",
