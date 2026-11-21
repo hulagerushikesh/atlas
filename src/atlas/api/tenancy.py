@@ -3,10 +3,16 @@ Tenancy: organisations, workspaces, users, roles, service accounts, and the
 principal every request carries. Design: docs/e1-identity.md.
 
 Design rationale:
-    E1.1 stores the model and attaches a Principal to every request without
-    changing what anyone can reach. Routes start asking `principal.can(...)`
-    in E1.2; until then a key with no tenancy record resolves to a *legacy*
-    principal that may do everything a key can do today.
+    E1.1 stores the model and attaches a Principal to every request. E1.2
+    makes routes ask: every workspace route calls `authz.authorize`, which
+    resolves the name inside the caller's organisation and checks the role.
+
+    A key with no tenancy record (not migrated yet), and the dev box with
+    auth off, resolve to a *legacy* principal. Legacy keeps today's access
+    and no more: every workspace of the public organisation, including a
+    pre-E1 collection that has no workspace record yet, and nothing in any
+    other organisation. A failed tenancy read refuses the request
+    (`TenancyUnavailable`); it never falls back to legacy.
 
     Grants are kept on the subject (user or service account) as a map of
     workspace id -> role, so building a principal is one read in either
@@ -104,9 +110,17 @@ class Principal:
     org_id: str = ""
     org_admin: bool = False
     roles: dict[str, Role] = field(default_factory=dict)
-    # Pre-tenancy access: a key not yet migrated, or auth switched off. Keeps
-    # today's behaviour while E1.1 is live; E1.2 decides what it may still do.
+    # Pre-tenancy access: a key not yet migrated, or auth switched off. May
+    # read and write the public organisation, as every key could before E1,
+    # and nothing else.
     legacy: bool = False
+
+    @property
+    def home_org(self) -> str:
+        """The organisation workspace names are looked up in; "" for none."""
+        if self.org_id:
+            return self.org_id
+        return PUBLIC_ORG_ID if self.legacy else ""
 
     def role_on(self, workspace_id: str) -> Role | None:
         if self.org_admin:
@@ -115,8 +129,8 @@ class Principal:
 
     def can(self, workspace: Workspace, action: Action) -> bool:
         if self.legacy:
-            return True
-        if workspace.org_id != self.org_id:
+            return workspace.org_id == PUBLIC_ORG_ID
+        if not self.org_id or workspace.org_id != self.org_id:
             return False
         role = self.role_on(workspace.id)
         return role is not None and role.rank >= _NEEDS[action].rank
@@ -144,6 +158,29 @@ def visitor_principal(visitor_id: str, demo_workspace: Workspace | None) -> Prin
         kind="visitor", subject_id=visitor_id, org_id=demo_workspace.org_id,
         roles={demo_workspace.id: Role.READER},
     )
+
+
+# Collections of new workspaces are `atlas_{org}__{ws}`, so a name holding
+# "__" could address another organisation's collection. No pre-E1 namespace
+# has one; legacy resolution refuses them.
+_RESERVED = "__"
+
+
+def legacy_workspace(namespace: str) -> Workspace | None:
+    """A pre-E1 namespace as the public workspace the migration makes of it.
+
+    Same id and collection the migration writes, so a request before and after
+    the migration reads the same collection and the same cache entries.
+    """
+    if not namespace or _RESERVED in namespace:
+        return None
+    return Workspace(id=legacy_workspace_id(namespace), org_id=PUBLIC_ORG_ID,
+                     name=namespace, collection=f"atlas_{namespace}")
+
+
+def registry_namespace(workspace: Workspace) -> str:
+    """The key the namespace registry builds this workspace's pipeline under."""
+    return workspace.collection.removeprefix("atlas_")
 
 
 _SLUG = re.compile(r"[^a-z0-9_-]+")
@@ -487,24 +524,64 @@ def get_tenancy() -> TenancyStore:
     return _store
 
 
+class TenancyUnavailable(RuntimeError):
+    """The tenancy store could not be read. The request is refused, not guessed:
+    falling back to legacy would hand an organisation's key the public one."""
+
+
 async def principal_for_key(key_id: object) -> Principal:
     """The principal behind an API key. Unmigrated keys keep today's access."""
     try:
         subject = await _store.get_subject("service", str(key_id))
-    except Exception as exc:  # noqa: BLE001 -- E1.1 must not change behaviour
-        # E1.2 must fail closed here instead; today nothing is enforced yet.
+    except Exception as exc:
         logger.warning("principal_lookup_failed", error=str(exc))
-        subject = None
+        raise TenancyUnavailable(str(exc)) from exc
     return legacy_key_principal(key_id) if subject is None else principal_from_subject(subject)
 
 
 async def principal_for_visitor(visitor_id: str, demo_namespace: str) -> Principal:
     try:
         ws = await _store.get_workspace(legacy_workspace_id(demo_namespace))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("principal_lookup_failed", error=str(exc))
-        ws = None
-    return visitor_principal(visitor_id, ws)
+        raise TenancyUnavailable(str(exc)) from exc
+    # Before the migration the demo sheet has no record; it is still the
+    # public workspace the migration will write, under the same id.
+    return visitor_principal(visitor_id, ws or legacy_workspace(demo_namespace))
+
+
+async def resolve_workspace(principal: Principal, name: str) -> Workspace | None:
+    """The workspace *name* means to this caller, looked up in its own
+    organisation only, so another organisation's name is simply not found."""
+    org = principal.home_org
+    if not org:
+        return None
+    try:
+        ws = await find_workspace(_store, org, name)
+    except Exception as exc:
+        logger.warning("workspace_lookup_failed", error=str(exc))
+        raise TenancyUnavailable(str(exc)) from exc
+    if ws is None and org == PUBLIC_ORG_ID:
+        ws = legacy_workspace(name)
+    return ws
+
+
+async def readable_workspaces(principal: Principal, namespaces: list[str]) -> list[Workspace]:
+    """Every workspace this caller may read. *namespaces* are the collections
+    Qdrant holds; in the public organisation those without a record count too."""
+    org = principal.home_org
+    if not org:
+        return []
+    try:
+        found = await _store.list_workspaces(org)
+    except Exception as exc:
+        logger.warning("workspace_lookup_failed", error=str(exc))
+        raise TenancyUnavailable(str(exc)) from exc
+    if org == PUBLIC_ORG_ID:
+        held = {w.collection for w in found}
+        found += [w for ns in namespaces
+                  if (w := legacy_workspace(ns)) is not None and w.collection not in held]
+    return sorted((w for w in found if principal.can(w, "read")), key=lambda w: w.name)
 
 
 # ── Migration ─────────────────────────────────────────────────────────────────

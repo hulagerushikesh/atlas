@@ -107,6 +107,28 @@ owner runs it (₹0).
 | **E1.3** | Google sign-in, sessions, invitations, a members and service-accounts page in the console | Sign-in tests with a fake Google key; console checked in the browser |
 | **E1.4** | Migration run and deployed | Live: the demo still answers a visitor; a second organisation's key gets "not found" on the demo workspace |
 
+### Decided while building E1.2 (2026-11-21)
+
+- **Unmigrated keys and the dev box are confined to the public
+  organisation.** They keep today's access there, including a pre-E1
+  collection with no workspace record yet, and reach nothing in any other
+  organisation. A name containing `__` is never resolved this way, because
+  `atlas_{org}__{ws}` is how new organisations' collections are named.
+- **Fail closed.** A tenancy store that cannot be read answers 503; it never
+  falls back to legacy access.
+- **Not found, not forbidden.** A workspace the caller cannot read answers
+  exactly like one that does not exist. A reader trying to add documents
+  gets 403, since it already knows the workspace exists.
+- **The keyless demo** may also open the set list and the demo sheet's
+  sources (30 a minute per visitor, separate from its 3 questions a minute);
+  the list shows the demo sheet only.
+- **Public metrics** label requests by route template, not URL, so they no
+  longer carry set names.
+- **Left for E1.3:** creating a workspace in a new organisation (today only
+  the store can), service-account management inside an organisation (`/keys`
+  is still the shared admin secret, and a key made there is legacy), and
+  `/usage` for an organisation admin (it shows the caller's own key).
+
 ## 7. Not in E1, on purpose
 
 SAML, SCIM, groups and per-document permissions (E2), audit store (E4),

@@ -132,7 +132,8 @@ class TestAFinishedStreamIsCached:
 
         _stream(client, "what is atlas")
 
-        assert cache._make_key("what is atlas", "default") in cache._mem
+        # The workspace id, not the name: see test_isolation.py.
+        assert cache._make_key("what is atlas", "ws_public_default") in cache._mem
 
 
 class TestARepeatIsServedFromTheCache:

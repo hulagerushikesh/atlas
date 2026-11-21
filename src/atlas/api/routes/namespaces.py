@@ -1,11 +1,12 @@
-"""GET /namespaces — list available corpora."""
+"""GET /namespaces — the corpora the caller may read."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
-from atlas.api.dependencies import get_registry
-from atlas.api.namespaces import namespace_to_collection
+from atlas.api import tenancy
+from atlas.api.authz import access_unavailable, authorize
+from atlas.api.dependencies import get_principal, get_registry
 from atlas.api.schemas import (
     NamespaceInfo,
     NamespaceListResponse,
@@ -19,17 +20,24 @@ router = APIRouter()
 @router.get("/namespaces", response_model=NamespaceListResponse)
 async def list_namespaces(request: Request) -> NamespaceListResponse:
     """
-    List all Atlas-managed corpora (Qdrant collections prefixed with atlas_).
+    The workspaces the caller may read, and nothing else.
+
+    This used to list every Atlas collection in Qdrant to anyone, which on a
+    shared deployment is every company's set names. Now it lists the caller's
+    own organisation's workspaces that it holds a role on (a keyless visitor:
+    the demo sheet). Public-organisation collections that predate the
+    migration have no workspace record yet and are listed from Qdrant.
 
     Returns an empty list when Qdrant is unavailable rather than raising an error,
     so the console can still render with the namespace picker disabled.
     """
     registry = get_registry(request)
-    names = await registry.list_namespaces()
-    namespaces = [
-        NamespaceInfo(name=n, collection=namespace_to_collection(n))
-        for n in names
-    ]
+    try:
+        found = await tenancy.readable_workspaces(
+            get_principal(request), await registry.list_namespaces())
+    except tenancy.TenancyUnavailable as exc:
+        raise access_unavailable() from exc
+    namespaces = [NamespaceInfo(name=w.name, collection=w.collection) for w in found]
     return NamespaceListResponse(namespaces=namespaces, total=len(namespaces))
 
 
@@ -55,7 +63,13 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     that number anyway. That matters because the console refetches this after
     every upload: it is the request most likely to be the first one an
     instance sees for a corpus another instance just wrote.
+
+    Needs reader on the workspace. `writable` also says whether this caller
+    may add to it, so a reader's drop zone is disabled before a file is chosen.
     """
+    ws = await authorize(request, namespace, "read")
+    may_write = get_principal(request).can(ws, "write")
+    namespace = tenancy.registry_namespace(ws)
     registry = get_registry(request)
     dense_chunks = await registry.dense_chunk_count(namespace)
     await registry.reconcile_sparse(namespace, dense_chunks=dense_chunks)
@@ -82,13 +96,13 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
 
     described = registry.settings.router.describes(namespace)
     return SourceListResponse(
-        namespace=namespace,
+        namespace=ws.name,
         sources=sources,
         total_sources=len(sources),
         total_chunks=total_chunks,
         dense_chunks=dense_chunks,
         consistent=consistent,
         warning=warning,
-        writable=not described,
+        writable=may_write and not described,
         description=registry.settings.router.domain if described else None,
     )

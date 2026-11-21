@@ -126,8 +126,20 @@ class TestPrincipal:
         p = Principal(kind="user", org_id="org_b", org_admin=True, roles={"ws_a": Role.ADMIN})
         assert not p.can(_WS, "read")
 
-    def test_legacy_keeps_todays_access(self) -> None:
-        assert tenancy.legacy_key_principal(7).can(_WS, "write")
+    def test_legacy_keeps_todays_access_to_the_public_organisation_only(self) -> None:
+        legacy = tenancy.legacy_key_principal(7)
+        public = tenancy.legacy_workspace("duckdb")
+        assert public is not None and legacy.can(public, "write")
+        assert not legacy.can(_WS, "read")
+
+    def test_a_reserved_name_is_never_a_legacy_workspace(self) -> None:
+        # "org_a__docs" would address atlas_org_a__docs, another org's collection.
+        assert tenancy.legacy_workspace("org_a__docs") is None
+        assert tenancy.legacy_workspace("") is None
+
+    def test_a_principal_with_no_organisation_reaches_nothing(self) -> None:
+        stray = Workspace(id="ws_x", org_id="", name="x", collection="atlas_x")
+        assert not Principal(kind="user", roles={"ws_x": Role.ADMIN}).can(stray, "read")
 
     def test_visitor_reads_only_the_demo_workspace(self) -> None:
         p = tenancy.visitor_principal("demo:1.1.1.1", _WS)
@@ -340,9 +352,11 @@ class TestEveryRequestCarriesAPrincipal:
         body = who.get("/out/whoami").json()
         assert body["kind"] == "anonymous" and body["legacy"] is False
 
-    def test_a_store_failure_keeps_the_request_working(
+    def test_a_store_failure_refuses_the_request(
         self, who: TestClient, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Fails closed: falling back to legacy would hand an organisation's
+        # key the public organisation's workspaces.
         raw, _ = _mint(who)
 
         async def broken(*_: object) -> None:
@@ -350,7 +364,7 @@ class TestEveryRequestCarriesAPrincipal:
 
         monkeypatch.setattr(tenancy.get_tenancy(), "get_subject", broken)
         r = who.get("/whoami", headers={"Authorization": f"Bearer {raw}"})
-        assert r.status_code == 200 and r.json()["legacy"] is True
+        assert r.status_code == 503
 
 
 def test_with_auth_off_the_caller_is_the_dev_box() -> None:
@@ -370,5 +384,20 @@ async def test_a_visitor_is_reader_on_the_migrated_demo_workspace() -> None:
     await migrate(tenancy.get_tenancy(), ["duckdb"], [], apply=True)
     p = await tenancy.principal_for_visitor("demo:1.1.1.1", "duckdb")
     assert p.kind == "visitor" and p.roles == {"ws_public_duckdb": Role.READER}
-    nobody = await tenancy.principal_for_visitor("demo:1.1.1.1", "unmigrated")
+    # Before the migration: the same workspace, under the id it will be given.
+    early = await tenancy.principal_for_visitor("demo:1.1.1.1", "unmigrated")
+    assert early.roles == {"ws_public_unmigrated": Role.READER}
+    assert early.org_id == PUBLIC_ORG_ID
+    nobody = await tenancy.principal_for_visitor("demo:1.1.1.1", "")
     assert nobody.roles == {}
+
+
+async def test_a_visitor_lookup_failure_is_reported_not_guessed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def broken(*_: object) -> None:
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr(tenancy.get_tenancy(), "get_workspace", broken)
+    with pytest.raises(tenancy.TenancyUnavailable):
+        await tenancy.principal_for_visitor("demo:1.1.1.1", "duckdb")

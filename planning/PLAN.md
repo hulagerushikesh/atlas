@@ -111,7 +111,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 **E1 Identity and tenancy** — two organisations cannot see each other's anything.
 - [x] **E1.1** Organisations, workspaces, users, roles and service accounts
       stored; every request carries "who is asking"; today's keys keep working.
-- [ ] **E1.2** Every route checks it; listings private; isolation suite in CI.
+- [x] **E1.2** Every route checks it; listings private; isolation suite in CI.
 - [ ] **E1.3** Google sign-in, invitations, a members page in the console.
 - [ ] **E1.4** Live: migrated and deployed; a second organisation is refused live.
 
@@ -175,12 +175,12 @@ parking lot in section 7 as one line, and the session moves on.
 
 | ~~T16~~ | ~~E1 design: model, sign-in, enforcement points, migration~~ | C | ₹0 | **done 2026-11-20** — `docs/e1-identity.md` | — |
 | ~~T17~~ | ~~Build E1.1: tenancy store, principal on every request, migration~~ | C | ₹0 | **done 2026-11-21** — gate green; nothing enforced yet, so every key behaves as before | E1.1 |
-| T18 | Build E1.2: route policy table, checks everywhere, isolation suite | C | ₹0 | suite green in CI | E1.2 |
+| ~~T18~~ | ~~Build E1.2: route policy table, checks everywhere, isolation suite~~ | C | ₹0 | **done 2026-11-21** — isolation suite green on the laptop; CI runs it on push. Not live until T21 | E1.2 |
 | T19 | Create the Google sign-in client id (O7) | You | ₹0 | id in `.env` and Secret Manager | — |
 | T20 | Build E1.3: Google sign-in, invitations, members page | C | ₹0 | browser-checked | E1.3 |
 | T21 | Run the migration; deploy; live check with a second organisation | C + You | ₹0 | refused live | E1.4 |
 
-T18 is next and needs nothing from the owner. Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+T19 is next and is yours: T20 cannot start without the Google client id. Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -254,6 +254,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-21 — T18 done: every route checks who is asking against a policy table; set lists private; answers cached per workspace; a failed access check refuses; isolation suite (two organisations, every route, both ways) green. Unmigrated keys keep the public sets only. Not live. ₹0.
 - 2026-11-21 — T17 done: organisations, workspaces, users, roles and service accounts stored (laptop and live stores); every request carries who is asking; re-runnable migration with a dry run; not live, nothing enforced yet. ₹0.
 - 2026-11-20 — D8 approved: E1–E6 added as milestones (plan 36 boxes, project 56), 9.4/9.5 folded into E2; E1 design written (T16). ₹0.
 - 2026-11-20 — Owner reframed Atlas as an enterprise product; gap review against the code (4 blockers: identity, tenancy, document permissions, connector + delete) and phases E1–E6 written; D8 added. ₹0.
