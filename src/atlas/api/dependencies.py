@@ -29,6 +29,7 @@ from fastapi import Request
 from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
 from atlas.api.namespaces import NamespaceRegistry
+from atlas.api.tenancy import ANONYMOUS, Principal
 from atlas.config import IngestConfig
 from atlas.ingestion.indexer import DocumentIndexer
 from atlas.orchestration.pipeline import RAGPipeline
@@ -77,3 +78,9 @@ def get_indexer(request: Request) -> DocumentIndexer:
 
 def get_cache(request: Request) -> QueryCache:
     return get_app_state(request).cache
+
+
+def get_principal(request: Request) -> Principal:
+    """Who is asking. An app built without the auth middleware is the dev box."""
+    principal: Principal = getattr(request.state, "principal", ANONYMOUS)
+    return principal

@@ -2,7 +2,8 @@
 API key authentication middleware.
 
 Reads the Authorization: Bearer <key> header, validates against the SQLite
-store, checks rate limits, and attaches the key record to request.state.
+store, checks rate limits, and attaches the key record and the principal
+(atlas.api.tenancy) to request.state.
 
 Auth is bypassed when AUTH_ENABLED=false (the default) so the dev experience
 requires no keys. With a keyless demo sheet configured (BUDGET_DEMO_*), a
@@ -24,6 +25,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from atlas.api import auth as auth_db
+from atlas.api import tenancy
 
 # /keys is guarded by X-Admin-Secret, not a Bearer key — it has to be reachable
 # before the first key exists.
@@ -43,6 +45,10 @@ _PUBLIC_PATHS = {
 # added here without that check would be open to anyone.
 _PUBLIC_PREFIXES = ("/app", "/out", "/namespaces", "/keys/")
 
+# A caller on a public path, before or without a key. Not legacy: when E1.2
+# makes listings private, this principal is what they will refuse.
+_PUBLIC_CALLER = tenancy.Principal(kind="anonymous")
+
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """Validate Bearer tokens and enforce per-key rate limits."""
@@ -54,10 +60,12 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not self._enabled:
+            request.state.principal = tenancy.ANONYMOUS
             return await call_next(request)
 
         path = request.url.path
         if path in _PUBLIC_PATHS or any(path.startswith(p) for p in _PUBLIC_PREFIXES):
+            request.state.principal = _PUBLIC_CALLER
             return await call_next(request)
 
         # Use Redis from app cache if available for distributed rate limiting
@@ -92,6 +100,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         request.state.api_key_id = api_key.id
         request.state.api_key_name = api_key.name
+        request.state.principal = await tenancy.principal_for_key(api_key.id)
         return await call_next(request)
 
     async def _admit_demo(
@@ -111,6 +120,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 headers={"Retry-After": "60"},
             )
         request.state.demo = True
+        demo_ns = getattr(request.app.state.atlas, "demo_namespace", "")
+        request.state.principal = await tenancy.principal_for_visitor(visitor, demo_ns)
         return await call_next(request)
 
 
