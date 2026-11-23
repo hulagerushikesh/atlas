@@ -150,6 +150,25 @@ paise of model calls.
 - **A member update that does not mention groups keeps them**, so the
   current console cannot take groups away by accident.
 
+### Decided while building E2.2 (2026-11-23)
+
+- **Two locks on cached answers, not one.** The key holds the caller's
+  tokens *that the sheet uses* (its tokens intersected with every token on
+  the sheet's passages), so people who can read exactly the same passages
+  share answers: everyone on the demo still shares one entry, and a
+  personal `user:{id}` token splits nothing unless a passage is shared with
+  that person. The entry also stores each retrieved passage's access list,
+  and a hit is served only if the asker may read all of them. The second
+  lock covers what the first cannot see: this server's keyword copy may lag
+  a document another server just added. An entry without lists (from before
+  E2) is never served.
+- **The source list shows a caller only what it may open**, and never how
+  much is hidden: its counts are its own, and an index mismatch is reported
+  to it without numbers.
+- **Citations and the evidence trail need no code of their own:** they are
+  built from retrieved passages only, which the filter already decided.
+  The cached path re-checks them (lock 2).
+
 ## 7. Not in E2, on purpose
 
 Drive sharing and Google Groups (E3), the audit record (E4), passage-level

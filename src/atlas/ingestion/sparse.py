@@ -185,17 +185,22 @@ class BM25SparseIndex(BaseIndex):
         ]
         return await self.delete(stale) if stale else 0
 
-    def sources(self) -> list[dict[str, Any]]:
+    def sources(self, access: frozenset[str] | None = None) -> list[dict[str, Any]]:
         """
         Chunk counts grouped by source document, in first-seen order.
 
         The BM25 corpus already holds every chunk's metadata in memory, so
         this is the cheapest complete inventory of a namespace — no Qdrant
         scroll needed. Used by the console's corpus pane.
+
+        *access* (E2): only passages the caller may read are counted, so a
+        document it cannot open is not listed, not even by title.
         """
         counts: dict[str, dict[str, Any]] = {}
         for entry in self._corpus:
             meta = entry["metadata"]
+            if not readable(meta.get(ACL_FIELD), access):
+                continue
             src = meta["source"]
             row = counts.get(src)
             if row is None:
@@ -239,6 +244,16 @@ class BM25SparseIndex(BaseIndex):
         return [(entry, float(score)) for entry, score in ranked[:top_k]]
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def acl_tokens(self) -> frozenset[str]:
+        """Every token on any passage's access list in this sheet (E2).
+
+        The answer cache keys on a caller's tokens intersected with these, so
+        people who can read exactly the same passages share answers. Computed
+        on each call: one pass over metadata, well under a millisecond at
+        today's few thousand passages, and never stale.
+        """
+        return frozenset(t for e in self._corpus for t in e["metadata"].get(ACL_FIELD) or ())
 
     def _rebuild(self) -> None:
         if not self._corpus:

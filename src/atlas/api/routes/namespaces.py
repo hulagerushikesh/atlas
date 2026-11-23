@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Request
 
+from atlas.access import reader_access
 from atlas.api import tenancy
 from atlas.api.authz import access_unavailable, authorize
 from atlas.api.dependencies import get_principal, get_registry
@@ -75,11 +76,19 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     await registry.reconcile_sparse(namespace, dense_chunks=dense_chunks)
 
     components = registry.get(namespace)
-    rows = components.sparse_index.sources() if components.sparse_index else []
+    sparse = components.sparse_index
+    # E2: list only what this caller may read. Consistency is still judged on
+    # the whole sheet, but a caller who cannot see everything is never told
+    # how much it cannot see: its counts are its own, and a mismatch is
+    # reported without numbers.
+    every = sparse.sources() if sparse else []
+    rows = sparse.sources(reader_access()) if sparse else []
     sources = [SourceInfo(**row) for row in rows]
     total_chunks = sum(s.chunks for s in sources)
+    whole_sheet = sum(int(r["chunks"]) for r in every)
+    hidden = whole_sheet != total_chunks
 
-    consistent = None if dense_chunks is None else dense_chunks == total_chunks
+    consistent = None if dense_chunks is None else dense_chunks == whole_sheet
 
     warning: str | None = None
     if dense_chunks is None:
@@ -87,12 +96,19 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
             "Vector store unreachable — these counts come from the keyword "
             "index alone and may not match what a query can retrieve."
         )
+    elif not consistent and hidden:
+        warning = (
+            "Index mismatch: the keyword index and the vector store disagree "
+            "for this sheet, so some sources listed may return nothing."
+        )
     elif not consistent:
         warning = (
             f"Index mismatch: {total_chunks} chunks listed here, "
             f"{dense_chunks} in the vector store. Queries search the vector "
             f"store, so some sources listed may return nothing."
         )
+    if hidden and dense_chunks is not None:
+        dense_chunks = total_chunks if consistent else None
 
     described = registry.settings.router.describes(namespace)
     return SourceListResponse(

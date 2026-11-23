@@ -117,7 +117,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 
 **E2 Document permissions** — a reader never receives a passage they cannot open.
 - [x] **E2.1** Allowed groups on every passage; filter inside both searches. **Done 2026-11-23** (not live until T26).
-- [ ] **E2.2** Cache, source listings and citations respect it.
+- [x] **E2.2** Cache, source listings and citations respect it. **Done 2026-11-23** (not live until T26).
 - [ ] **E2.3** Delete a document, and its cached answers with it.
 - [ ] **E2.4** Adversarial suite (cached and reworded questions) passes live.
 - [ ] **E2.5** Evidence-based reuse (old 9.4), permission-aware, behind a switch.
@@ -182,12 +182,12 @@ parking lot in section 7 as one line, and the session moves on.
 
 | ~~T22~~ | ~~E2 design: access lists, where they are enforced, cache, removal, migration~~ | C | ₹0 | **done 2026-11-23** — `docs/e2-permissions.md`; two choices wait on the owner (D9) | — |
 | ~~T23~~ | ~~Build E2.1: access lists on passages, groups, filter in both searches, migration~~ | C | ₹0 | **done 2026-11-23** — 1296 tests green; a reader outside a group gets nothing from a group-only passage by either search, streamed or not; the deploy refuses until `scripts/migrate_acl.py --apply` has run. Not live until T26 | E2.1 |
-| T24 | Build E2.2: cache key, source list, citations respect access | C | ₹0 | privileged-then-unprivileged tests pass | E2.2 |
+| ~~T24~~ | ~~Build E2.2: cache key, source list, citations respect access~~ | C | ₹0 | **done 2026-11-23** — 1307 tests green; someone allowed less never gets an answer built for someone allowed more (typed, streamed, reworded, stale index, pre-E2 entry); same access still shares; the source list hides titles and counts; each protection was removed once to check its test fails. Not live until T26 | E2.2 |
 | T25 | Build E2.3: change access, remove a document; decide one server or shared cache (priced first) | C + You | priced first | a removed document stops being answered | E2.3 |
 | T26 | E2.4: adversarial suite in CI, migration run, deploy, live run with two test accounts | C + You | a few paise | zero leaks live | E2.4 |
 | T27 | E2.5: evidence-based reuse behind a switch | C | ₹0 | paraphrase hit rate measured; T26's suite still passes | E2.5 |
 
-T24 is next (C, ₹0). Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+T25 is next (C + You; the shared-cache choice is priced before it is built). The owner holds the friend invitation (O1) until Claude signals, after T26 is live. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -266,6 +266,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-23 — T24 done: cached answers keyed by the access the sheet uses and re-checked against each passage's list on every hit; source list filtered without revealing hidden counts. Owner will send the friend invitation only after Claude's signal (after T26). Not live. ₹0.
 - 2026-11-23 — T23 done: access lists on every passage (`all` by default), groups on the organisation page's API, both searches filtered by the caller's tokens set per request, `scripts/migrate_acl.py` (₹0, owner runs it in T26), deploy guard. Not live. ₹0.
 - 2026-11-23 — T22 done: E2 design written (`docs/e2-permissions.md`): access lists on passages, filtered inside both searches, cache keyed by the caller's access, document removal, ₹0 migration; tasks T23–T27 added; D9 opened. ₹0.
 - 2026-11-23 — T21 done, E1 complete: session secret in Secret Manager, migration applied to Firestore, sign-in live on atlas.hulage.in, second organisation refused live, demo still answers visitors. A signed-in person in another organisation does not see the public demo sheet (by design: their list is their organisation's). ≈₹5/month for the secret.

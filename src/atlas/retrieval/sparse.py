@@ -71,4 +71,5 @@ class BM25Retriever(BaseRetriever):
             page_number=m.get("page_number"),
             content_hash=m.get("content_hash", ""),
             extra=m.get("extra", {}),
+            acl=m.get("acl") or [],  # see dense.py: the cache's hit check reads it
         )

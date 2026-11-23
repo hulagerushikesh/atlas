@@ -119,6 +119,7 @@ def client() -> TestClient:
     mock_ns.pipeline = mock_pipeline
     mock_ns.indexer = mock_indexer
     mock_ns.sparse_index = MagicMock()
+    mock_ns.sparse_index.acl_tokens.return_value = frozenset({"all"})
     mock_ns.sparse_index.sources.return_value = [
         {"source": "tutorial/first-steps.md", "doc_type": "markdown", "chunks": 12},
         {"source": "reference/depends.md", "doc_type": "markdown", "chunks": 7},

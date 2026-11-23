@@ -105,6 +105,10 @@ class QdrantDenseRetriever(BaseRetriever):
             page_number=p.get("page_number"),
             content_hash=p.get("content_hash", ""),
             extra=p.get("extra", {}),
+            # Carried so the answer cache can check, on a hit, that the asker
+            # may read every passage the answer was built from (E2). Missing
+            # means pre-E2 and readable by no request, as in the filter.
+            acl=p.get("acl") or [],
         )
         return RetrievedChunk(
             chunk_id=str(hit.id),  # type: ignore[attr-defined]
