@@ -134,5 +134,5 @@ Drive sharing and Google Groups (E3), the audit record (E4), passage-level
 permissions inside one document (nobody has asked), and deny rules (an
 allow list is enough while sources are Drive-like).
 
-Two choices above are the owner's to confirm before E2.1: **admins get no
+The owner confirmed both choices above on 2026-11-23 (D9): **admins get no
 bypass**, and **new uploads default to everyone on the sheet**.
