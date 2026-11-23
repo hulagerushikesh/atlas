@@ -1,7 +1,7 @@
 import { create } from "zustand"
 import {
-  ApiError, getHealth, getSheets, getSources, postQuery, streamQuery, store as ls,
-  type Citation, type Evidence, type Health, type QueryResponse, type SourceInfo, type TokenUsage,
+  ApiError, getAuthConfig, getHealth, getMe, getSheets, getSources, postQuery, streamQuery, store as ls,
+  type AuthConfig, type Citation, type Evidence, type Health, type Me, type QueryResponse, type SourceInfo, type TokenUsage,
 } from "./api"
 
 /* ── Stages ────────────────────────────────────────────────────────────── */
@@ -82,6 +82,12 @@ export function failureFrom(e: unknown): Failure {
   const err = e instanceof ApiError ? e : new ApiError(-1, e instanceof Error ? e.message : String(e))
   const detail = err.detail as { code?: unknown; sheet?: unknown } | undefined
   if (err.status === 503 && detail?.code === "demo_paused") return DEMO_PAUSED
+  if (detail?.code === "signed_out")
+    return { what: "You are signed out.", why: "Your account no longer has access to this Atlas, or an admin removed it.", next: "Sign in again, or ask your organisation's admin." }
+  if (detail?.code === "workspace_not_found")
+    return { what: "Not a sheet you can open.", why: String((detail as { message?: unknown }).message ?? "No sheet by that name."), next: "Pick a sheet from the list, or ask an admin for access." }
+  if (detail?.code === "forbidden")
+    return { what: "Your access does not allow this.", why: String((detail as { message?: unknown }).message ?? ""), next: "Ask an admin of your organisation for editor access." }
   // Refusals of keyless questions: the server allows them on one sheet only.
   if (detail?.code === "key_required")
     return { what: "This sheet needs a key.", why: `Without a key, Atlas answers questions about sheet "${String(detail.sheet ?? "duckdb")}" only.`, next: "Switch to that sheet, or add a key under Settings." }
@@ -90,7 +96,7 @@ export function failureFrom(e: unknown): Failure {
   if (detail?.code === "demo_rate")
     return { what: "Too many questions in a minute.", why: "Without a key, each visitor can ask a few questions a minute.", next: "Wait a minute and ask again." }
   if (err.status === 401 || err.status === 403)
-    return { what: "Not authorised.", why: "The sheet requires an API key and none was accepted.", next: "Add a key under Settings." }
+    return { what: "Not authorised.", why: "This sheet needs you signed in, or an API key, and neither was accepted.", next: "Sign in, or add a key under Settings." }
   if (err.status === 429)
     return { what: "Rate limited.", why: "This key has used its requests-per-minute budget.", next: "Wait a minute, or use a key with a higher limit." }
   if (err.status >= 500)
@@ -165,6 +171,11 @@ interface AtlasState {
   // Held for this tab and never written to localStorage: it is the one
   // credential that can revoke every key, where an API key can only spend.
   adminSecret: string
+  // Who is signed in (null: nobody), and whether this Atlas offers sign-in.
+  me: Me | null
+  authConfig: AuthConfig | null
+  signInOpen: boolean
+  membersOpen: boolean
   paletteOpen: boolean
   // The first-visit orientation card. Persisted inverted -- a *dismissal* is
   // what gets stored, so a reader who has never seen it (no key, private
@@ -242,6 +253,10 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   settingsOpen: false,
   accessOpen: false,
   adminSecret: "",
+  me: null,
+  authConfig: null,
+  signInOpen: false,
+  membersOpen: false,
   paletteOpen: false,
   tourOpen: ls.get("atlas_oriented") !== "1",
   flashChunk: null,
@@ -257,11 +272,28 @@ export const useAtlas = create<AtlasState>((set, get) => ({
 
   boot: async () => {
     getHealth().then((h) => set({ health: h.status })).catch(() => set({ health: "unreachable" }))
-    let names: string[] = []
-    try { names = await getSheets() } catch { /* offline */ }
-    if (!names.length) names = [DEFAULT_SHEET]
+    const [listed, me, authConfig] = await Promise.all([
+      getSheets().catch(() => [] as string[]),
+      getMe().catch(() => null),
+      getAuthConfig().catch(() => null),
+    ])
+    const person = me?.kind === "user" ? me : null
+    set({ me: person, authConfig })
+    let names = listed
     const wanted = get().sheet
-    if (!names.includes(wanted)) names.unshift(wanted)
+    if (person) {
+      // A signed-in person's list is exactly what they may open. A remembered
+      // sheet from before signing in would be a 404 waiting to happen, so it
+      // gives way to their first one.
+      if (names.length && !names.includes(wanted)) {
+        set({ sheets: names })
+        get().setSheet(names[0])
+        return
+      }
+    } else {
+      if (!names.length) names = [DEFAULT_SHEET]
+      if (!names.includes(wanted)) names.unshift(wanted)
+    }
     set({ sheets: names })
     await get().loadSources()
   },

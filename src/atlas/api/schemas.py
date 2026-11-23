@@ -20,6 +20,8 @@ Design rationale:
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 # ── /query ────────────────────────────────────────────────────────────────────
@@ -282,6 +284,131 @@ class UsageResponse(BaseModel):
     first_query_at: float | None
     last_query_at: float | None
     by_namespace: list[NamespaceUsage]
+
+
+# ── Sign-in and organisation management (E1.3) ────────────────────────────────
+
+RoleName = Literal["reader", "editor", "admin"]
+# Roles are given by workspace *name*: names are what an admin sees, and they
+# are looked up inside the admin's own organisation, never another's.
+RoleGrants = dict[str, RoleName]
+
+
+class AuthConfigResponse(BaseModel):
+    enabled: bool
+    google_client_id: str
+
+
+class GoogleSignInRequest(BaseModel):
+    credential: str = Field(..., min_length=1, max_length=8192,
+                            description="The ID token Google Identity Services returned")
+
+
+class MeUser(BaseModel):
+    id: str
+    email: str
+    name: str
+
+
+class MeOrg(BaseModel):
+    id: str
+    name: str
+
+
+class MeWorkspace(BaseModel):
+    name: str
+    role: RoleName
+
+
+class MeResponse(BaseModel):
+    kind: str                       # user | service | visitor | anonymous
+    user: MeUser | None = None
+    org: MeOrg | None = None
+    org_admin: bool = False
+    workspaces: list[MeWorkspace] = Field(default_factory=list)
+
+
+class OrgWorkspace(BaseModel):
+    id: str
+    name: str
+
+
+class OrgMember(BaseModel):
+    id: str
+    email: str
+    name: str
+    org_admin: bool
+    roles: RoleGrants
+    you: bool = False
+
+
+class OrgInvitation(BaseModel):
+    email: str
+    org_admin: bool
+    roles: RoleGrants
+    created_at: float | None
+
+
+class OrgServiceAccount(BaseModel):
+    key_id: int | str
+    name: str
+    is_active: bool
+    roles: RoleGrants
+    total_queries: int
+    last_query_at: float | None
+
+
+class OrgResponse(BaseModel):
+    org: MeOrg
+    domain: str
+    workspaces: list[OrgWorkspace]
+    members: list[OrgMember]
+    invitations: list[OrgInvitation]
+    service_accounts: list[OrgServiceAccount]
+
+
+class WorkspaceCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
+
+
+class InvitationRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    org_admin: bool = False
+    roles: RoleGrants = Field(default_factory=dict)
+
+
+class MemberUpdateRequest(BaseModel):
+    org_admin: bool = False
+    roles: RoleGrants = Field(default_factory=dict)
+
+
+class ServiceAccountCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    roles: RoleGrants = Field(default_factory=dict)
+    rate_limit_rpm: int = Field(60, ge=1, le=10000)
+
+
+class ServiceAccountCreateResponse(BaseModel):
+    key: str          # shown once — never retrievable again
+    key_id: int | str
+    name: str
+
+
+class AdminOrgRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    domain: str = Field("", max_length=253,
+                        description="Google Workspace domain; its accounts join on sign-in")
+
+
+class AdminOrgResponse(BaseModel):
+    id: str
+    name: str
+    domain: str
+
+
+class AdminInvitationRequest(BaseModel):
+    org_id: str = Field(..., min_length=1)
+    email: str = Field(..., min_length=3, max_length=254)
 
 
 # ── Error ─────────────────────────────────────────────────────────────────────

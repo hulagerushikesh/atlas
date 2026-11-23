@@ -314,6 +314,7 @@ export function Footer() {
           <a href="/docs" className="transition-colors hover:text-foreground">API docs</a>
           <a href={CASE_STUDY} className="transition-colors hover:text-foreground" target="_blank" rel="noreferrer">Case study</a>
           <a href={GITHUB} className="transition-colors hover:text-foreground" target="_blank" rel="noreferrer">GitHub</a>
+          <a href="/privacy" className="transition-colors hover:text-foreground">Privacy</a>
         </nav>
       </div>
     </footer>

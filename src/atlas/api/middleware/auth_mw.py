@@ -18,6 +18,11 @@ is there because it is guarded by X-Admin-Secret and must be reachable before
 the first key exists; /warm because `atlas-keepwarm` calls it without a key
 (it makes no model calls and cannot spend).
 
+A signed session cookie (atlas.api.sessions, set by POST /auth/google) is
+read first: the principal is the person's, read from the store on every
+request, limited to 60 a minute, and a cookie-carrying write must also carry
+the console's X-Requested-With header.
+
 A tenancy store that cannot be read answers 503: the caller's access cannot
 be known, and guessing would hand an organisation's key the public one.
 """
@@ -35,7 +40,7 @@ from starlette.responses import Response
 from starlette.types import ASGIApp
 
 from atlas.api import auth as auth_db
-from atlas.api import tenancy
+from atlas.api import sessions, tenancy
 from atlas.api.authz import is_public
 
 # A caller on a public path, before or without a key. Not legacy: it can
@@ -45,6 +50,10 @@ _PUBLIC_CALLER = tenancy.Principal(kind="anonymous")
 # Keyless browsing of the demo sheet's listing. Cheap (no model call) but it
 # reads Qdrant, so it is limited too, separately from questions.
 _DEMO_BROWSE_RPM = 30
+
+# A signed-in person, the same default a new API key gets.
+_USER_RPM = 60
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 def _unavailable() -> JSONResponse:
@@ -65,10 +74,12 @@ def _bind(principal: tenancy.Principal) -> None:
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """Validate Bearer tokens and enforce per-key rate limits."""
 
-    def __init__(self, app: ASGIApp, *, enabled: bool, demo_rpm: int = 3) -> None:
+    def __init__(self, app: ASGIApp, *, enabled: bool, demo_rpm: int = 3,
+                 session_secret: str = "") -> None:
         super().__init__(app)
         self._enabled = enabled
         self._demo_rpm = demo_rpm
+        self._session_secret = session_secret
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if not self._enabled:
@@ -83,6 +94,13 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         redis_client = None
         with contextlib.suppress(AttributeError):
             redis_client = request.app.state.atlas.cache._redis
+
+        # A signed-in person. Checked before the Bearer header: a browser that
+        # also holds an old key in its settings acts as the person signed in.
+        user_id = sessions.read_session(request.cookies.get(sessions.COOKIE, ""),
+                                        self._session_secret)
+        if user_id:
+            return await self._admit_user(request, call_next, user_id, redis_client)
 
         auth_header = request.headers.get("Authorization", "")
         if not auth_header and _demo_open(request):
@@ -115,6 +133,44 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             principal = await tenancy.principal_for_key(api_key.id)
         except tenancy.TenancyUnavailable:
             return _unavailable()
+        request.state.principal = principal
+        _bind(principal)
+        return await call_next(request)
+
+    async def _admit_user(
+        self, request: Request, call_next: RequestResponseEndpoint, user_id: str,
+        redis_client: Any,
+    ) -> Response:
+        # The cookie rides along on any request to this site, including one a
+        # form on another site makes; a write must also carry the header only
+        # the console sends.
+        if (request.method not in _SAFE_METHODS
+                and request.headers.get(sessions.CSRF_HEADER) != sessions.CSRF_VALUE):
+            return JSONResponse(
+                {"error": "Missing request header",
+                 "detail": {"code": "csrf", "message": "This request did not come from Atlas."}},
+                status_code=403,
+            )
+        try:
+            principal = await tenancy.principal_for_user(user_id)
+        except tenancy.TenancyUnavailable:
+            return _unavailable()
+        if principal is None:
+            # Removed since the cookie was issued: signed out, not forbidden.
+            response = JSONResponse(
+                {"error": "Signed out",
+                 "detail": {"code": "signed_out",
+                            "message": "This account no longer has access to Atlas."}},
+                status_code=401,
+            )
+            response.delete_cookie(sessions.COOKIE, path="/")
+            return response
+        if not await auth_db.check_rate_limit(f"user:{user_id}", _USER_RPM, redis_client):
+            return JSONResponse(
+                {"error": "Rate limit exceeded", "detail": f"Limit: {_USER_RPM} rpm"},
+                status_code=429, headers={"Retry-After": "60"},
+            )
+        request.state.user_id = user_id
         request.state.principal = principal
         _bind(principal)
         return await call_next(request)

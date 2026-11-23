@@ -342,8 +342,8 @@ def test_every_route_the_app_serves_has_a_policy() -> None:
 
 
 def test_the_policy_names_no_route_that_is_gone() -> None:
-    # "/" and "/app" exist only when the web and console builds are present.
-    optional = {("GET", "/"), ("GET", "/app")}
+    # "/", "/app" and "/privacy" exist only when the console build is present.
+    optional = {("GET", "/"), ("GET", "/app"), ("GET", "/privacy")}
     stale = set(POLICY) - _served() - optional
     assert not stale, f"remove from authz.POLICY: {sorted(stale)}"
 
@@ -352,5 +352,6 @@ def test_the_policy_names_no_route_that_is_gone() -> None:
 def test_the_middleware_lets_through_exactly_what_the_table_calls_public(
     key: tuple[str, str], rule: str
 ) -> None:
-    path = key[1].replace("{key_id}", "7").replace("{namespace}", "docs")
+    path = (key[1].replace("{key_id}", "7").replace("{namespace}", "docs")
+            .replace("{email}", "x@y.z").replace("{user_id}", "usr_1"))
     assert is_public(path) is (rule in ("public", "admin_secret"))

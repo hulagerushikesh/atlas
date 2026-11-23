@@ -50,6 +50,10 @@ dependencies = [
 
     # Auth / usage storage
     "aiosqlite>=0.20.0",
+    # Google sign-in: checks the ID token's signature, audience and expiry
+    # (atlas.api.sessions). Also arrives with the gcp extra, but sign-in must
+    # not depend on which extra happens to be installed.
+    "google-auth>=2.30,<3",
 
     # Observability
     "structlog>=24.2.0",

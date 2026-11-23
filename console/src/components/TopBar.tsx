@@ -1,7 +1,10 @@
-import { Command, KeyRound, Layers, Map, Settings2, SunMoon, TriangleAlert } from "lucide-react"
+import { Command, KeyRound, Layers, LogIn, LogOut, Map, Settings2, SunMoon, TriangleAlert, UserRound, Users } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { signOut } from "@/lib/api"
 import { useAtlas, fmt } from "@/lib/store"
 import { SCORES } from "@/lib/glossary"
 import { cn } from "@/lib/utils"
@@ -93,6 +96,8 @@ export function TopBar() {
           <TooltipContent>Theme: {theme || "system"}</TooltipContent>
         </Tooltip>
 
+        <Account />
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-sm" className="press" aria-label="API keys" onClick={() => set({ accessOpen: true })}>
@@ -112,6 +117,55 @@ export function TopBar() {
         </Tooltip>
       </div>
     </header>
+  )
+}
+
+/**
+ * Who is signed in, or the way to sign in. Text, not an avatar (DESIGN §9):
+ * the address is what tells a person which account they are using.
+ */
+function Account() {
+  const { me, authConfig, set, boot } = useAtlas()
+  if (!me?.user) {
+    if (!authConfig?.enabled) return null
+    return (
+      <Button variant="ghost" size="sm" className="press gap-1.5 font-mono text-[11px] uppercase tracking-wider" onClick={() => set({ signInOpen: true })}>
+        <LogIn className="size-3.5" /> <span className="hidden sm:inline">Sign in</span>
+      </Button>
+    )
+  }
+  const leave = async () => {
+    try { await signOut() } catch { /* the cookie is cleared server-side or already gone */ }
+    set({ me: null })
+    toast.success("Signed out")
+    void boot()
+  }
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="press max-w-56 gap-1.5 font-mono text-[11px] normal-case" aria-label={`Signed in as ${me.user.email}`}>
+          <UserRound className="size-3.5 shrink-0" /> <span className="hidden truncate lg:inline">{me.user.email}</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 space-y-3 p-3">
+        <div className="space-y-0.5 font-mono text-[13px]">
+          <div className="truncate">{me.user.email}</div>
+          <div className="label normal-case tracking-normal">
+            {me.org?.name}{me.org_admin ? " · organisation admin" : ` · ${me.workspaces.length} sheet${me.workspaces.length === 1 ? "" : "s"}`}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          {me.org_admin && (
+            <Button variant="ghost" size="sm" className="press justify-start gap-2" onClick={() => set({ membersOpen: true })}>
+              <Users className="size-3.5" /> Members
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="press justify-start gap-2" onClick={() => void leave()}>
+            <LogOut className="size-3.5" /> Sign out
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 

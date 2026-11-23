@@ -352,6 +352,37 @@ same reason Settings is a dialog.
 - Errors are named for what happened here: a 403 is "Admin secret not
   accepted", not the query path's "the sheet requires an API key".
 
+### Account control and sign-in dialog
+
+- In the top bar, beside the keys button. Signed out: a mono 11px uppercase
+  "Sign in" ghost button, shown only when the server has sign-in on.
+  Signed in: the email address in mono 11px (icon only below `lg`), opening
+  a popover with the organisation, "Members" for an organisation admin, and
+  "Sign out". Text, never an avatar (§9).
+- The dialog hosts Google's own button, outline in light and filled black in
+  dark, and a link to `/privacy`. A refusal is the three-line error surface:
+  "Not invited yet." / the server's reason / what to do.
+
+### Members dialog
+
+- A dialog, not a pane, like the key listing. Sections in order: people,
+  invited, invite, sheets, service accounts; each headed by a pane-header
+  label with its count and a 1px rule.
+- Rows are mono 13px with access underneath at 12px: `docs: reader ·
+  hr: editor`, or a blue-soft "org admin · every sheet" badge.
+- Roles are a select per sheet ("no access", reader, editor, admin, each with
+  a few words on what it allows) and one switch for organisation admin.
+- A new service account's key is shown once in a blue-bordered box with a
+  copy button; it is never shown again.
+- The dialog grid is `minmax(0, 1fr)` so a long row cannot widen it past a
+  phone screen.
+
+### Privacy page
+
+- `/privacy`, built with the landing page's nav and footer. Display title,
+  four sections with the 2px section rule, body 17px at 72ch. Every claim on
+  it is checked against the code; change them together.
+
 ### Run export
 
 A download icon in the evidence pane header, and "Export this run as JSON" in

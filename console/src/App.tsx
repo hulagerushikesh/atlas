@@ -6,6 +6,8 @@ import { AnswerPane } from "@/components/AnswerPane"
 import { CommandMenu } from "@/components/CommandMenu"
 import { CorpusPane } from "@/components/CorpusPane"
 import { EvidencePane } from "@/components/EvidencePane"
+import { MembersDialog } from "@/components/MembersDialog"
+import { SignInDialog } from "@/components/SignInDialog"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { SurveyBar } from "@/components/SurveyBar"
 import { KeyStrip, TopBar } from "@/components/TopBar"
@@ -46,6 +48,8 @@ export default function App() {
       <CommandMenu onToggleCorpus={toggleCorpus} />
       <SettingsDialog />
       <AccessDialog />
+      <SignInDialog />
+      <MembersDialog />
       <Toaster position="bottom-left" toastOptions={{ className: "font-mono text-[13px]" }} />
     </TooltipProvider>
   )
