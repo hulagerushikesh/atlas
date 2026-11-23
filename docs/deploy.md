@@ -61,13 +61,18 @@ printf '%s' 'https://<cluster>.cloud.qdrant.io:6333' \
 grep '^QDRANT_API_KEY=' .env | cut -d= -f2- | tr -d '\n' \
   | gcloud secrets create atlas-qdrant-api-key --data-file=-
 openssl rand -hex 24 | tr -d '\n' | gcloud secrets create atlas-admin-secret --data-file=-
+openssl rand -base64 48 | tr -d '\n' | gcloud secrets create atlas-session-secret --data-file=-
 ```
+
+`atlas-session-secret` signs the sign-in cookie (added at T21). Replacing it
+signs everyone out, nothing else. Google sign-in's client id is public and is
+a plain setting in `scripts/deploy_gcp.sh`.
 
 Grant the Cloud Run service account access to them and to Firestore:
 
 ```bash
 SA=$(gcloud projects describe $PROJECT --format 'value(projectNumber)')-compute@developer.gserviceaccount.com
-for s in atlas-openai-api-key atlas-qdrant-url atlas-qdrant-api-key atlas-admin-secret; do
+for s in atlas-openai-api-key atlas-qdrant-url atlas-qdrant-api-key atlas-admin-secret atlas-session-secret; do
   gcloud secrets add-iam-policy-binding $s --member serviceAccount:$SA --role roles/secretmanager.secretAccessor
 done
 gcloud projects add-iam-policy-binding $PROJECT --member serviceAccount:$SA --role roles/datastore.user
