@@ -25,9 +25,15 @@ import structlog
 from fastapi import HTTPException, Request
 
 from atlas.api.dependencies import get_principal
-from atlas.api.tenancy import Action, TenancyUnavailable, Workspace, resolve_workspace
+from atlas.api.tenancy import (
+    Action,
+    Principal,
+    TenancyUnavailable,
+    Workspace,
+    resolve_workspace,
+)
 
-Rule = Literal["public", "admin_secret", "authenticated", "read", "write", "manage"]
+Rule = Literal["public", "admin_secret", "authenticated", "org_admin", "read", "write", "manage"]
 
 POLICY: dict[tuple[str, str], Rule] = {
     ("GET", "/"): "public",
@@ -40,10 +46,30 @@ POLICY: dict[tuple[str, str], Rule] = {
     ("GET", "/docs/oauth2-redirect"): "public",
     ("GET", "/redoc"): "public",
     ("GET", "/openapi.json"): "public",
+    ("GET", "/privacy"): "public",
+    # Sign-in (E1.3). Signing in and out need no session by definition; the
+    # client id is public. /auth/me answers for whoever is asking.
+    ("GET", "/auth/config"): "public",
+    ("POST", "/auth/google"): "public",
+    ("POST", "/auth/logout"): "public",
+    ("GET", "/auth/me"): "authenticated",
     # Reachable before the first key exists; each checks X-Admin-Secret.
     ("POST", "/keys"): "admin_secret",
     ("GET", "/keys"): "admin_secret",
     ("PATCH", "/keys/{key_id}"): "admin_secret",
+    # Break-glass: the first organisation and its first admin (E1.3).
+    ("POST", "/admin/orgs"): "admin_secret",
+    ("POST", "/admin/invitations"): "admin_secret",
+    # One organisation's own people, workspaces and service accounts; always
+    # the caller's organisation, never one named in the request.
+    ("GET", "/org"): "org_admin",
+    ("POST", "/org/workspaces"): "org_admin",
+    ("POST", "/org/invitations"): "org_admin",
+    ("DELETE", "/org/invitations/{email}"): "org_admin",
+    ("PUT", "/org/members/{user_id}"): "org_admin",
+    ("DELETE", "/org/members/{user_id}"): "org_admin",
+    ("POST", "/org/service-accounts"): "org_admin",
+    ("DELETE", "/org/service-accounts/{key_id}"): "org_admin",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",
     # Lists only what the caller may read.
@@ -79,6 +105,20 @@ def _not_found(name: str) -> HTTPException:
         "code": "workspace_not_found",
         "message": f"No sheet called '{name}' that you can open.",
     })
+
+
+def require_org_admin(request: Request) -> Principal:
+    """The caller, if it administers an organisation. A legacy key or the dev
+    box has none of its own, so it is refused here rather than handed the
+    public organisation's people."""
+    principal = get_principal(request)
+    if principal.legacy or not principal.org_id or not principal.org_admin:
+        raise HTTPException(status_code=403, detail={
+            "code": "not_org_admin",
+            "message": "Only an organisation admin can manage members.",
+        })
+    structlog.contextvars.bind_contextvars(org_id=principal.org_id)
+    return principal
 
 
 async def authorize(request: Request, name: str, action: Action) -> Workspace:

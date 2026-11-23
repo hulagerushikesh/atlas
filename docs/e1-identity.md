@@ -129,6 +129,39 @@ owner runs it (₹0).
   is still the shared admin secret, and a key made there is legacy), and
   `/usage` for an organisation admin (it shows the caller's own key).
 
+### Decided while building E1.3 (2026-11-23)
+
+- **The cookie holds an account number and an expiry, never roles.** Roles
+  are read from the store on every request, so removing a member or changing
+  a role applies on their next request. The cookie is HMAC-signed with
+  `SESSION_SECRET` (a new secret for T21), HttpOnly, Secure, SameSite=Lax,
+  8 hours. Signed-in people are limited to 60 requests a minute.
+- **A cookie wins over a stored API key** in the same browser, and every
+  cookie-carrying write must also send `X-Requested-With: atlas` (the
+  console always does). The API's CORS policy allows no credentials, so
+  another site cannot send both.
+- **Placement order:** existing user → invitation (used up on first sign-in,
+  with its grants) → organisation whose domain is the token's `hd` claim
+  (joins with no sheets) → refused. The email address alone never places
+  anyone: `hd` is what proves Google runs the account for that domain.
+- **Only the client id is used**, never the client secret, which is stored
+  nowhere. Google's certificates are cached for the max-age Google sends; an
+  unknown key id refetches at most once a minute.
+- **Revoking a service account deactivates its key and keeps its record.**
+  Deleting the record would turn it back into a legacy key with the public
+  organisation's access.
+- **New sheet names are their own collection slug** (`a-z 0-9 - _`, no
+  `__`), so two names can never share a collection.
+- **Break-glass:** `POST /admin/orgs` and `POST /admin/invitations` (admin
+  secret) make an organisation and invite its first admin; everything after
+  is that admin, signed in, on the Members page.
+- **Sign-in is on only with auth on** and both `GOOGLE_CLIENT_ID` and
+  `SESSION_SECRET` set. `/privacy` exists because Google will not let the app
+  leave Testing without one.
+- **Still not done:** `/usage` for an organisation admin, and charging a
+  signed-in person's questions to their own usage record (they count against
+  the global daily cap only). Both move to E4 (budgets and audit).
+
 ## 7. Not in E1, on purpose
 
 SAML, SCIM, groups and per-document permissions (E2), audit store (E4),

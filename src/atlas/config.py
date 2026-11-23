@@ -313,6 +313,11 @@ class Settings(BaseSettings):
     # service account; AUTH_FIRESTORE_PROJECT only when it differs from ADC.
     auth_store: Literal["sqlite", "firestore"] = "sqlite"
     auth_firestore_project: str = ""
+    # Google sign-in (E1.3). The client id is public: every visitor's browser
+    # receives it. SESSION_SECRET signs the session cookie and is a secret.
+    # Sign-in is off unless both are set.
+    google_client_id: str = ""
+    session_secret: str = ""
 
     # Sub-configs are instantiated here; in tests you can pass them directly.
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)  # type: ignore[arg-type]

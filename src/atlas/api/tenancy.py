@@ -28,6 +28,7 @@ Design rationale:
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import time
@@ -87,6 +88,22 @@ class User:
     org_id: str
     email: str
     name: str = ""
+    created_at: float | None = None
+
+
+@dataclass(frozen=True)
+class Invitation:
+    """A person an admin has let in, before they first sign in (E1.3).
+
+    One per address: it is consumed by that address's first sign-in, which
+    makes the user in `org_id` with exactly these grants.
+    """
+
+    email: str
+    org_id: str
+    org_admin: bool = False
+    roles: dict[str, Role] = field(default_factory=dict)  # workspace id -> role
+    invited_by: str = ""
     created_at: float | None = None
 
 
@@ -223,6 +240,21 @@ class TenancyStore(Protocol):
     async def find_user(self, email: str) -> User | None: ...
     async def put_subject(self, subject: Subject) -> None: ...
     async def get_subject(self, kind: SubjectKind, subject_id: str) -> Subject | None: ...
+    # E1.3: sign-in, invitations and the members page.
+    async def find_org_by_domain(self, domain: str) -> Organisation | None: ...
+    async def get_user(self, user_id: str) -> User | None: ...
+    async def list_users(self, org_id: str) -> list[User]: ...
+    async def delete_user(self, user_id: str) -> None: ...
+    async def list_subjects(self, org_id: str, kind: SubjectKind) -> list[Subject]: ...
+    async def delete_subject(self, kind: SubjectKind, subject_id: str) -> None: ...
+    async def put_invitation(self, invitation: Invitation) -> None: ...
+    async def get_invitation(self, email: str) -> Invitation | None: ...
+    async def list_invitations(self, org_id: str) -> list[Invitation]: ...
+    async def delete_invitation(self, email: str) -> None: ...
+
+
+def normalise_email(email: str) -> str:
+    return email.strip().lower()
 
 
 async def find_workspace(store: TenancyStore, org_id: str, name: str) -> Workspace | None:
@@ -274,6 +306,11 @@ CREATE TABLE IF NOT EXISTS grants (
     workspace_id TEXT NOT NULL REFERENCES workspaces(id), role TEXT NOT NULL,
     PRIMARY KEY (kind, subject_id, workspace_id)
 );
+CREATE TABLE IF NOT EXISTS invitations (
+    email TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id),
+    org_admin INTEGER NOT NULL DEFAULT 0, roles TEXT NOT NULL DEFAULT '{}',
+    invited_by TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL
+);
 """
 
 
@@ -297,7 +334,7 @@ class SQLiteTenancyStore:
                          org_id: str | None = None) -> Organisation:
         if org_id is not None and (existing := await self.get_org(org_id)) is not None:
             return existing
-        org = Organisation(id=org_id or _new_id("org"), name=name, domain=domain,
+        org = Organisation(id=org_id or _new_id("org"), name=name, domain=domain.strip().lower(),
                            created_at=time.time())
         async with aiosqlite.connect(self.db_path) as db:
             await db.execute("INSERT INTO orgs VALUES (?, ?, ?, ?)",
@@ -386,6 +423,81 @@ class SQLiteTenancyStore:
                        org_admin=bool(row["org_admin"]),
                        roles={g["workspace_id"]: Role(g["role"]) for g in grants})
 
+    async def _all(self, sql: str, params: tuple[Any, ...]) -> list[aiosqlite.Row]:
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            return list(await (await db.execute(sql, params)).fetchall())
+
+    async def _run(self, *statements: tuple[str, tuple[Any, ...]]) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            for sql, params in statements:
+                await db.execute(sql, params)
+            await db.commit()
+
+    async def find_org_by_domain(self, domain: str) -> Organisation | None:
+        if not domain:
+            return None
+        r = await self._one("SELECT * FROM orgs WHERE domain = ?", (domain.lower(),))
+        return None if r is None else Organisation(r["id"], r["name"], r["domain"],
+                                                   r["created_at"])
+
+    @staticmethod
+    def _user(r: aiosqlite.Row) -> User:
+        return User(r["id"], r["org_id"], r["email"], r["name"], r["created_at"])
+
+    async def get_user(self, user_id: str) -> User | None:
+        r = await self._one("SELECT * FROM users WHERE id = ?", (user_id,))
+        return None if r is None else self._user(r)
+
+    async def list_users(self, org_id: str) -> list[User]:
+        rows = await self._all("SELECT * FROM users WHERE org_id = ? ORDER BY email", (org_id,))
+        return [self._user(r) for r in rows]
+
+    async def delete_user(self, user_id: str) -> None:
+        await self._run(("DELETE FROM users WHERE id = ?", (user_id,)))
+        await self.delete_subject("user", user_id)
+
+    async def list_subjects(self, org_id: str, kind: SubjectKind) -> list[Subject]:
+        rows = await self._all("SELECT id FROM subjects WHERE org_id = ? AND kind = ?",
+                               (org_id, kind))
+        found = [await self.get_subject(kind, r["id"]) for r in rows]
+        return [s for s in found if s is not None]
+
+    async def delete_subject(self, kind: SubjectKind, subject_id: str) -> None:
+        await self._run(
+            ("DELETE FROM grants WHERE kind = ? AND subject_id = ?", (kind, subject_id)),
+            ("DELETE FROM subjects WHERE kind = ? AND id = ?", (kind, subject_id)),
+        )
+
+    @staticmethod
+    def _invitation(r: aiosqlite.Row) -> Invitation:
+        roles = {ws: Role(role) for ws, role in json.loads(r["roles"] or "{}").items()}
+        return Invitation(email=r["email"], org_id=r["org_id"], org_admin=bool(r["org_admin"]),
+                          roles=roles, invited_by=r["invited_by"], created_at=r["created_at"])
+
+    async def put_invitation(self, invitation: Invitation) -> None:
+        roles = json.dumps({ws: role.value for ws, role in invitation.roles.items()})
+        await self._run((
+            "INSERT INTO invitations VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (email) DO UPDATE "
+            "SET org_id = excluded.org_id, org_admin = excluded.org_admin, "
+            "roles = excluded.roles, invited_by = excluded.invited_by, "
+            "created_at = excluded.created_at",
+            (normalise_email(invitation.email), invitation.org_id, int(invitation.org_admin),
+             roles, invitation.invited_by, invitation.created_at or time.time()),
+        ))
+
+    async def get_invitation(self, email: str) -> Invitation | None:
+        r = await self._one("SELECT * FROM invitations WHERE email = ?", (normalise_email(email),))
+        return None if r is None else self._invitation(r)
+
+    async def list_invitations(self, org_id: str) -> list[Invitation]:
+        rows = await self._all("SELECT * FROM invitations WHERE org_id = ? ORDER BY email",
+                               (org_id,))
+        return [self._invitation(r) for r in rows]
+
+    async def delete_invitation(self, email: str) -> None:
+        await self._run(("DELETE FROM invitations WHERE email = ?", (normalise_email(email),)))
+
 
 # ── Firestore ─────────────────────────────────────────────────────────────────
 
@@ -419,7 +531,7 @@ class FirestoreTenancyStore:
                          org_id: str | None = None) -> Organisation:
         if org_id is not None and (existing := await self.get_org(org_id)) is not None:
             return existing
-        org = Organisation(id=org_id or _new_id("org"), name=name, domain=domain,
+        org = Organisation(id=org_id or _new_id("org"), name=name, domain=domain.strip().lower(),
                            created_at=time.time())
         await self._col("orgs").document(org.id).set(
             {"name": org.name, "domain": org.domain, "created_at": org.created_at})
@@ -493,9 +605,81 @@ class FirestoreTenancyStore:
         if not snap.exists:
             return None
         d = snap.to_dict() or {}
+        return self._subject(kind, subject_id, d)
+
+    @staticmethod
+    def _subject(kind: SubjectKind, subject_id: str, d: dict[str, Any]) -> Subject:
         return Subject(kind=kind, id=subject_id, org_id=d.get("org_id", ""),
                        org_admin=bool(d.get("org_admin", False)),
                        roles={ws: Role(r) for ws, r in (d.get("roles") or {}).items()})
+
+    async def find_org_by_domain(self, domain: str) -> Organisation | None:
+        if not domain:
+            return None
+        snaps = await self._col("orgs").where(
+            filter=self._eq("domain", domain.strip().lower())).limit(1).get()
+        for s in snaps:
+            d = s.to_dict() or {}
+            return Organisation(s.id, d.get("name", ""), d.get("domain", ""), d.get("created_at"))
+        return None
+
+    @staticmethod
+    def _user(doc_id: str, d: dict[str, Any]) -> User:
+        return User(doc_id, d.get("org_id", ""), d.get("email", ""), d.get("name", ""),
+                    d.get("created_at"))
+
+    async def get_user(self, user_id: str) -> User | None:
+        snap = await self._col("users").document(user_id).get()
+        return self._user(snap.id, snap.to_dict() or {}) if snap.exists else None
+
+    async def list_users(self, org_id: str) -> list[User]:
+        snaps = await self._col("users").where(filter=self._eq("org_id", org_id)).get()
+        return sorted((self._user(s.id, s.to_dict() or {}) for s in snaps), key=lambda u: u.email)
+
+    async def delete_user(self, user_id: str) -> None:
+        await self._col("users").document(user_id).delete()
+        await self.delete_subject("user", user_id)
+
+    async def list_subjects(self, org_id: str, kind: SubjectKind) -> list[Subject]:
+        snaps = await self._col("subjects").where(filter=self._eq("org_id", org_id)).get()
+        out = []
+        for s in snaps:
+            d = s.to_dict() or {}
+            if d.get("kind") == kind:
+                out.append(self._subject(kind, str(d.get("id", "")), d))
+        return out
+
+    async def delete_subject(self, kind: SubjectKind, subject_id: str) -> None:
+        await self._col("subjects").document(f"{kind}:{subject_id}").delete()
+
+    @staticmethod
+    def _invitation(d: dict[str, Any]) -> Invitation:
+        return Invitation(
+            email=d.get("email", ""), org_id=d.get("org_id", ""),
+            org_admin=bool(d.get("org_admin", False)),
+            roles={ws: Role(r) for ws, r in (d.get("roles") or {}).items()},
+            invited_by=d.get("invited_by", ""), created_at=d.get("created_at"),
+        )
+
+    async def put_invitation(self, invitation: Invitation) -> None:
+        email = normalise_email(invitation.email)
+        await self._col("invitations").document(email).set({
+            "email": email, "org_id": invitation.org_id, "org_admin": invitation.org_admin,
+            "roles": {ws: role.value for ws, role in invitation.roles.items()},
+            "invited_by": invitation.invited_by,
+            "created_at": invitation.created_at or time.time(),
+        })
+
+    async def get_invitation(self, email: str) -> Invitation | None:
+        snap = await self._col("invitations").document(normalise_email(email)).get()
+        return self._invitation(snap.to_dict() or {}) if snap.exists else None
+
+    async def list_invitations(self, org_id: str) -> list[Invitation]:
+        snaps = await self._col("invitations").where(filter=self._eq("org_id", org_id)).get()
+        return sorted((self._invitation(s.to_dict() or {}) for s in snaps), key=lambda i: i.email)
+
+    async def delete_invitation(self, email: str) -> None:
+        await self._col("invitations").document(normalise_email(email)).delete()
 
 
 def build_tenancy_store(backend: str, *, sqlite_path: Path | None = None,
@@ -537,6 +721,50 @@ async def principal_for_key(key_id: object) -> Principal:
         logger.warning("principal_lookup_failed", error=str(exc))
         raise TenancyUnavailable(str(exc)) from exc
     return legacy_key_principal(key_id) if subject is None else principal_from_subject(subject)
+
+
+async def principal_for_user(user_id: str) -> Principal | None:
+    """The principal behind a session; None once the member has been removed.
+
+    Read on every request, not carried in the cookie, so removing a member or
+    changing a role takes effect on their next request.
+    """
+    try:
+        subject = await _store.get_subject("user", user_id)
+    except Exception as exc:
+        logger.warning("principal_lookup_failed", error=str(exc))
+        raise TenancyUnavailable(str(exc)) from exc
+    return None if subject is None else principal_from_subject(subject)
+
+
+class NotInvited(PermissionError):
+    """A Google account with no user, no invitation and no matching domain."""
+
+
+async def place_user(store: TenancyStore, email: str, name: str, hosted_domain: str) -> User:
+    """The user a verified Google sign-in becomes (docs/e1-identity.md §3).
+
+    In order: an existing user; else an invitation, consumed here with its
+    grants; else an organisation whose Workspace domain is the account's
+    `hd` claim, which places the user with no workspace roles until an admin
+    grants some. A personal address with no invitation is refused.
+    """
+    email = normalise_email(email)
+    if (user := await store.find_user(email)) is not None:
+        return user
+    if (inv := await store.get_invitation(email)) is not None:
+        user = await store.create_user(inv.org_id, email, name)
+        await store.put_subject(Subject(kind="user", id=user.id, org_id=inv.org_id,
+                                        org_admin=inv.org_admin, roles=dict(inv.roles)))
+        await store.delete_invitation(email)
+        logger.info("user_joined", org_id=inv.org_id, via="invitation")
+        return user
+    if hosted_domain and (org := await store.find_org_by_domain(hosted_domain)) is not None:
+        user = await store.create_user(org.id, email, name)
+        await store.put_subject(Subject(kind="user", id=user.id, org_id=org.id))
+        logger.info("user_joined", org_id=org.id, via="domain")
+        return user
+    raise NotInvited(email)
 
 
 async def principal_for_visitor(visitor_id: str, demo_namespace: str) -> Principal:

@@ -94,6 +94,9 @@ eval: ## Run eval harness against the demo question set (requires ingested corpu
 create-key: ## Create an API key: make create-key NAME="my app" EMAIL=me@example.com
 	$(PYTHON) scripts/create_key.py --name "$(NAME)" --email "$(EMAIL)" --rate-limit $(or $(RPM),60)
 
+try-sign-in: ## Try Google sign-in on :8000 with throwaway data: make try-sign-in EMAIL=you@gmail.com
+	$(PYTHON) scripts/try_sign_in.py --email "$(EMAIL)"
+
 eval-compare: ## Compare latest eval against a baseline (set BASELINE=path/to/report.json)
 	$(PYTHON) scripts/run_eval.py --dataset $(EVAL_DATA) --namespace $(NAMESPACE) --run-name duckdb-v1 \
 	  --compare $(BASELINE)

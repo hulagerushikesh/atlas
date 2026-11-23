@@ -17,6 +17,8 @@ export default defineConfig({
       input: {
         console: path.resolve(__dirname, "index.html"),
         landing: path.resolve(__dirname, "landing.html"),
+        // The privacy page Google's sign-in screen links to; served at /privacy.
+        privacy: path.resolve(__dirname, "privacy.html"),
       },
     },
   },
@@ -26,6 +28,7 @@ export default defineConfig({
       "/query": "http://localhost:8010", "/namespaces": "http://localhost:8010",
       "/health": "http://localhost:8010", "/ingest": "http://localhost:8010",
       "/usage": "http://localhost:8010", "/keys": "http://localhost:8010",
+      "/auth": "http://localhost:8010", "/org": "http://localhost:8010",
     },
   },
 })

@@ -112,7 +112,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [x] **E1.1** Organisations, workspaces, users, roles and service accounts
       stored; every request carries "who is asking"; today's keys keep working.
 - [x] **E1.2** Every route checks it; listings private; isolation suite in CI.
-- [ ] **E1.3** Google sign-in, invitations, a members page in the console.
+- [x] **E1.3** Google sign-in, invitations, a members page in the console. **Done 2026-11-23.**
 - [ ] **E1.4** Live: migrated and deployed; a second organisation is refused live.
 
 **E2 Document permissions** — a reader never receives a passage they cannot open.
@@ -176,11 +176,11 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T16~~ | ~~E1 design: model, sign-in, enforcement points, migration~~ | C | ₹0 | **done 2026-11-20** — `docs/e1-identity.md` | — |
 | ~~T17~~ | ~~Build E1.1: tenancy store, principal on every request, migration~~ | C | ₹0 | **done 2026-11-21** — gate green; nothing enforced yet, so every key behaves as before | E1.1 |
 | ~~T18~~ | ~~Build E1.2: route policy table, checks everywhere, isolation suite~~ | C | ₹0 | **done 2026-11-21** — isolation suite green on the laptop; CI runs it on push. Not live until T21 | E1.2 |
-| T19 | Create the Google sign-in client id (O7) | You | ₹0 | id in `.env` and Secret Manager | — |
-| T20 | Build E1.3: Google sign-in, invitations, members page | C | ₹0 | browser-checked | E1.3 |
+| ~~T19~~ | ~~Create the Google sign-in client id (O7)~~ | You | ₹0 | **done 2026-11-23** — id in the laptop `.env`; app in Testing (owner is a test user). Not in Secret Manager: the id is public, it goes in as a plain setting at T21 | — |
+| ~~T20~~ | ~~Build E1.3: Google sign-in, invitations, members page~~ | C | ₹0 | **done 2026-11-23** — 56 sign-in tests green; console checked in a headless browser (light, dark, phone); the owner signed in with Google on the laptop and opened Members. Not live until T21 | E1.3 |
 | T21 | Run the migration; deploy; live check with a second organisation | C + You | ₹0 | refused live | E1.4 |
 
-T19 is next and is yours: T20 cannot start without the Google client id. Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+T21 is next (C + You; it needs a new secret, SESSION_SECRET, in Secret Manager, and the privacy page's link on Google's Branding page before Publish app). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -220,8 +220,10 @@ T19 is next and is yours: T20 cannot start without the Google client id. Older C
       before 2026-11-19.**
 - [ ] **O6 — Five recovery-code files in Downloads:** save to a password
       manager, then delete them.
-- [ ] **O7 — Google sign-in client id (T19), ₹0.** Needed only when T20
-      starts; Claude will give the steps then.
+- [x] **O7 — Google sign-in client id (T19), ₹0.** **Done 2026-11-23.** The
+      client secret was shown once and then deleted and replaced; Atlas never
+      uses it, so it is stored nowhere. Left for T21: add the homepage and
+      privacy page on Google's Branding page, then press Publish app.
 - [ ] **O8 — Five short conversations before E3** with people who run
       internal tools: where docs live, how people find answers, what would
       stop their security team, what they would pay per user per month.
@@ -254,6 +256,8 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-23 — T20 done (owner signed in with Google on the laptop): Google sign-in with an 8-hour signed cookie, invitations, domain joining, members page (people, invitations, sheets, service accounts), break-glass org creation, privacy page. Roles read on every request, so removal applies next request. Not live. ₹0.
+- 2026-11-23 — T19 done by the owner: Google sign-in client created in atlas-rag-rush, id in the laptop `.env`; leaked client secret deleted and replaced (unused by Atlas); app stays in Testing until a privacy page exists. ₹0.
 - 2026-11-21 — T18 done: every route checks who is asking against a policy table; set lists private; answers cached per workspace; a failed access check refuses; isolation suite (two organisations, every route, both ways) green. Unmigrated keys keep the public sets only. Not live. ₹0.
 - 2026-11-21 — T17 done: organisations, workspaces, users, roles and service accounts stored (laptop and live stores); every request carries who is asking; re-runnable migration with a dry run; not live, nothing enforced yet. ₹0.
 - 2026-11-20 — D8 approved: E1–E6 added as milestones (plan 36 boxes, project 56), 9.4/9.5 folded into E2; E1 design written (T16). ₹0.

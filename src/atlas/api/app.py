@@ -44,7 +44,8 @@ from atlas.api.middleware.auth_mw import APIKeyMiddleware
 from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents
-from atlas.api.routes import health, ingest, keys, metrics_route, namespaces, query
+from atlas.api.routes import auth, health, ingest, keys, metrics_route, namespaces, org, query
+from atlas.api.sessions import SignIn
 from atlas.api.spendstore import build_spend_backend
 from atlas.config import Settings, get_settings
 from atlas.logging import configure_logging
@@ -215,7 +216,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(TracingMiddleware)
     app.add_middleware(PrometheusMiddleware)
-    app.add_middleware(APIKeyMiddleware, enabled=cfg.auth_enabled, demo_rpm=cfg.budget.demo_rpm)
+    app.add_middleware(APIKeyMiddleware, enabled=cfg.auth_enabled, demo_rpm=cfg.budget.demo_rpm,
+                       session_secret=cfg.session_secret)
+    # Sign-in needs the key middleware to read its cookie, so it is on only
+    # with auth on as well.
+    app.state.sign_in = SignIn.from_settings(
+        cfg.google_client_id if cfg.auth_enabled else "", cfg.session_secret)
 
     # Landing page at /
     import pathlib as _pl
@@ -232,11 +238,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         app.add_api_route("/", _landing, include_in_schema=False, response_class=HTMLResponse)
 
+    # The privacy page Google's sign-in screen links to. Same build, same
+    # no-cache reason as the landing page.
+    _privacy_index = _pl.Path(__file__).parent / "static" / "privacy.html"
+    if _privacy_index.exists():
+        _privacy_html = _privacy_index.read_text()
+
+        async def _privacy() -> HTMLResponse:
+            return HTMLResponse(content=_privacy_html, headers={"Cache-Control": "no-cache"})
+
+        app.add_api_route("/privacy", _privacy, include_in_schema=False,
+                          response_class=HTMLResponse)
+
     # Routes
     app.include_router(health.router, tags=["ops"])
     app.include_router(metrics_route.router, tags=["ops"])
     app.include_router(namespaces.router, tags=["namespaces"])
     app.include_router(keys.router, tags=["auth"])
+    app.include_router(auth.router, tags=["auth"])
+    app.include_router(org.router, tags=["organisation"])
     app.include_router(ingest.router, tags=["ingestion"])
     app.include_router(query.router, tags=["query"])
 

@@ -157,6 +157,9 @@ export async function api(path: string, init: RequestInit = {}, timeoutMs?: numb
   const headers = new Headers(init.headers)
   const key = store.get(KEY)
   if (key) headers.set("Authorization", `Bearer ${key}`)
+  // A signed-in person's writes must carry this: the session cookie rides on
+  // any request to this site, and this header is what says the console sent it.
+  headers.set("X-Requested-With", "atlas")
   const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : init.signal
   let r: Response
   try {
@@ -240,6 +243,79 @@ export const setKeyActive = (keyId: number | string, isActive: boolean, secret: 
     headers: { "Content-Type": "application/json", "X-Admin-Secret": secret },
     body: JSON.stringify({ is_active: isActive }),
   }, 5000).then((r) => r.json() as Promise<KeyRecord>)
+
+/* ── Sign-in and the organisation page (E1.3) ──────────────────────────────
+ * The session is an HttpOnly cookie: this code never sees it, the browser
+ * sends it. Roles are named by sheet, the way the server takes them.
+ */
+
+export type Role = "reader" | "editor" | "admin"
+export type Grants = Record<string, Role>
+
+export interface AuthConfig { enabled: boolean; google_client_id: string }
+export interface Me {
+  kind: "user" | "service" | "visitor" | "anonymous"
+  user: { id: string; email: string; name: string } | null
+  org: { id: string; name: string } | null
+  org_admin: boolean
+  workspaces: { name: string; role: Role }[]
+}
+export interface OrgMember { id: string; email: string; name: string; org_admin: boolean; roles: Grants; you: boolean }
+export interface OrgInvitation { email: string; org_admin: boolean; roles: Grants; created_at: number | null }
+export interface OrgServiceAccount {
+  key_id: number | string; name: string; is_active: boolean; roles: Grants
+  total_queries: number; last_query_at: number | null
+}
+export interface Org {
+  org: { id: string; name: string }
+  domain: string
+  workspaces: { id: string; name: string }[]
+  members: OrgMember[]
+  invitations: OrgInvitation[]
+  service_accounts: OrgServiceAccount[]
+}
+
+const json = (body: unknown): RequestInit => ({
+  headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+})
+
+export const getAuthConfig = () => api("/auth/config", {}, 3000).then((r) => r.json() as Promise<AuthConfig>)
+/** Null when nobody is signed in: the server answers 401 for that. */
+export const getMe = () =>
+  api("/auth/me", {}, 3000).then((r) => r.json() as Promise<Me>).catch((e) => {
+    if (e instanceof ApiError && e.status === 401) return null
+    throw e
+  })
+export const signInWithGoogle = (credential: string) =>
+  api("/auth/google", { method: "POST", ...json({ credential }) }, 10000).then((r) => r.json() as Promise<Me>)
+export const signOut = () => api("/auth/logout", { method: "POST" }, 5000)
+
+export const getOrg = () => api("/org", {}, 5000).then((r) => r.json() as Promise<Org>)
+export const createSheet = (name: string) =>
+  api("/org/workspaces", { method: "POST", ...json({ name }) }, 5000)
+export const invite = (email: string, org_admin: boolean, roles: Grants) =>
+  api("/org/invitations", { method: "POST", ...json({ email, org_admin, roles }) }, 5000)
+export const withdrawInvitation = (email: string) =>
+  api(`/org/invitations/${encodeURIComponent(email)}`, { method: "DELETE" }, 5000)
+export const updateMember = (id: string, org_admin: boolean, roles: Grants) =>
+  api(`/org/members/${encodeURIComponent(id)}`, { method: "PUT", ...json({ org_admin, roles }) }, 5000)
+export const removeMember = (id: string) =>
+  api(`/org/members/${encodeURIComponent(id)}`, { method: "DELETE" }, 5000)
+export const createServiceAccount = (name: string, roles: Grants) =>
+  api("/org/service-accounts", { method: "POST", ...json({ name, roles }) }, 5000)
+    .then((r) => r.json() as Promise<{ key: string; key_id: number | string; name: string }>)
+export const revokeServiceAccount = (keyId: number | string) =>
+  api(`/org/service-accounts/${encodeURIComponent(String(keyId))}`, { method: "DELETE" }, 5000)
+
+/** The message a structured error carries, else the plain one. */
+export function messageOf(e: unknown): string {
+  if (e instanceof ApiError) {
+    const d = e.detail as { message?: unknown } | undefined
+    if (d && typeof d.message === "string") return d.message
+    return e.message
+  }
+  return e instanceof Error ? e.message : String(e)
+}
 
 export const postQuery = (query: string, namespace: string, top_k: number) =>
   api("/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, namespace, top_k, stream: false }) })
