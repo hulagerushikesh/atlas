@@ -14,6 +14,7 @@ from atlas.api.schemas import (
     SourceInfo,
     SourceListResponse,
 )
+from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
 
 router = APIRouter()
 
@@ -73,7 +74,8 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     namespace = tenancy.registry_namespace(ws)
     registry = get_registry(request)
     dense_chunks = await registry.dense_chunk_count(namespace)
-    await registry.reconcile_sparse(namespace, dense_chunks=dense_chunks)
+    await bring_keyword_copy_up_to_date(registry, namespace, await sheet_version(ws),
+                                        dense_chunks=dense_chunks)
 
     components = registry.get(namespace)
     sparse = components.sparse_index

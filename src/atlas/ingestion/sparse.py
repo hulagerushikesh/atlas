@@ -245,6 +245,19 @@ class BM25SparseIndex(BaseIndex):
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
+    async def set_document_acl(self, doc_id: str, acl: list[str]) -> int:
+        """Rewrite one document's access list in this process's keyword copy."""
+        hits = [e for e in self._corpus if e["metadata"].get("doc_id") == doc_id]
+        for e in hits:
+            e["metadata"][ACL_FIELD] = list(acl)
+        if hits:
+            await asyncio.to_thread(self._save_to_disk)
+        return len(hits)
+
+    async def delete_document(self, doc_id: str) -> int:
+        ids = [e["chunk_id"] for e in self._corpus if e["metadata"].get("doc_id") == doc_id]
+        return await self.delete(ids) if ids else 0
+
     def acl_tokens(self) -> frozenset[str]:
         """Every token on any passage's access list in this sheet (E2).
 

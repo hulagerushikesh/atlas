@@ -57,6 +57,7 @@ def mock_dense() -> MagicMock:
     idx.upsert = AsyncMock(return_value=3)
     idx.unchanged_ids = AsyncMock(return_value=set())
     idx.prune_document = AsyncMock(return_value=0)
+    idx.document_acl = AsyncMock(return_value=None)  # E2: a new document
     idx.stats = AsyncMock(
         return_value=IndexStats(total_chunks=3, collection_name="test", index_type="dense")
     )
@@ -120,6 +121,7 @@ class TestDocumentIndexer:
         dense.upsert = AsyncMock(return_value=0)
         dense.unchanged_ids = AsyncMock(return_value=set())
         dense.prune_document = AsyncMock(return_value=0)
+        dense.document_acl = AsyncMock(return_value=None)
         sparse = MagicMock()
         sparse.upsert = AsyncMock(return_value=0)
         sparse.prune_document = AsyncMock(return_value=0)

@@ -169,6 +169,35 @@ paise of model calls.
   built from retrieved passages only, which the filter already decided.
   The cached path re-checks them (lock 2).
 
+### Decided while building E2.3 (2026-11-23)
+
+- **Neither one server nor a shared cache: a sheet version.** Each sheet has
+  a version in the tenancy store, rewritten (never counted up, so two
+  simultaneous changes cannot land on the same value) after every change to
+  its documents or their access, and after every upload. It is part of every
+  cache key, so older answers on any server are never found again, and a
+  server that sees a version it has not seen rebuilds its keyword copy from
+  Qdrant before searching. Cost: one more Firestore read per question,
+  inside the free tier, so ₹0; Redis was not needed and live keeps two
+  servers. It also closes the old gap where an upload on one server left the
+  other's cached answers stale for an hour.
+- **A rebuild that fails refuses the question** ("still updating, try again")
+  rather than search a keyword copy that may still call a narrowed passage
+  open.
+- **Routes:** `PUT /namespaces/{ns}/documents/access` (everyone, or groups
+  and people by email in the caller's organisation) and `DELETE
+  /namespaces/{ns}/documents?source=`. Editor only, and a document the
+  editor cannot read answers exactly like one that does not exist. The demo
+  sheet refuses both, as it refuses uploads.
+- **Re-uploading a document keeps its access list,** so editing a narrowed
+  document cannot reopen it.
+- **No document records yet.** The passages' own `acl` and the deterministic
+  doc id were enough; a record per document can come with E3's connector,
+  which needs one anyway.
+- **The console controls (groups on Members, access and remove per
+  document) are a task of their own** before T26, since the live test needs
+  them.
+
 ## 7. Not in E2, on purpose
 
 Drive sharing and Google Groups (E3), the audit record (E4), passage-level

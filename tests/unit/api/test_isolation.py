@@ -128,11 +128,23 @@ def _upload(w: World, who: str, name: str) -> httpx.Response:
                          files=[("files", ("n.md", b"# n", "text/markdown"))])
 
 
+def _document_access(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.put(f"/namespaces/{name}/documents/access", headers=w.h(who),
+                        json={"source": "n.md", "everyone": True})
+
+
+def _remove_document(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.delete(f"/namespaces/{name}/documents", params={"source": "n.md"},
+                           headers=w.h(who))
+
+
 ROUTES: dict[tuple[str, str], Call] = {
     ("POST", "/query"): _query,
     ("GET", "/namespaces/{namespace}/sources"): _sources,
     ("POST", "/ingest"): _ingest,
     ("POST", "/ingest/upload"): _upload,
+    ("PUT", "/namespaces/{namespace}/documents/access"): _document_access,
+    ("DELETE", "/namespaces/{namespace}/documents"): _remove_document,
 }
 WRITES = {k for k, rule in POLICY.items() if rule == "write"}
 

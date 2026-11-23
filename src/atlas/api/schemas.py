@@ -431,3 +431,28 @@ class ErrorResponse(BaseModel):
     error: str
     detail: str = ""
     request_id: str = ""
+
+
+# ── Documents (E2.3) ──────────────────────────────────────────────────────────
+
+class DocumentAccessRequest(BaseModel):
+    """Who may read one document: everyone on the sheet, or named groups and
+    people (by email) in the caller's organisation."""
+
+    source: str = Field(..., min_length=1, max_length=1024)
+    everyone: bool = False
+    groups: list[str] = Field(default_factory=list)
+    people: list[str] = Field(default_factory=list)
+
+
+class DocumentAccessResponse(BaseModel):
+    source: str
+    everyone: bool
+    groups: list[str]
+    people: list[str]
+    passages: int
+
+
+class DocumentRemovedResponse(BaseModel):
+    source: str
+    passages_removed: int

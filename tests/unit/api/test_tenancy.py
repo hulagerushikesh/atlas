@@ -296,6 +296,15 @@ class TestGroups:
         assert s is not None and s.groups == ()
 
 
+async def test_a_sheets_version_starts_empty_and_every_bump_is_new(store: TenancyStore) -> None:
+    assert await store.get_generation("ws_x") == ""
+    first = await store.bump_generation("ws_x")
+    second = await store.bump_generation("ws_x")
+    assert first and second and first != second
+    assert await store.get_generation("ws_x") == second
+    assert await store.get_generation("ws_y") == ""
+
+
 def test_unknown_backend_raises() -> None:
     with pytest.raises(ValueError):
         tenancy.build_tenancy_store("postgres")

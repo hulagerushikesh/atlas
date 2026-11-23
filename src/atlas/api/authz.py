@@ -71,6 +71,10 @@ POLICY: dict[tuple[str, str], Rule] = {
     ("POST", "/org/service-accounts"): "org_admin",
     ("DELETE", "/org/service-accounts/{key_id}"): "org_admin",
     ("POST", "/org/groups"): "org_admin",
+    # E2.3: one document's access, and removing it. The route also needs the
+    # caller to be able to read the document itself.
+    ("PUT", "/namespaces/{namespace}/documents/access"): "write",
+    ("DELETE", "/namespaces/{namespace}/documents"): "write",
     ("DELETE", "/org/groups/{group_id}"): "org_admin",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",

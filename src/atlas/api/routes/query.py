@@ -80,6 +80,7 @@ from atlas.api.schemas import (
     StageTimings,
     TokenUsage,
 )
+from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
 from atlas.cost import estimate_usage_cost
 from atlas.ingestion.hashing import hash_text
 from atlas.orchestration.pipeline import EvidenceChunk, PipelineResult, RAGPipeline
@@ -163,9 +164,9 @@ def _cache_access(access: frozenset[str] | None, sparse: Any) -> frozenset[str] 
 
 async def _reusable(cache: QueryCache, query: str, cache_key: str,
                     cache_access: frozenset[str] | None,
-                    access: frozenset[str] | None) -> dict[str, Any] | None:
+                    access: frozenset[str] | None, version: str) -> dict[str, Any] | None:
     """A cached answer this caller may be shown, or None (lock 2)."""
-    payload = await cache.get(query, cache_key, cache_access)
+    payload = await cache.get(query, cache_key, cache_access, version)
     if payload is None or access is None:
         return payload
     lists = payload.get(_EVIDENCE_ACL)
@@ -510,6 +511,7 @@ async def _stream_query(
     cache: QueryCache | None = None,
     cache_key: str | None = None,
     cache_access: frozenset[str] | None = None,
+    cache_version: str = "",
 ) -> AsyncIterator[str]:
     """Stream the answer, and charge the daily cap for the whole request.
 
@@ -619,7 +621,7 @@ async def _stream_query(
         spawn(
             cache.set(query, {**_cache_entry(capture, usage, total_ms),
                               _EVIDENCE_ACL: capture.evidence_acl},
-                      cache_key or namespace, cache_access),
+                      cache_key or namespace, cache_access, cache_version),
             name="cache_set_stream",
         )
 
@@ -977,6 +979,9 @@ async def query(
     components = registry.get(corpus)
     pipeline = components.pipeline
     cache_access = _cache_access(access, components.sparse_index)
+    # The sheet's version (E2.3): part of the cache key, and what tells this
+    # server its keyword copy is out of date after a change on another one.
+    version = await sheet_version(ws)
 
     # ── Streaming path ────────────────────────────────────────────────────────
     if body.stream:
@@ -984,7 +989,8 @@ async def query(
         # the non-streaming path checks it there: a hit calls no model, so it
         # owes the cap nothing, and it retrieves nothing, so it does not need
         # the keyword index to be current.
-        cached_payload = await _reusable(cache, body.query, cache_key, cache_access, access)
+        cached_payload = await _reusable(cache, body.query, cache_key, cache_access, access,
+                                         version)
         if cached_payload is not None:
             log.info("query_cache_hit", stream=True,
                      **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
@@ -1013,7 +1019,7 @@ async def query(
         # before the pipeline reads it, or a document indexed by the other
         # instance is missing from the keyword half of every search this one
         # serves. Within the TTL this is free; see `reconcile_sparse`.
-        await registry.reconcile_sparse(corpus)
+        await bring_keyword_copy_up_to_date(registry, corpus, version)
         log.info("query_stream_start")
         return StreamingResponse(
             _stream_query(
@@ -1021,6 +1027,7 @@ async def query(
                 api_key_id=getattr(request.state, "api_key_id", None),
                 namespace=body.namespace,
                 cache=cache, cache_key=cache_key, cache_access=cache_access,
+                cache_version=version,
             ),
             media_type="text/event-stream",
             # Was "skipped-streaming", which stopped being true on
@@ -1041,7 +1048,7 @@ async def query(
     # Glued on it was inside the hash, so no amount of string work could find
     # one corpus's entries again -- which is why an ingest could not invalidate
     # them and a corpus answered from before its newest document for an hour.
-    cached_payload = await _reusable(cache, body.query, cache_key, cache_access, access)
+    cached_payload = await _reusable(cache, body.query, cache_key, cache_access, access, version)
     if cached_payload is not None:
         log.info("query_cache_hit",
                  **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
@@ -1054,7 +1061,7 @@ async def query(
     # call the model. Same for the reconcile: a cached answer does not
     # retrieve, so it does not need the keyword index to be current.
     await _enforce_budget(spend)
-    await registry.reconcile_sparse(corpus)
+    await bring_keyword_copy_up_to_date(registry, corpus, version)
     log.info("query_start")
     t_total = time.perf_counter()
 
@@ -1115,7 +1122,7 @@ async def query(
     spawn(
         cache.set(body.query, {**response.model_dump(), _EVIDENCE_ACL: [
                       list(c.metadata.acl) for c in result.retrieved_chunks]},
-                  cache_key, cache_access),
+                  cache_key, cache_access, version),
         name="cache_set",
     )
 

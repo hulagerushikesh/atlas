@@ -258,6 +258,13 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}_{secrets.token_hex(8)}"
 
 
+def _new_generation() -> str:
+    """A fresh, never-repeated value rather than a counter: two servers
+    changing one sheet at once each write a different value, so neither
+    change can be hidden by the other's landing on the same number."""
+    return f"{time.time_ns():x}-{secrets.token_hex(4)}"
+
+
 class WorkspaceNameTaken(ValueError):
     pass
 
@@ -295,6 +302,10 @@ class TenancyStore(Protocol):
     async def get_group(self, group_id: str) -> Group | None: ...
     async def list_groups(self, org_id: str) -> list[Group]: ...
     async def delete_group(self, group_id: str) -> None: ...
+    # E2.3: a workspace's version, changed whenever its documents or their
+    # access change, so every server notices (docs/e2-permissions.md §4).
+    async def get_generation(self, workspace_id: str) -> str: ...
+    async def bump_generation(self, workspace_id: str) -> str: ...
 
 
 def normalise_email(email: str) -> str:
@@ -359,6 +370,9 @@ CREATE TABLE IF NOT EXISTS invitations (
 CREATE TABLE IF NOT EXISTS groups (
     id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL,
     created_at REAL NOT NULL, UNIQUE (org_id, name)
+);
+CREATE TABLE IF NOT EXISTS generations (
+    workspace_id TEXT PRIMARY KEY, generation TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS subject_groups (
     kind TEXT NOT NULL, subject_id TEXT NOT NULL, group_id TEXT NOT NULL,
@@ -580,6 +594,18 @@ class SQLiteTenancyStore:
         rows = await self._all("SELECT * FROM groups WHERE org_id = ? ORDER BY name", (org_id,))
         return [Group(r["id"], r["org_id"], r["name"], r["created_at"]) for r in rows]
 
+    async def get_generation(self, workspace_id: str) -> str:
+        r = await self._one("SELECT generation FROM generations WHERE workspace_id = ?",
+                            (workspace_id,))
+        return "" if r is None else str(r["generation"])
+
+    async def bump_generation(self, workspace_id: str) -> str:
+        gen = _new_generation()
+        await self._run((
+            "INSERT INTO generations VALUES (?, ?) ON CONFLICT (workspace_id) "
+            "DO UPDATE SET generation = excluded.generation", (workspace_id, gen)))
+        return gen
+
     async def delete_group(self, group_id: str) -> None:
         # Membership first: a member left holding a deleted group's id would
         # keep reading documents shared with it if the id were ever reused.
@@ -792,6 +818,15 @@ class FirestoreTenancyStore:
     async def list_groups(self, org_id: str) -> list[Group]:
         snaps = await self._col("groups").where(filter=self._eq("org_id", org_id)).get()
         return sorted((self._group(s.id, s.to_dict() or {}) for s in snaps), key=lambda g: g.name)
+
+    async def get_generation(self, workspace_id: str) -> str:
+        snap = await self._col("generations").document(workspace_id).get()
+        return str((snap.to_dict() or {}).get("generation", "")) if snap.exists else ""
+
+    async def bump_generation(self, workspace_id: str) -> str:
+        gen = _new_generation()
+        await self._col("generations").document(workspace_id).set({"generation": gen})
+        return gen
 
     async def delete_group(self, group_id: str) -> None:
         group = await self.get_group(group_id)

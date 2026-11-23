@@ -56,6 +56,27 @@ class BaseIndex(ABC):
         """
         return 0
 
+    # ── E2: one document's access list (docs/e2-permissions.md §4) ───────────
+
+    async def document_acl(self, doc_id: str) -> list[str] | None:
+        """The access list *doc_id*'s passages carry now; None if it has none
+        stored. A re-ingest keeps it, so editing a narrowed document cannot
+        reopen it. Default: nothing known."""
+        return None
+
+    async def readable_passages(self, doc_id: str, access: frozenset[str]) -> int:
+        """How many of *doc_id*'s passages a caller holding *access* may read."""
+        raise NotImplementedError
+
+    async def set_document_acl(self, doc_id: str, acl: list[str]) -> int:
+        """Give every passage of *doc_id* this access list. Returns how many
+        passages were changed where the index can tell. Default: none."""
+        return 0
+
+    async def delete_document(self, doc_id: str) -> int:
+        """Remove every passage of *doc_id*. Default: none."""
+        return 0
+
     @abstractmethod
     async def stats(self) -> IndexStats:
         """Return current collection statistics."""
