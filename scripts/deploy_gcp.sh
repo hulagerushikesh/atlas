@@ -25,6 +25,11 @@ IMAGE="${REGION}-docker.pkg.dev/${PROJECT}/${REPO}/${SERVICE}:${IMAGE_TAG}"
 
 PYTHON="${PYTHON:-.venv/bin/python}"
 
+# Google sign-in's client id is public (every visitor's browser sees it), so it
+# is a plain setting, not a secret. The session secret that signs the cookie
+# is in Secret Manager as atlas-session-secret.
+GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-797295077194-majuoccs6vt4mbmnrdp3ersf6dd3uiec.apps.googleusercontent.com}"
+
 # ── Index gate ────────────────────────────────────────────────────────────────
 #
 # The BM25 file travels inside the image; the dense vectors do not, they are
@@ -119,11 +124,13 @@ OPENAI_EMBEDDING_MODEL=gemini-embedding-001,OPENAI_EMBEDDING_DIMENSIONS=1536,\
 ROUTER_DOMAIN=the DuckDB 2.0 SQL reference and guides: the SQL dialect of the DuckDB database and how to use it from Python and the command line,\
 ROUTER_DOMAIN_NAMESPACE=duckdb,\
 ATLAS_INDEX_DIR=/app/data/index,\
+GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},\
 REDIS_URL=" \
   --set-secrets "OPENAI_API_KEY=atlas-openai-api-key:latest,\
 QDRANT_URL=atlas-qdrant-url:latest,\
 QDRANT_API_KEY=atlas-qdrant-api-key:latest,\
-ADMIN_SECRET=atlas-admin-secret:latest" \
+ADMIN_SECRET=atlas-admin-secret:latest,\
+SESSION_SECRET=atlas-session-secret:latest" \
   --quiet
 
 gcloud run services describe "${SERVICE}" --project "${PROJECT}" --region "${REGION}" \
