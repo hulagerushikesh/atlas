@@ -128,6 +128,28 @@ question and the sheet's description, never passages.
 Each box costs ₹0 to build. Only E2.4's live run spends anything, a few
 paise of model calls.
 
+### Decided while building E2.1 (2026-11-23)
+
+- **The caller's tokens travel in a context variable** (`atlas/access.py`),
+  set by the auth middleware for every request and read by the dense and
+  keyword retrievers where they search. Threading an argument through the
+  pipeline would leave one path (decomposed, HyDE, retry, streaming) to
+  forget; a test proves the streamed path sees the tokens too. Outside a
+  request (laptop scripts) nothing is filtered.
+- **A request starts with no tokens**, and a passage with no `acl` matches
+  no request. So the live code must not ship before `scripts/migrate_acl.py
+  --apply`; the deploy script now refuses until every passage has a list.
+  The migration is harmless to the code live today, which ignores `acl`.
+- **Keyword ranking scores the whole sheet, then drops what the caller
+  cannot read before the top-k cut.** Scores do not depend on who asks, and
+  a forbidden passage cannot take a place in the results.
+- **Service accounts hold `user:{key id}`**, like people; group membership
+  for them, and the group controls on the Members page, come with E2.3.
+- **Document records** (§5) move to E2.3, where changing access needs them.
+  E2.1 needs only the passages' own `acl`.
+- **A member update that does not mention groups keeps them**, so the
+  current console cannot take groups away by accident.
+
 ## 7. Not in E2, on purpose
 
 Drive sharing and Google Groups (E3), the audit record (E4), passage-level

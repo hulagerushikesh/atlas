@@ -94,6 +94,25 @@ EOF
   fi
 }
 
+# ── Access-list gate (E2) ─────────────────────────────────────────────────────
+#
+# From E2.1 both searches read only passages that carry an access list, and a
+# passage without one is readable by nobody. Deploying that code before
+# scripts/migrate_acl.py --apply has run answers every question "not covered"
+# — a failure that looks like a quiet day. Free: two Qdrant counts per sheet.
+verify_acl() {
+  if [[ -n "${SKIP_VERIFY:-}" || ! -x "${PYTHON}" ]]; then
+    return 0
+  fi
+  echo "→ checking every passage has an access list"
+  if ! "${PYTHON}" scripts/migrate_acl.py --check; then
+    echo "Refusing to deploy: run scripts/migrate_acl.py --apply first." >&2
+    return 1
+  fi
+}
+
+verify_acl
+
 if [[ -z "${SKIP_BUILD:-}" ]]; then
   verify_index
   echo "→ building ${IMAGE}"

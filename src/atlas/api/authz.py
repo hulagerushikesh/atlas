@@ -70,6 +70,8 @@ POLICY: dict[tuple[str, str], Rule] = {
     ("DELETE", "/org/members/{user_id}"): "org_admin",
     ("POST", "/org/service-accounts"): "org_admin",
     ("DELETE", "/org/service-accounts/{key_id}"): "org_admin",
+    ("POST", "/org/groups"): "org_admin",
+    ("DELETE", "/org/groups/{group_id}"): "org_admin",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",
     # Lists only what the caller may read.

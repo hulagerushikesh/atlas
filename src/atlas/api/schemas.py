@@ -340,6 +340,16 @@ class OrgMember(BaseModel):
     org_admin: bool
     roles: RoleGrants
     you: bool = False
+    groups: list[str] = Field(default_factory=list)  # group names, E2
+
+
+class OrgGroup(BaseModel):
+    id: str
+    name: str
+
+
+class GroupCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
 
 
 class OrgInvitation(BaseModel):
@@ -365,6 +375,7 @@ class OrgResponse(BaseModel):
     members: list[OrgMember]
     invitations: list[OrgInvitation]
     service_accounts: list[OrgServiceAccount]
+    groups: list[OrgGroup] = Field(default_factory=list)
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -380,6 +391,9 @@ class InvitationRequest(BaseModel):
 class MemberUpdateRequest(BaseModel):
     org_admin: bool = False
     roles: RoleGrants = Field(default_factory=dict)
+    # Group names. None leaves the member's groups as they are, so a client
+    # that does not know about groups cannot take them away by accident.
+    groups: list[str] | None = None
 
 
 class ServiceAccountCreateRequest(BaseModel):

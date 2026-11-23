@@ -38,6 +38,7 @@ from typing import Any
 import structlog
 from rank_bm25 import BM25Okapi
 
+from atlas.access import ACL_FIELD, readable
 from atlas.interfaces.document import Chunk, ChunkMetadata, DocumentType
 from atlas.interfaces.index import BaseIndex, IndexStats
 
@@ -210,10 +211,16 @@ class BM25SparseIndex(BaseIndex):
             index_type="sparse",
         )
 
-    def search(self, query: str, top_k: int) -> list[tuple[dict[str, Any], float]]:
+    def search(self, query: str, top_k: int,
+               access: frozenset[str] | None = None) -> list[tuple[dict[str, Any], float]]:
         """
         Synchronous search — called by BM25Retriever from within an executor.
         Returns [(entry_dict, score)] sorted by score descending.
+
+        *access* (E2): only entries whose access list shares one of these
+        tokens are ranked, so a forbidden entry never reaches the top-k cut.
+        Scores are still computed over the whole corpus, so the statistics
+        BM25 ranks with do not depend on who is asking.
         """
         if self._bm25 is None or not self._corpus:
             return []
@@ -222,7 +229,12 @@ class BM25SparseIndex(BaseIndex):
         ranked = sorted(
             # strict: BM25 must return exactly one score per corpus entry;
             # a mismatch would silently misalign scores with documents.
-            zip(self._corpus, scores, strict=True), key=lambda x: x[1], reverse=True
+            (
+                (entry, score)
+                for entry, score in zip(self._corpus, scores, strict=True)
+                if readable(entry["metadata"].get(ACL_FIELD), access)
+            ),
+            key=lambda x: x[1], reverse=True,
         )
         return [(entry, float(score)) for entry, score in ranked[:top_k]]
 

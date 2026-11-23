@@ -22,6 +22,7 @@ import asyncio
 
 import structlog
 
+from atlas.access import reader_access
 from atlas.ingestion.sparse import BM25SparseIndex
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.retriever import BaseRetriever, RetrievalResult, RetrievedChunk
@@ -41,7 +42,9 @@ class BM25Retriever(BaseRetriever):
 
     async def retrieve(self, query: str, top_k: int) -> RetrievalResult:
         # Run CPU-bound BM25 scoring on a thread so we don't block the loop
-        results = await asyncio.to_thread(self._index.search, query, top_k)
+        # The caller's access (E2) is read here, on the request's own task,
+        # and handed to the thread explicitly.
+        results = await asyncio.to_thread(self._index.search, query, top_k, reader_access())
 
         chunks = [
             RetrievedChunk(

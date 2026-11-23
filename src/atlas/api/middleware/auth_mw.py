@@ -39,6 +39,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from atlas.access import set_reader_access
 from atlas.api import auth as auth_db
 from atlas.api import sessions, tenancy
 from atlas.api.authz import is_public
@@ -69,6 +70,9 @@ def _bind(principal: tenancy.Principal) -> None:
     structlog.contextvars.bind_contextvars(
         principal_kind=principal.kind, org_id=principal.home_org or None,
     )
+    # And on every search the request makes (E2): retrieval reads only
+    # passages whose access list shares one of these tokens.
+    set_reader_access(principal.access)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -82,8 +86,11 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         self._session_secret = session_secret
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # Until a principal is known this request reads no passage at all.
+        set_reader_access(())
         if not self._enabled:
             request.state.principal = tenancy.ANONYMOUS
+            set_reader_access(tenancy.ANONYMOUS.access)
             return await call_next(request)
 
         if is_public(request.url.path):

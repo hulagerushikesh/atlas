@@ -24,6 +24,11 @@ Design rationale:
 
     Same two backends as the key store: SQLite for tests and the laptop,
     Firestore live. The Firestore client is built lazily, as in keystore.py.
+
+    E2 (docs/e2-permissions.md) adds groups. A subject's group ids are kept
+    on the subject next to its roles, so the principal still costs one read,
+    and `Principal.access` turns them into the tokens every passage's access
+    list is matched against.
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ import json
 import re
 import secrets
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Literal, Protocol
@@ -63,6 +68,9 @@ PrincipalKind = Literal["user", "service", "visitor", "anonymous"]
 
 PUBLIC_ORG_ID = "org_public"
 PUBLIC_ORG_NAME = "Public"
+
+# The access-list token every reader of a workspace holds (docs/e2-permissions.md §2).
+ACCESS_ALL = "all"
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,16 @@ class Invitation:
 
 
 @dataclass(frozen=True)
+class Group:
+    """A named set of members inside one organisation (E2)."""
+
+    id: str
+    org_id: str
+    name: str
+    created_at: float | None = None
+
+
+@dataclass(frozen=True)
 class Subject:
     """A user or service account as stored: who it is and what it holds."""
 
@@ -116,6 +134,7 @@ class Subject:
     org_id: str
     org_admin: bool = False
     roles: dict[str, Role] = field(default_factory=dict)  # workspace id -> role
+    groups: tuple[str, ...] = ()                           # group ids, E2
 
 
 @dataclass(frozen=True)
@@ -131,6 +150,22 @@ class Principal:
     # read and write the public organisation, as every key could before E1,
     # and nothing else.
     legacy: bool = False
+    groups: tuple[str, ...] = ()
+
+    @property
+    def access(self) -> frozenset[str]:
+        """The tokens a passage's access list must share for this caller to read it.
+
+        Everyone with a role on a workspace holds `all`. A user or service
+        account also holds `user:{id}` and `group:{id}` for each of its
+        groups. Visitors and legacy keys hold `all` only. Organisation admins
+        get nothing extra: no bypass (D9).
+        """
+        tokens = {ACCESS_ALL}
+        if self.kind in ("user", "service") and self.subject_id and not self.legacy:
+            tokens.add(f"user:{self.subject_id}")
+            tokens.update(f"group:{g}" for g in self.groups)
+        return frozenset(tokens)
 
     @property
     def home_org(self) -> str:
@@ -159,7 +194,7 @@ ANONYMOUS = Principal(kind="anonymous", legacy=True)
 def principal_from_subject(subject: Subject) -> Principal:
     return Principal(
         kind=subject.kind, subject_id=subject.id, org_id=subject.org_id,
-        org_admin=subject.org_admin, roles=dict(subject.roles),
+        org_admin=subject.org_admin, roles=dict(subject.roles), groups=subject.groups,
     )
 
 
@@ -227,6 +262,10 @@ class WorkspaceNameTaken(ValueError):
     pass
 
 
+class GroupNameTaken(ValueError):
+    pass
+
+
 class TenancyStore(Protocol):
     async def init(self) -> None: ...
     async def create_org(self, name: str, domain: str = "", *,
@@ -251,6 +290,11 @@ class TenancyStore(Protocol):
     async def get_invitation(self, email: str) -> Invitation | None: ...
     async def list_invitations(self, org_id: str) -> list[Invitation]: ...
     async def delete_invitation(self, email: str) -> None: ...
+    # E2: groups. Membership lives on the subject (Subject.groups).
+    async def create_group(self, org_id: str, name: str) -> Group: ...
+    async def get_group(self, group_id: str) -> Group | None: ...
+    async def list_groups(self, org_id: str) -> list[Group]: ...
+    async def delete_group(self, group_id: str) -> None: ...
 
 
 def normalise_email(email: str) -> str:
@@ -277,7 +321,8 @@ async def grant(store: TenancyStore, kind: SubjectKind, subject_id: str, org_id:
     roles = dict(current.roles) if current else {}
     roles[workspace_id] = role
     subject = Subject(kind=kind, id=subject_id, org_id=org_id,
-                      org_admin=current.org_admin if current else False, roles=roles)
+                      org_admin=current.org_admin if current else False, roles=roles,
+                      groups=current.groups if current else ())
     await store.put_subject(subject)
     return subject
 
@@ -310,6 +355,14 @@ CREATE TABLE IF NOT EXISTS invitations (
     email TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id),
     org_admin INTEGER NOT NULL DEFAULT 0, roles TEXT NOT NULL DEFAULT '{}',
     invited_by TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS groups (
+    id TEXT PRIMARY KEY, org_id TEXT NOT NULL REFERENCES orgs(id), name TEXT NOT NULL,
+    created_at REAL NOT NULL, UNIQUE (org_id, name)
+);
+CREATE TABLE IF NOT EXISTS subject_groups (
+    kind TEXT NOT NULL, subject_id TEXT NOT NULL, group_id TEXT NOT NULL,
+    PRIMARY KEY (kind, subject_id, group_id)
 );
 """
 
@@ -405,6 +458,12 @@ class SQLiteTenancyStore:
                 "INSERT INTO grants VALUES (?, ?, ?, ?)",
                 [(subject.kind, subject.id, ws, role.value) for ws, role in subject.roles.items()],
             )
+            await db.execute("DELETE FROM subject_groups WHERE kind = ? AND subject_id = ?",
+                             (subject.kind, subject.id))
+            await db.executemany(
+                "INSERT INTO subject_groups VALUES (?, ?, ?)",
+                [(subject.kind, subject.id, g) for g in sorted(set(subject.groups))],
+            )
             await db.commit()
 
     async def get_subject(self, kind: SubjectKind, subject_id: str) -> Subject | None:
@@ -419,9 +478,14 @@ class SQLiteTenancyStore:
                 "SELECT workspace_id, role FROM grants WHERE kind = ? AND subject_id = ?",
                 (kind, subject_id),
             )).fetchall()
+            groups = await (await db.execute(
+                "SELECT group_id FROM subject_groups WHERE kind = ? AND subject_id = ? "
+                "ORDER BY group_id", (kind, subject_id),
+            )).fetchall()
         return Subject(kind=kind, id=subject_id, org_id=row["org_id"],
                        org_admin=bool(row["org_admin"]),
-                       roles={g["workspace_id"]: Role(g["role"]) for g in grants})
+                       roles={g["workspace_id"]: Role(g["role"]) for g in grants},
+                       groups=tuple(g["group_id"] for g in groups))
 
     async def _all(self, sql: str, params: tuple[Any, ...]) -> list[aiosqlite.Row]:
         async with aiosqlite.connect(self.db_path) as db:
@@ -466,6 +530,7 @@ class SQLiteTenancyStore:
     async def delete_subject(self, kind: SubjectKind, subject_id: str) -> None:
         await self._run(
             ("DELETE FROM grants WHERE kind = ? AND subject_id = ?", (kind, subject_id)),
+            ("DELETE FROM subject_groups WHERE kind = ? AND subject_id = ?", (kind, subject_id)),
             ("DELETE FROM subjects WHERE kind = ? AND id = ?", (kind, subject_id)),
         )
 
@@ -497,6 +562,31 @@ class SQLiteTenancyStore:
 
     async def delete_invitation(self, email: str) -> None:
         await self._run(("DELETE FROM invitations WHERE email = ?", (normalise_email(email),)))
+
+    async def create_group(self, org_id: str, name: str) -> Group:
+        group = Group(id=_new_id("grp"), org_id=org_id, name=name, created_at=time.time())
+        try:
+            await self._run(("INSERT INTO groups VALUES (?, ?, ?, ?)",
+                             (group.id, group.org_id, group.name, group.created_at)))
+        except aiosqlite.IntegrityError as exc:
+            raise GroupNameTaken(name) from exc
+        return group
+
+    async def get_group(self, group_id: str) -> Group | None:
+        r = await self._one("SELECT * FROM groups WHERE id = ?", (group_id,))
+        return None if r is None else Group(r["id"], r["org_id"], r["name"], r["created_at"])
+
+    async def list_groups(self, org_id: str) -> list[Group]:
+        rows = await self._all("SELECT * FROM groups WHERE org_id = ? ORDER BY name", (org_id,))
+        return [Group(r["id"], r["org_id"], r["name"], r["created_at"]) for r in rows]
+
+    async def delete_group(self, group_id: str) -> None:
+        # Membership first: a member left holding a deleted group's id would
+        # keep reading documents shared with it if the id were ever reused.
+        await self._run(
+            ("DELETE FROM subject_groups WHERE group_id = ?", (group_id,)),
+            ("DELETE FROM groups WHERE id = ?", (group_id,)),
+        )
 
 
 # ── Firestore ─────────────────────────────────────────────────────────────────
@@ -598,6 +688,7 @@ class FirestoreTenancyStore:
             "kind": subject.kind, "id": subject.id, "org_id": subject.org_id,
             "org_admin": subject.org_admin,
             "roles": {ws: role.value for ws, role in subject.roles.items()},
+            "groups": sorted(set(subject.groups)),
         })
 
     async def get_subject(self, kind: SubjectKind, subject_id: str) -> Subject | None:
@@ -611,7 +702,8 @@ class FirestoreTenancyStore:
     def _subject(kind: SubjectKind, subject_id: str, d: dict[str, Any]) -> Subject:
         return Subject(kind=kind, id=subject_id, org_id=d.get("org_id", ""),
                        org_admin=bool(d.get("org_admin", False)),
-                       roles={ws: Role(r) for ws, r in (d.get("roles") or {}).items()})
+                       roles={ws: Role(r) for ws, r in (d.get("roles") or {}).items()},
+                       groups=tuple(d.get("groups") or ()))
 
     async def find_org_by_domain(self, domain: str) -> Organisation | None:
         if not domain:
@@ -680,6 +772,37 @@ class FirestoreTenancyStore:
 
     async def delete_invitation(self, email: str) -> None:
         await self._col("invitations").document(normalise_email(email)).delete()
+
+    @staticmethod
+    def _group(doc_id: str, d: dict[str, Any]) -> Group:
+        return Group(doc_id, d.get("org_id", ""), d.get("name", ""), d.get("created_at"))
+
+    async def create_group(self, org_id: str, name: str) -> Group:
+        if any(g.name == name for g in await self.list_groups(org_id)):
+            raise GroupNameTaken(name)
+        group = Group(id=_new_id("grp"), org_id=org_id, name=name, created_at=time.time())
+        await self._col("groups").document(group.id).set(
+            {"org_id": org_id, "name": name, "created_at": group.created_at})
+        return group
+
+    async def get_group(self, group_id: str) -> Group | None:
+        snap = await self._col("groups").document(group_id).get()
+        return self._group(snap.id, snap.to_dict() or {}) if snap.exists else None
+
+    async def list_groups(self, org_id: str) -> list[Group]:
+        snaps = await self._col("groups").where(filter=self._eq("org_id", org_id)).get()
+        return sorted((self._group(s.id, s.to_dict() or {}) for s in snaps), key=lambda g: g.name)
+
+    async def delete_group(self, group_id: str) -> None:
+        group = await self.get_group(group_id)
+        if group is not None:
+            # Membership first, as in SQLite.
+            for kind in ("user", "service"):
+                for s in await self.list_subjects(group.org_id, kind):
+                    if group_id in s.groups:
+                        await self.put_subject(replace(
+                            s, groups=tuple(g for g in s.groups if g != group_id)))
+        await self._col("groups").document(group_id).delete()
 
 
 def build_tenancy_store(backend: str, *, sqlite_path: Path | None = None,

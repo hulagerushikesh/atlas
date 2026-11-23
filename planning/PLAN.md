@@ -116,7 +116,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [x] **E1.4** Live: migrated and deployed; a second organisation is refused live. **Done 2026-11-23.**
 
 **E2 Document permissions** — a reader never receives a passage they cannot open.
-- [ ] **E2.1** Allowed groups on every passage; filter inside both searches.
+- [x] **E2.1** Allowed groups on every passage; filter inside both searches. **Done 2026-11-23** (not live until T26).
 - [ ] **E2.2** Cache, source listings and citations respect it.
 - [ ] **E2.3** Delete a document, and its cached answers with it.
 - [ ] **E2.4** Adversarial suite (cached and reworded questions) passes live.
@@ -181,13 +181,13 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T21~~ | ~~Run the migration; deploy; live check with a second organisation~~ | C + You | ≈₹5/month | **done 2026-11-23** — migration wrote the public organisation, sheets default and duckdb, 5 keys; deployed with sign-in on; the owner, signed in to a second organisation "Live check", got "not found" on the public organisation's `default` sheet and an empty sheet list; a keyless visitor still got a cited demo answer. The new secret is the project's 8th active secret version, past the 6 free | E1.4 |
 
 | ~~T22~~ | ~~E2 design: access lists, where they are enforced, cache, removal, migration~~ | C | ₹0 | **done 2026-11-23** — `docs/e2-permissions.md`; two choices wait on the owner (D9) | — |
-| T23 | Build E2.1: access lists on passages, groups, filter in both searches, migration | C | ₹0 | gate green; nothing changes for anyone (every passage `all`) | E2.1 |
+| ~~T23~~ | ~~Build E2.1: access lists on passages, groups, filter in both searches, migration~~ | C | ₹0 | **done 2026-11-23** — 1296 tests green; a reader outside a group gets nothing from a group-only passage by either search, streamed or not; the deploy refuses until `scripts/migrate_acl.py --apply` has run. Not live until T26 | E2.1 |
 | T24 | Build E2.2: cache key, source list, citations respect access | C | ₹0 | privileged-then-unprivileged tests pass | E2.2 |
 | T25 | Build E2.3: change access, remove a document; decide one server or shared cache (priced first) | C + You | priced first | a removed document stops being answered | E2.3 |
 | T26 | E2.4: adversarial suite in CI, migration run, deploy, live run with two test accounts | C + You | a few paise | zero leaks live | E2.4 |
 | T27 | E2.5: evidence-based reuse behind a switch | C | ₹0 | paraphrase hit rate measured; T26's suite still passes | E2.5 |
 
-T23 is next (D9 decided: no admin bypass; uploads open to the sheet by default). Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+T24 is next (C, ₹0). Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -261,9 +261,12 @@ Write the answer in the table when decided. Claude never decides these.
 - Keyboard shortcut help in the console · `make demo`
 - Research ideas: see `planning/BACKLOG.md` under *Ideas*
 - The daily spend cap's refusal reads "rate limited, wait a minute" in the console; it lasts until midnight UTC
+- A signed-in person from another organisation cannot open the public demo sheet (their list is their own organisation's); visitors without an account can
+- Sign-in attempts (`/auth/google`) have no per-visitor limit; a refusal costs ≈₹0, so low priority
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-23 — T23 done: access lists on every passage (`all` by default), groups on the organisation page's API, both searches filtered by the caller's tokens set per request, `scripts/migrate_acl.py` (₹0, owner runs it in T26), deploy guard. Not live. ₹0.
 - 2026-11-23 — T22 done: E2 design written (`docs/e2-permissions.md`): access lists on passages, filtered inside both searches, cache keyed by the caller's access, document removal, ₹0 migration; tasks T23–T27 added; D9 opened. ₹0.
 - 2026-11-23 — T21 done, E1 complete: session secret in Secret Manager, migration applied to Firestore, sign-in live on atlas.hulage.in, second organisation refused live, demo still answers visitors. A signed-in person in another organisation does not see the public demo sheet (by design: their list is their organisation's). ≈₹5/month for the secret.
 - 2026-11-23 — T20 done (owner signed in with Google on the laptop): Google sign-in with an 8-hour signed cookie, invitations, domain joining, members page (people, invitations, sheets, service accounts), break-glass org creation, privacy page. Roles read on every request, so removal applies next request. Not live. ₹0.

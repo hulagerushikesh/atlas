@@ -17,6 +17,7 @@ from atlas.api.routes import keys
 from atlas.api.tenancy import (
     PUBLIC_ORG_ID,
     FirestoreTenancyStore,
+    GroupNameTaken,
     Principal,
     Role,
     SQLiteTenancyStore,
@@ -28,6 +29,7 @@ from atlas.api.tenancy import (
     grant,
     legacy_workspace_id,
     migrate,
+    principal_from_subject,
 )
 from atlas.config import get_settings
 
@@ -54,6 +56,9 @@ class _Doc:
 
     async def get(self) -> _Snap:
         return _Snap(self.id, self._docs.get(self.id))
+
+    async def delete(self) -> None:
+        self._docs.pop(self.id, None)
 
 
 class _Query:
@@ -236,6 +241,59 @@ class TestStore:
         await grant(store, "user", "u1", a.id, wa.id, Role.READER)
         with pytest.raises(ValueError):
             await grant(store, "user", "u1", b.id, wb.id, Role.READER)
+
+
+class TestGroups:
+    """E2: groups, with membership kept on the subject (both backends)."""
+
+    async def test_create_list_and_names_are_unique_per_organisation(
+        self, store: TenancyStore
+    ) -> None:
+        await store.create_org("A", org_id="org_a")
+        await store.create_org("B", org_id="org_b")
+        hr = await store.create_group("org_a", "HR")
+        await store.create_group("org_a", "Engineering")
+        await store.create_group("org_b", "HR")  # another org may reuse the name
+        assert [g.name for g in await store.list_groups("org_a")] == ["Engineering", "HR"]
+        assert await store.get_group(hr.id) == hr
+        with pytest.raises(GroupNameTaken):
+            await store.create_group("org_a", "HR")
+
+    async def test_membership_round_trips_and_survives_a_grant(
+        self, store: TenancyStore
+    ) -> None:
+        await store.create_org("A", org_id="org_a")
+        ws = await store.create_workspace("org_a", "docs")
+        hr = await store.create_group("org_a", "HR")
+        await store.put_subject(Subject(kind="user", id="u1", org_id="org_a",
+                                        groups=(hr.id,)))
+        # A later grant rewrites the subject; it must not drop the group.
+        await grant(store, "user", "u1", "org_a", ws.id, Role.READER)
+        s = await store.get_subject("user", "u1")
+        assert s is not None and s.groups == (hr.id,) and s.roles == {ws.id: Role.READER}
+        assert principal_from_subject(s).access == {"all", "user:u1", f"group:{hr.id}"}
+
+    async def test_deleting_a_group_takes_it_off_every_member(
+        self, store: TenancyStore
+    ) -> None:
+        await store.create_org("A", org_id="org_a")
+        hr = await store.create_group("org_a", "HR")
+        eng = await store.create_group("org_a", "Eng")
+        await store.put_subject(Subject(kind="user", id="u1", org_id="org_a",
+                                        groups=(eng.id, hr.id)))
+        await store.delete_group(hr.id)
+        assert await store.get_group(hr.id) is None
+        s = await store.get_subject("user", "u1")
+        assert s is not None and s.groups == (eng.id,)
+
+    async def test_deleting_a_subject_forgets_its_groups(self, store: TenancyStore) -> None:
+        await store.create_org("A", org_id="org_a")
+        hr = await store.create_group("org_a", "HR")
+        await store.put_subject(Subject(kind="user", id="u1", org_id="org_a", groups=(hr.id,)))
+        await store.delete_subject("user", "u1")
+        await store.put_subject(Subject(kind="user", id="u1", org_id="org_a"))
+        s = await store.get_subject("user", "u1")
+        assert s is not None and s.groups == ()
 
 
 def test_unknown_backend_raises() -> None:
