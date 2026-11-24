@@ -57,6 +57,7 @@ def patch_bm25_files(apply: bool) -> list[tuple[Path, int]]:
 
 async def main(args: argparse.Namespace) -> int:
     from qdrant_client import AsyncQdrantClient
+    from qdrant_client.http.exceptions import UnexpectedResponse
     from qdrant_client.models import (
         Filter,
         IsEmptyCondition,
@@ -82,10 +83,20 @@ async def main(args: argparse.Namespace) -> int:
         if collection_to_namespace(c.name) is None:
             continue
         total = (await qdrant.count(c.name, exact=True)).count
-        without = (await qdrant.count(c.name, count_filter=missing, exact=True)).count
         if args.apply:
+            # First: Qdrant Cloud refuses any filter on a field without an
+            # index (400 "Index required"), the count just below included.
             await qdrant.create_payload_index(c.name, field_name=ACL_FIELD,
                                               field_schema=PayloadSchemaType.KEYWORD)
+        try:
+            without = (await qdrant.count(c.name, count_filter=missing, exact=True)).count
+        except UnexpectedResponse as e:
+            # Dry run before any --apply: no index means no passage has been
+            # migrated, so all of them are without (and --check refuses).
+            if args.apply or e.status_code != 400 or b"Index required" not in e.content:
+                raise
+            without = total
+        if args.apply:
             if without:
                 await qdrant.set_payload(c.name, payload={ACL_FIELD: [ACCESS_ALL]},
                                          points=missing, wait=True)
