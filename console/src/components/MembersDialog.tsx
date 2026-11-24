@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  createServiceAccount, createSheet, getOrg, invite, messageOf, removeMember, revokeServiceAccount,
-  updateMember, withdrawInvitation, type Grants, type Org, type Role,
+  createGroup, createServiceAccount, createSheet, deleteGroup, getOrg, invite, messageOf, removeMember,
+  revokeServiceAccount, updateMember, withdrawInvitation, type Grants, type Org, type Role,
 } from "@/lib/api"
+import { GroupToggle } from "@/components/DocumentDialog"
 import { useAtlas } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -67,6 +68,7 @@ export function MembersDialog() {
         ) : (
           <div className="space-y-6">
             <People org={org} sheets={sheets} act={act} />
+            <Groups org={org} act={act} />
             <Invited org={org} act={act} />
             <Invite sheets={sheets} act={act} domain={org.domain} />
             <Sheets org={org} act={act} />
@@ -161,6 +163,7 @@ function People({ org, sheets, act }: { org: Org; sheets: string[]; act: Act }) 
   const [editing, setEditing] = useState<string | null>(null)
   const [admin, setAdmin] = useState(false)
   const [roles, setRoles] = useState<Grants>({})
+  const [groups, setGroups] = useState<string[]>([])
 
   return (
     <Section title={`People · ${org.members.length}`}>
@@ -171,9 +174,10 @@ function People({ org, sheets, act }: { org: Org; sheets: string[]; act: Act }) 
               <div className="min-w-0 flex-1">
                 <div className="truncate">{m.email}{m.you && <span className="text-ink-3"> · you</span>}</div>
                 <div className="text-[12px]"><Access admin={m.org_admin} roles={m.roles} /></div>
+                {m.groups.length > 0 && <div className="truncate text-[12px] text-ink-3">groups: {m.groups.join(" · ")}</div>}
               </div>
               <Button variant="ghost" size="sm" className="press gap-1.5" aria-label={`Change access for ${m.email}`}
-                onClick={() => { setEditing(editing === m.id ? null : m.id); setAdmin(m.org_admin); setRoles(m.roles) }}>
+                onClick={() => { setEditing(editing === m.id ? null : m.id); setAdmin(m.org_admin); setRoles(m.roles); setGroups(m.groups) }}>
                 {editing === m.id ? <X className="size-3.5" /> : <Pencil className="size-3.5" />}
                 <span className="hidden sm:inline">{editing === m.id ? "Close" : "Change"}</span>
               </Button>
@@ -188,9 +192,20 @@ function People({ org, sheets, act }: { org: Org; sheets: string[]; act: Act }) 
               <div className="mt-2 space-y-2 rounded-md border bg-card p-3">
                 <GrantsEditor sheets={sheets} roles={roles} onRoles={setRoles} admin={admin}
                   onAdmin={m.you ? undefined : setAdmin} />
+                {org.groups.length > 0 && (
+                  <div className="space-y-1.5">
+                    <div className="label">Groups <span className="normal-case tracking-normal">— decide which restricted sources they can read</span></div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {org.groups.map((g) => (
+                        <GroupToggle key={g.id} name={g.name} on={groups.includes(g.name)}
+                          onToggle={() => setGroups(groups.includes(g.name) ? groups.filter((x) => x !== g.name) : [...groups, g.name])} />
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="flex justify-end">
                   <Button size="sm" className="press" onClick={async () => {
-                    if (await act(`Updated ${m.email}`, () => updateMember(m.id, admin, admin ? {} : roles))) setEditing(null)
+                    if (await act(`Updated ${m.email}`, () => updateMember(m.id, admin, admin ? {} : roles, groups))) setEditing(null)
                   }}>Save access</Button>
                 </div>
               </div>
@@ -198,6 +213,49 @@ function People({ org, sheets, act }: { org: Org; sheets: string[]; act: Act }) 
           </li>
         ))}
       </ul>
+    </Section>
+  )
+}
+
+/**
+ * The organisation's groups. A group is what a restricted source is shared
+ * with; who is in it is set on each person above, so this list only names
+ * them, counts them, and adds or deletes one.
+ */
+function Groups({ org, act }: { org: Org; act: Act }) {
+  const [name, setName] = useState("")
+  const count = (g: string) => org.members.filter((m) => m.groups.includes(g)).length
+  return (
+    <Section title={`Groups · ${org.groups.length}`}>
+      <p className="label normal-case tracking-normal">
+        Share a source with a group from its row in the corpus pane. Add people to a group with Change, above.
+        Organisation admins read only what their own groups allow.
+      </p>
+      {org.groups.length > 0 && (
+        <ul className="divide-y font-mono text-[13px]">
+          {org.groups.map((g) => (
+            <li key={g.id} className="flex items-center gap-3 py-2">
+              <div className="min-w-0 flex-1 truncate">{g.name} <span className="tabular text-ink-3">· {count(g.name)} {count(g.name) === 1 ? "person" : "people"}</span></div>
+              <Button variant="ghost" size="sm" className="press gap-1.5 text-bad" aria-label={`Delete group ${g.name}`}
+                onClick={() => {
+                  if (confirm(`Delete group ${g.name}? Sources shared only with it become readable by nobody until an editor shares them again.`))
+                    void act(`Deleted group ${g.name}`, () => deleteGroup(g.id))
+                }}>
+                <Trash2 className="size-3.5" /> <span className="hidden sm:inline">Delete</span>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="flex gap-2" onSubmit={async (e) => {
+        e.preventDefault()
+        const n = name.trim()
+        if (n && await act(`Added group ${n}`, () => createGroup(n), "Add people to it with Change, then share sources with it.")) setName("")
+      }}>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="new group, e.g. Legal" aria-label="New group name"
+          autoComplete="off" spellCheck={false} className="font-mono text-[13px]" />
+        <Button type="submit" variant="secondary" className="press" disabled={!name.trim()}>Add group</Button>
+      </form>
     </Section>
   )
 }

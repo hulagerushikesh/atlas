@@ -287,7 +287,8 @@ class TestTheRoutesReconcileBeforeTheyRead:
         assert isinstance(client, TestClient)
         registry = client.app.state.atlas.registry
         client.get("/namespaces/default/sources")
-        registry.reconcile_sparse.assert_awaited_once_with("default", dense_chunks=19)
+        registry.reconcile_sparse.assert_awaited_once_with("default", dense_chunks=19,
+                                                           generation="")
 
     def test_a_query_reconciles_before_the_pipeline_runs(self, client: object) -> None:
         from fastapi.testclient import TestClient
@@ -295,7 +296,7 @@ class TestTheRoutesReconcileBeforeTheyRead:
         assert isinstance(client, TestClient)
         registry = client.app.state.atlas.registry
         client.post("/query", json={"query": "what is atlas?"})
-        registry.reconcile_sparse.assert_awaited_once_with("default")
+        registry.reconcile_sparse.assert_awaited_once_with("default", generation="")
 
     def test_a_streamed_query_reconciles_too(self, client: object) -> None:
         """
@@ -311,7 +312,7 @@ class TestTheRoutesReconcileBeforeTheyRead:
             "POST", "/query", json={"query": "what is atlas?", "stream": True}
         ) as response:
             response.read()
-        registry.reconcile_sparse.assert_awaited_once_with("default")
+        registry.reconcile_sparse.assert_awaited_once_with("default", generation="")
 
     def test_an_upload_reconciles_before_it_indexes(self, client: object) -> None:
         from fastapi.testclient import TestClient
@@ -329,7 +330,7 @@ class TestTheRoutesReconcileBeforeTheyRead:
             files=[("files", ("notes.md", b"hello", "text/markdown"))],
             data={"namespace": "my-notes"},
         )
-        registry.reconcile_sparse.assert_awaited_once_with("my-notes")
+        registry.reconcile_sparse.assert_awaited_once_with("my-notes", generation="")
 
 
 @pytest.mark.parametrize("ttl", [0.0, 60.0])

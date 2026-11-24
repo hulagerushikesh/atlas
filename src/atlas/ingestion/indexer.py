@@ -101,6 +101,26 @@ class DocumentIndexer:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    # E2 (docs/e2-permissions.md §4): one document's access, in both halves.
+    # Qdrant first: it is what every server searches, and what each server's
+    # keyword copy is rebuilt from.
+
+    async def document_acl(self, doc_id: str) -> list[str] | None:
+        return await self._dense.document_acl(doc_id)
+
+    async def readable_passages(self, doc_id: str, access: frozenset[str]) -> int:
+        return await self._dense.readable_passages(doc_id, access)
+
+    async def set_document_acl(self, doc_id: str, acl: list[str]) -> int:
+        changed = await self._dense.set_document_acl(doc_id, acl)
+        await self._sparse.set_document_acl(doc_id, acl)
+        return changed
+
+    async def delete_document(self, doc_id: str) -> int:
+        removed = await self._dense.delete_document(doc_id)
+        await self._sparse.delete_document(doc_id)
+        return removed
+
     async def index_path(
         self,
         path: Path,
@@ -221,6 +241,14 @@ class DocumentIndexer:
                     document.content, chunks, str(source_root) if source_root else None
                 )
                 log.debug("context_headers_applied", chunks=headed)
+
+            # E2: a document already in the sheet keeps its access list. New
+            # passages default to everyone on the sheet (D9), so without this
+            # re-uploading an edited, narrowed document would reopen it.
+            kept = await self._dense.document_acl(document.id)
+            if kept is not None:
+                for c in chunks:
+                    c.metadata.acl = list(kept)
 
             # Ask the dense index which chunks it already holds unchanged, so
             # a re-ingest of an unchanged corpus makes zero embedding calls.

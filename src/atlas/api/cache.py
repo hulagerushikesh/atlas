@@ -100,11 +100,29 @@ class QueryCache:
         cannot run past its own namespace into a neighbour's."""
         return f"atlas:query:{hash_text(namespace)}:"
 
-    def _make_key(self, query: str, namespace: str = "default") -> str:
-        return f"{self._ns_prefix(namespace)}{hash_text(normalise_question(query))}"
+    def _make_key(self, query: str, namespace: str = "default",
+                  access: frozenset[str] | None = None, version: str = "") -> str:
+        """
+        The namespace half stays a hash of the namespace alone, so
+        `invalidate_namespace` still finds every entry. The caller's access
+        tokens (E2, docs/e2-permissions.md §3.4) go into the question half:
+        an answer is reused only by callers holding exactly the same tokens,
+        so it can never carry a passage the asker may not read. None (no
+        request, or before E2) keys on the question alone. *version* is the
+        sheet's version (E2.3): a change to its documents on any server makes
+        every older entry unreachable.
+        """
+        question = normalise_question(query)
+        if access is not None:
+            question = "\x1f".join([*sorted(access), question])
+        if version:
+            question = f"{version}\x1e{question}"
+        return f"{self._ns_prefix(namespace)}{hash_text(question)}"
 
-    async def get(self, query: str, namespace: str = "default") -> dict[str, Any] | None:
-        key = self._make_key(query, namespace)
+    async def get(self, query: str, namespace: str = "default",
+                  access: frozenset[str] | None = None,
+                  version: str = "") -> dict[str, Any] | None:
+        key = self._make_key(query, namespace, access, version)
 
         # L1 — memory
         if key in self._mem:
@@ -128,9 +146,10 @@ class QueryCache:
         return None
 
     async def set(
-        self, query: str, payload: dict[str, Any], namespace: str = "default"
+        self, query: str, payload: dict[str, Any], namespace: str = "default",
+        access: frozenset[str] | None = None, version: str = "",
     ) -> None:
-        key = self._make_key(query, namespace)
+        key = self._make_key(query, namespace, access, version)
         serialised = json.dumps(payload)
         self._mem_set(key, serialised)
 

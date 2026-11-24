@@ -80,6 +80,11 @@ class ChunkMetadata(BaseModel):
     page_number: int | None = None
     content_hash: str = ""
     extra: dict[str, Any] = Field(default_factory=dict)
+    # Who may read this passage (E2, docs/e2-permissions.md): tokens such as
+    # "all", "group:{id}", "user:{id}". Stored as the top-level `acl` payload
+    # field both searches filter on. New passages are open to everyone on the
+    # sheet unless narrowed (D9).
+    acl: list[str] = Field(default_factory=lambda: ["all"])
 
 
 class Chunk(BaseModel):

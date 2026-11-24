@@ -19,8 +19,10 @@ from typing import Any
 
 import structlog
 from qdrant_client import AsyncQdrantClient
+from qdrant_client.models import FieldCondition, Filter, MatchAny
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
+from atlas.access import ACL_FIELD, reader_access
 from atlas.config import QdrantConfig
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.embedder import BaseEmbedder
@@ -40,6 +42,18 @@ _retry_transient = retry(
     stop=stop_after_attempt(3),
     reraise=True,
 )
+
+
+def _access_filter(access: frozenset[str] | None) -> Filter | None:
+    """Only passages whose access list shares a caller token (E2).
+
+    Inside the search, so Qdrant never returns a forbidden passage. A passage
+    with no `acl` field matches nothing. An empty token set still sends a
+    filter (one that matches nothing) rather than no filter at all.
+    """
+    if access is None:
+        return None
+    return Filter(must=[FieldCondition(key=ACL_FIELD, match=MatchAny(any=sorted(access)))])
 
 
 class QdrantDenseRetriever(BaseRetriever):
@@ -75,6 +89,7 @@ class QdrantDenseRetriever(BaseRetriever):
             query=query_vector,
             limit=top_k,
             with_payload=True,
+            query_filter=_access_filter(reader_access()),
         )
 
     @staticmethod
@@ -90,6 +105,10 @@ class QdrantDenseRetriever(BaseRetriever):
             page_number=p.get("page_number"),
             content_hash=p.get("content_hash", ""),
             extra=p.get("extra", {}),
+            # Carried so the answer cache can check, on a hit, that the asker
+            # may read every passage the answer was built from (E2). Missing
+            # means pre-E2 and readable by no request, as in the filter.
+            acl=p.get("acl") or [],
         )
         return RetrievedChunk(
             chunk_id=str(hit.id),  # type: ignore[attr-defined]

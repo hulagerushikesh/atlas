@@ -225,5 +225,6 @@ class TestDenseRoundTrip:
         requested = {
             (c.kwargs["field_name"], c.kwargs["field_schema"].value) for c in spy.call_args_list
         }
-        assert requested == {("doc_id", "keyword"), ("chunk_index", "integer")}
-        assert spy.await_count == 2
+        assert requested == {("doc_id", "keyword"), ("chunk_index", "integer"),
+                             ("acl", "keyword")}  # E2: the access filter's key
+        assert spy.await_count == 3

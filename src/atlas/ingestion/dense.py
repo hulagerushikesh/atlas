@@ -122,6 +122,8 @@ class QdrantDenseIndex(BaseIndex):
         for field, schema in (
             ("doc_id", PayloadSchemaType.KEYWORD),
             ("chunk_index", PayloadSchemaType.INTEGER),
+            # E2: both searches filter on it (atlas.retrieval.dense).
+            ("acl", PayloadSchemaType.KEYWORD),
         ):
             await self._create_payload_index(field, schema)
 
@@ -231,6 +233,63 @@ class QdrantDenseIndex(BaseIndex):
         await self.delete(stale_ids)
         logger.info("dense_index_pruned", doc_id=doc_id, count=len(stale_ids))
         return len(stale_ids)
+
+    # ── E2: one document's access list ────────────────────────────────────────
+
+    @staticmethod
+    def _of(doc_id: str, *more: Any) -> Any:
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        return Filter(must=[FieldCondition(key="doc_id", match=MatchValue(value=doc_id)),
+                            *more])
+
+    @_retry_transient
+    async def document_acl(self, doc_id: str) -> list[str] | None:
+        points, _ = await self._client.scroll(
+            collection_name=self._config.collection_name, scroll_filter=self._of(doc_id),
+            limit=1, with_payload=["acl"], with_vectors=False,
+        )
+        if not points:
+            return None
+        acl = (points[0].payload or {}).get("acl")
+        return list(acl) if acl else None
+
+    @_retry_transient
+    async def readable_passages(self, doc_id: str, access: frozenset[str]) -> int:
+        from qdrant_client.models import FieldCondition, MatchAny
+
+        result = await self._client.count(
+            collection_name=self._config.collection_name, exact=True,
+            count_filter=self._of(doc_id, FieldCondition(
+                key="acl", match=MatchAny(any=sorted(access)))),
+        )
+        return int(result.count)
+
+    @_retry_transient
+    async def set_document_acl(self, doc_id: str, acl: list[str]) -> int:
+        # set_payload by filter: no re-embedding, ₹0.
+        await self._client.set_payload(
+            collection_name=self._config.collection_name, payload={"acl": list(acl)},
+            points=self._of(doc_id), wait=True,
+        )
+        result = await self._client.count(
+            collection_name=self._config.collection_name, exact=True,
+            count_filter=self._of(doc_id))
+        return int(result.count)
+
+    @_retry_transient
+    async def delete_document(self, doc_id: str) -> int:
+        from qdrant_client.models import FilterSelector
+
+        result = await self._client.count(
+            collection_name=self._config.collection_name, exact=True,
+            count_filter=self._of(doc_id))
+        await self._client.delete(
+            collection_name=self._config.collection_name,
+            points_selector=FilterSelector(filter=self._of(doc_id)), wait=True,
+        )
+        logger.info("dense_document_deleted", doc_id=doc_id, count=result.count)
+        return int(result.count)
 
     @_retry_transient
     async def _scroll_page(self, scroll_filter: Any, offset: Any) -> tuple[list[Any], Any]:

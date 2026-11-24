@@ -119,6 +119,12 @@ class SharedComponents:
         )
 
 
+class KeywordIndexStale(RuntimeError):
+    """The sheet changed elsewhere and this server could not rebuild its
+    keyword copy. Searching the old copy could return a passage whose access
+    was just narrowed, so the request is refused instead (E2.3)."""
+
+
 class NamespaceComponents:
     """Per-namespace pipeline and indexer."""
 
@@ -140,6 +146,11 @@ class NamespaceComponents:
         # requests would otherwise each scroll the whole collection and the
         # second would overwrite the first with the same rows.
         self.sync_lock = asyncio.Lock()
+        # The sheet version (E2.3) this process's keyword copy reflects; None
+        # until the first request. A count cannot see an access change -- the
+        # number of passages stays the same -- so a version this process has
+        # not seen forces a rebuild from Qdrant.
+        self.generation_seen: str | None = None
 
 
 class NamespaceRegistry:
@@ -243,8 +254,13 @@ class NamespaceRegistry:
             logger.warning("dense_chunk_count_failed", namespace=namespace, error=str(exc))
             return None
 
+    def mark_generation(self, namespace: str, generation: str) -> None:
+        """This process made the change behind *generation* itself, so its
+        keyword copy already reflects it; no rebuild needed."""
+        self.get(namespace).generation_seen = generation
+
     async def reconcile_sparse(
-        self, namespace: str, dense_chunks: Any = _UNREAD
+        self, namespace: str, dense_chunks: Any = _UNREAD, generation: str | None = None
     ) -> SparseSync:
         """
         Make this process's keyword index agree with the vector store.
@@ -288,6 +304,14 @@ class NamespaceRegistry:
         if sparse is None:
             return SparseSync(False, False, 0, None)
 
+        if generation is not None and generation != components.generation_seen:
+            # Never changed since E2.3 and first sight: whatever this process
+            # loaded is as current as the sheet has ever been.
+            if components.generation_seen is None and generation == "":
+                components.generation_seen = ""
+            else:
+                return await self._rebuild_for(namespace, components, generation)
+
         given = dense_chunks is not _UNREAD
         if not given and self._sync_is_fresh(components):
             return SparseSync(False, False, sparse.chunk_count(), None)
@@ -320,6 +344,26 @@ class NamespaceRegistry:
                 namespace=namespace, before=held, after=len(entries), dense=dense,
             )
             return SparseSync(True, True, len(entries), dense)
+
+    async def _rebuild_for(self, namespace: str, components: NamespaceComponents,
+                           generation: str) -> SparseSync:
+        """Another server changed this sheet's documents or their access."""
+        sparse = components.sparse_index
+        assert sparse is not None
+        async with components.sync_lock:
+            if components.generation_seen == generation:
+                return SparseSync(False, False, sparse.chunk_count(), None)
+            entries = await self._scroll_corpus(namespace)
+            if entries is None:
+                # Not kept and searched: the old copy may still call a passage
+                # open that was just narrowed. Refuse; the next request retries.
+                raise KeywordIndexStale(namespace)
+            await sparse.replace_all(entries)
+            components.generation_seen = generation
+            components.synced_at = time.monotonic()
+            logger.info("sparse_index_rebuilt_for_version", namespace=namespace,
+                        chunks=len(entries))
+            return SparseSync(True, True, len(entries), len(entries))
 
     def _sync_is_fresh(self, components: NamespaceComponents) -> bool:
         """Whether the last reconcile is recent enough to skip another."""

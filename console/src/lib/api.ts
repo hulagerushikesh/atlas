@@ -260,7 +260,8 @@ export interface Me {
   org_admin: boolean
   workspaces: { name: string; role: Role }[]
 }
-export interface OrgMember { id: string; email: string; name: string; org_admin: boolean; roles: Grants; you: boolean }
+export interface OrgMember { id: string; email: string; name: string; org_admin: boolean; roles: Grants; you: boolean; groups: string[] }
+export interface OrgGroup { id: string; name: string }
 export interface OrgInvitation { email: string; org_admin: boolean; roles: Grants; created_at: number | null }
 export interface OrgServiceAccount {
   key_id: number | string; name: string; is_active: boolean; roles: Grants
@@ -273,6 +274,7 @@ export interface Org {
   members: OrgMember[]
   invitations: OrgInvitation[]
   service_accounts: OrgServiceAccount[]
+  groups: OrgGroup[]
 }
 
 const json = (body: unknown): RequestInit => ({
@@ -297,8 +299,39 @@ export const invite = (email: string, org_admin: boolean, roles: Grants) =>
   api("/org/invitations", { method: "POST", ...json({ email, org_admin, roles }) }, 5000)
 export const withdrawInvitation = (email: string) =>
   api(`/org/invitations/${encodeURIComponent(email)}`, { method: "DELETE" }, 5000)
-export const updateMember = (id: string, org_admin: boolean, roles: Grants) =>
-  api(`/org/members/${encodeURIComponent(id)}`, { method: "PUT", ...json({ org_admin, roles }) }, 5000)
+export const updateMember = (id: string, org_admin: boolean, roles: Grants, groups?: string[]) =>
+  api(`/org/members/${encodeURIComponent(id)}`, { method: "PUT", ...json({ org_admin, roles, groups }) }, 5000)
+export const createGroup = (name: string) =>
+  api("/org/groups", { method: "POST", ...json({ name }) }, 5000)
+export const deleteGroup = (id: string) =>
+  api(`/org/groups/${encodeURIComponent(id)}`, { method: "DELETE" }, 5000)
+
+/* ── One document's readers, and removing it (E2.3) ────────────────────────
+ * Editor only. A document the caller cannot read answers 404 exactly like
+ * one that does not exist, so a hidden document's name cannot be probed.
+ */
+
+export interface DocumentAccess {
+  source: string
+  everyone: boolean
+  groups: string[]
+  people: string[]
+  passages: number
+  /** Readers that no longer resolve: a deleted group, someone who left. */
+  others: number
+  /** Every group in the organisation, to choose from. */
+  choices: string[]
+}
+const docs = (sheet: string) => `/namespaces/${encodeURIComponent(sheet)}/documents`
+export const getDocumentAccess = (sheet: string, source: string) =>
+  api(`${docs(sheet)}/access?source=${encodeURIComponent(source)}`, {}, 5000)
+    .then((r) => r.json() as Promise<DocumentAccess>)
+export const setDocumentAccess = (sheet: string, source: string, everyone: boolean, groups: string[], people: string[]) =>
+  api(`${docs(sheet)}/access`, { method: "PUT", ...json({ source, everyone, groups, people }) }, 10000)
+    .then((r) => r.json() as Promise<DocumentAccess>)
+export const removeDocument = (sheet: string, source: string) =>
+  api(`${docs(sheet)}?source=${encodeURIComponent(source)}`, { method: "DELETE" }, 10000)
+    .then((r) => r.json() as Promise<{ source: string; passages_removed: number }>)
 export const removeMember = (id: string) =>
   api(`/org/members/${encodeURIComponent(id)}`, { method: "DELETE" }, 5000)
 export const createServiceAccount = (name: string, roles: Grants) =>

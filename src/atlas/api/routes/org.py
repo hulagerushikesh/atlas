@@ -30,9 +30,11 @@ from atlas.api.schemas import (
     AdminInvitationRequest,
     AdminOrgRequest,
     AdminOrgResponse,
+    GroupCreateRequest,
     InvitationRequest,
     MemberUpdateRequest,
     MeOrg,
+    OrgGroup,
     OrgInvitation,
     OrgMember,
     OrgResponse,
@@ -61,7 +63,7 @@ async def _s(aw: Awaitable[T]) -> T:
     """A store call; a store that cannot be read refuses, as everywhere else."""
     try:
         return await aw
-    except (HTTPException, tenancy.WorkspaceNameTaken):
+    except (HTTPException, tenancy.WorkspaceNameTaken, tenancy.GroupNameTaken):
         raise
     except Exception as exc:
         logger.warning("org_store_failed", error=str(exc))
@@ -104,6 +106,24 @@ def _by_name(roles: dict[str, Role], workspaces: dict[str, tenancy.Workspace]) -
     return {workspaces[ws].name: role.value for ws, role in roles.items() if ws in workspaces}
 
 
+async def _groups(org_id: str) -> dict[str, tenancy.Group]:
+    return {g.id: g for g in await _s(tenancy.get_tenancy().list_groups(org_id))}
+
+
+def _group_ids(names: list[str], groups: dict[str, tenancy.Group]) -> tuple[str, ...]:
+    ids = {g.name: g.id for g in groups.values()}
+    unknown = sorted(set(names) - set(ids))
+    if unknown:
+        raise HTTPException(status_code=422, detail={
+            "code": "unknown_group",
+            "message": f"Your organisation has no group called {', '.join(unknown)}."})
+    return tuple(sorted({ids[n] for n in names}))
+
+
+def _group_names(ids: tuple[str, ...], groups: dict[str, tenancy.Group]) -> list[str]:
+    return sorted(groups[g].name for g in ids if g in groups)
+
+
 # ── The organisation page ─────────────────────────────────────────────────────
 
 @router.get("/org", response_model=OrgResponse)
@@ -115,6 +135,7 @@ async def get_org(request: Request) -> OrgResponse:
     if org is None:
         raise access_unavailable()
     workspaces = await _workspaces(org_id)
+    groups = await _groups(org_id)
 
     members = []
     for user in await _s(store.list_users(org_id)):
@@ -123,7 +144,8 @@ async def get_org(request: Request) -> OrgResponse:
             continue
         members.append(OrgMember(
             id=user.id, email=user.email, name=user.name, org_admin=subject.org_admin,
-            roles=_by_name(subject.roles, workspaces), you=user.id == principal.subject_id))
+            roles=_by_name(subject.roles, workspaces), you=user.id == principal.subject_id,
+            groups=_group_names(subject.groups, groups)))
 
     invitations = [
         OrgInvitation(email=i.email, org_admin=i.org_admin,
@@ -147,6 +169,8 @@ async def get_org(request: Request) -> OrgResponse:
         workspaces=[OrgWorkspace(id=w.id, name=w.name)
                     for w in sorted(workspaces.values(), key=lambda w: w.name)],
         members=members, invitations=invitations, service_accounts=accounts,
+        groups=[OrgGroup(id=g.id, name=g.name)
+                for g in sorted(groups.values(), key=lambda g: g.name)],
     )
 
 
@@ -222,12 +246,53 @@ async def update_member(user_id: str, body: MemberUpdateRequest,
                         "You cannot take away your own admin rights. Ask another admin.")
     workspaces = await _workspaces(principal.org_id)
     roles = _by_id(body.roles, workspaces)
-    await _s(tenancy.get_tenancy().put_subject(Subject(
+    groups = await _groups(principal.org_id)
+    store = tenancy.get_tenancy()
+    current = await _s(store.get_subject("user", user.id))
+    group_ids = (_group_ids(body.groups, groups) if body.groups is not None
+                 else current.groups if current else ())
+    await _s(store.put_subject(Subject(
         kind="user", id=user.id, org_id=principal.org_id, org_admin=body.org_admin,
-        roles=roles)))
+        roles=roles, groups=group_ids)))
     logger.info("member_updated", org_id=principal.org_id, org_admin=body.org_admin)
     return OrgMember(id=user.id, email=user.email, name=user.name, org_admin=body.org_admin,
-                     roles=_by_name(roles, workspaces), you=user.id == principal.subject_id)
+                     roles=_by_name(roles, workspaces), you=user.id == principal.subject_id,
+                     groups=_group_names(group_ids, groups))
+
+
+# ── Groups (E2) ───────────────────────────────────────────────────────────────
+
+_GROUP_NAME = re.compile(r"^[\w][\w .&-]{0,63}$")
+
+
+@router.post("/org/groups", response_model=OrgGroup, status_code=201)
+async def create_group(body: GroupCreateRequest, request: Request) -> OrgGroup:
+    principal = require_org_admin(request)
+    name = body.name.strip()
+    if not _GROUP_NAME.match(name):
+        raise HTTPException(status_code=422, detail={
+            "code": "bad_group_name",
+            "message": "A group name uses letters, digits, spaces, '.', '&', '-' and '_', "
+                       "and starts with a letter or digit."})
+    try:
+        group = await _s(tenancy.get_tenancy().create_group(principal.org_id, name))
+    except tenancy.GroupNameTaken as exc:
+        raise _conflict("group_exists",
+                        f"Your organisation already has a group called '{name}'.") from exc
+    logger.info("group_created", org_id=principal.org_id, group_id=group.id)
+    return OrgGroup(id=group.id, name=group.name)
+
+
+@router.delete("/org/groups/{group_id}", status_code=204)
+async def delete_group(group_id: str, request: Request) -> Response:
+    principal = require_org_admin(request)
+    store = tenancy.get_tenancy()
+    group = await _s(store.get_group(group_id))
+    if group is None or group.org_id != principal.org_id:
+        raise _not_found("group")
+    await _s(store.delete_group(group_id))
+    logger.info("group_deleted", org_id=principal.org_id, group_id=group_id)
+    return Response(status_code=204)
 
 
 @router.delete("/org/members/{user_id}", status_code=204)

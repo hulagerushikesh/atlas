@@ -65,7 +65,7 @@ def client() -> TestClient:
     from fastapi import FastAPI
 
     from atlas.api.middleware.tracing import TracingMiddleware
-    from atlas.api.routes import health, ingest, metrics_route, namespaces, query
+    from atlas.api.routes import documents, health, ingest, metrics_route, namespaces, query
 
     app = FastAPI()
     app.add_middleware(TracingMiddleware)
@@ -74,6 +74,7 @@ def client() -> TestClient:
     app.include_router(query.router)
     app.include_router(metrics_route.router)
     app.include_router(namespaces.router)
+    app.include_router(documents.router)
 
     # Mock pipeline
     mock_pipeline = MagicMock()
@@ -112,6 +113,12 @@ def client() -> TestClient:
     )
 
     mock_indexer = MagicMock()
+    # E2.3: one document's access. Two readable passages, so a document named
+    # by a test exists unless the test says otherwise.
+    mock_indexer.readable_passages = AsyncMock(return_value=2)
+    mock_indexer.set_document_acl = AsyncMock(return_value=2)
+    mock_indexer.document_acl = AsyncMock(return_value=["all"])
+    mock_indexer.delete_document = AsyncMock(return_value=2)
 
     # Build a mock NamespaceRegistry that returns the mocked pipeline+indexer
     from atlas.api.namespaces import NamespaceComponents
@@ -119,6 +126,7 @@ def client() -> TestClient:
     mock_ns.pipeline = mock_pipeline
     mock_ns.indexer = mock_indexer
     mock_ns.sparse_index = MagicMock()
+    mock_ns.sparse_index.acl_tokens.return_value = frozenset({"all"})
     mock_ns.sparse_index.sources.return_value = [
         {"source": "tutorial/first-steps.md", "doc_type": "markdown", "chunks": 12},
         {"source": "reference/depends.md", "doc_type": "markdown", "chunks": 7},

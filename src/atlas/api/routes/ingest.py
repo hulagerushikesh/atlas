@@ -45,6 +45,7 @@ from atlas.api.schemas import (
     RejectedUpload,
     UploadIngestResponse,
 )
+from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_changed, sheet_version
 from atlas.config import RouterConfig
 from atlas.cost import estimate_cost
 from atlas.ingestion.loaders import is_supported
@@ -156,7 +157,7 @@ async def ingest(
     # Adopt whatever the vector store already holds before adding to it. The
     # sparse index is written back to this container's disk in full, so
     # indexing on top of a stale copy persists the gap instead of closing it.
-    await registry.reconcile_sparse(corpus)
+    await bring_keyword_copy_up_to_date(registry, corpus, await sheet_version(ws))
     indexer = registry.get(corpus).indexer
     logger.info("ingest_request", path=body.path, namespace=body.namespace, glob=body.glob)
     start = time.perf_counter()
@@ -192,7 +193,7 @@ async def ingest(
     # was written, so an idempotent re-ingest stays free in both senses: no
     # re-embed, and no paid pipeline runs to refill a cache that was correct.
     if result.documents_processed:
-        await app_state.cache.invalidate_namespace(ws.id)
+        await sheet_changed(registry, corpus, ws, app_state.cache)
 
     logger.info(
         "ingest_complete",
@@ -316,7 +317,7 @@ async def ingest_upload(
         registry = get_registry(request)
         # Same reason as `/ingest`: write on top of the vector store's
         # contents, not on top of one container's partial view of them.
-        await registry.reconcile_sparse(corpus)
+        await bring_keyword_copy_up_to_date(registry, corpus, await sheet_version(ws))
         indexer = registry.get(corpus).indexer
         logger.info("ingest_upload_request", namespace=namespace,
                     files=len(accepted), bytes=total)
@@ -340,7 +341,7 @@ async def ingest_upload(
         embedding_tokens=result.total_tokens,
     ))
     if result.documents_processed:
-        await app_state.cache.invalidate_namespace(ws.id)
+        await sheet_changed(registry, corpus, ws, app_state.cache)
 
     logger.info(
         "ingest_upload_complete",

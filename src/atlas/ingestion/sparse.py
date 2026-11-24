@@ -38,6 +38,7 @@ from typing import Any
 import structlog
 from rank_bm25 import BM25Okapi
 
+from atlas.access import ACL_FIELD, readable
 from atlas.interfaces.document import Chunk, ChunkMetadata, DocumentType
 from atlas.interfaces.index import BaseIndex, IndexStats
 
@@ -184,17 +185,22 @@ class BM25SparseIndex(BaseIndex):
         ]
         return await self.delete(stale) if stale else 0
 
-    def sources(self) -> list[dict[str, Any]]:
+    def sources(self, access: frozenset[str] | None = None) -> list[dict[str, Any]]:
         """
         Chunk counts grouped by source document, in first-seen order.
 
         The BM25 corpus already holds every chunk's metadata in memory, so
         this is the cheapest complete inventory of a namespace — no Qdrant
         scroll needed. Used by the console's corpus pane.
+
+        *access* (E2): only passages the caller may read are counted, so a
+        document it cannot open is not listed, not even by title.
         """
         counts: dict[str, dict[str, Any]] = {}
         for entry in self._corpus:
             meta = entry["metadata"]
+            if not readable(meta.get(ACL_FIELD), access):
+                continue
             src = meta["source"]
             row = counts.get(src)
             if row is None:
@@ -210,10 +216,16 @@ class BM25SparseIndex(BaseIndex):
             index_type="sparse",
         )
 
-    def search(self, query: str, top_k: int) -> list[tuple[dict[str, Any], float]]:
+    def search(self, query: str, top_k: int,
+               access: frozenset[str] | None = None) -> list[tuple[dict[str, Any], float]]:
         """
         Synchronous search — called by BM25Retriever from within an executor.
         Returns [(entry_dict, score)] sorted by score descending.
+
+        *access* (E2): only entries whose access list shares one of these
+        tokens are ranked, so a forbidden entry never reaches the top-k cut.
+        Scores are still computed over the whole corpus, so the statistics
+        BM25 ranks with do not depend on who is asking.
         """
         if self._bm25 is None or not self._corpus:
             return []
@@ -222,11 +234,39 @@ class BM25SparseIndex(BaseIndex):
         ranked = sorted(
             # strict: BM25 must return exactly one score per corpus entry;
             # a mismatch would silently misalign scores with documents.
-            zip(self._corpus, scores, strict=True), key=lambda x: x[1], reverse=True
+            (
+                (entry, score)
+                for entry, score in zip(self._corpus, scores, strict=True)
+                if readable(entry["metadata"].get(ACL_FIELD), access)
+            ),
+            key=lambda x: x[1], reverse=True,
         )
         return [(entry, float(score)) for entry, score in ranked[:top_k]]
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    async def set_document_acl(self, doc_id: str, acl: list[str]) -> int:
+        """Rewrite one document's access list in this process's keyword copy."""
+        hits = [e for e in self._corpus if e["metadata"].get("doc_id") == doc_id]
+        for e in hits:
+            e["metadata"][ACL_FIELD] = list(acl)
+        if hits:
+            await asyncio.to_thread(self._save_to_disk)
+        return len(hits)
+
+    async def delete_document(self, doc_id: str) -> int:
+        ids = [e["chunk_id"] for e in self._corpus if e["metadata"].get("doc_id") == doc_id]
+        return await self.delete(ids) if ids else 0
+
+    def acl_tokens(self) -> frozenset[str]:
+        """Every token on any passage's access list in this sheet (E2).
+
+        The answer cache keys on a caller's tokens intersected with these, so
+        people who can read exactly the same passages share answers. Computed
+        on each call: one pass over metadata, well under a millisecond at
+        today's few thousand passages, and never stale.
+        """
+        return frozenset(t for e in self._corpus for t in e["metadata"].get(ACL_FIELD) or ())
 
     def _rebuild(self) -> None:
         if not self._corpus:

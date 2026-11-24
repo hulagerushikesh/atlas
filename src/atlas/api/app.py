@@ -44,7 +44,17 @@ from atlas.api.middleware.auth_mw import APIKeyMiddleware
 from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents
-from atlas.api.routes import auth, health, ingest, keys, metrics_route, namespaces, org, query
+from atlas.api.routes import (
+    auth,
+    documents,
+    health,
+    ingest,
+    keys,
+    metrics_route,
+    namespaces,
+    org,
+    query,
+)
 from atlas.api.sessions import SignIn
 from atlas.api.spendstore import build_spend_backend
 from atlas.config import Settings, get_settings
@@ -258,6 +268,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth.router, tags=["auth"])
     app.include_router(org.router, tags=["organisation"])
     app.include_router(ingest.router, tags=["ingestion"])
+    app.include_router(documents.router, tags=["ingestion"])
     app.include_router(query.router, tags=["query"])
 
     # Static console — served at /app (must come after API routes)

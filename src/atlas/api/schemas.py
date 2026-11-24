@@ -340,6 +340,16 @@ class OrgMember(BaseModel):
     org_admin: bool
     roles: RoleGrants
     you: bool = False
+    groups: list[str] = Field(default_factory=list)  # group names, E2
+
+
+class OrgGroup(BaseModel):
+    id: str
+    name: str
+
+
+class GroupCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64)
 
 
 class OrgInvitation(BaseModel):
@@ -365,6 +375,7 @@ class OrgResponse(BaseModel):
     members: list[OrgMember]
     invitations: list[OrgInvitation]
     service_accounts: list[OrgServiceAccount]
+    groups: list[OrgGroup] = Field(default_factory=list)
 
 
 class WorkspaceCreateRequest(BaseModel):
@@ -380,6 +391,9 @@ class InvitationRequest(BaseModel):
 class MemberUpdateRequest(BaseModel):
     org_admin: bool = False
     roles: RoleGrants = Field(default_factory=dict)
+    # Group names. None leaves the member's groups as they are, so a client
+    # that does not know about groups cannot take them away by accident.
+    groups: list[str] | None = None
 
 
 class ServiceAccountCreateRequest(BaseModel):
@@ -417,3 +431,34 @@ class ErrorResponse(BaseModel):
     error: str
     detail: str = ""
     request_id: str = ""
+
+
+# ── Documents (E2.3) ──────────────────────────────────────────────────────────
+
+class DocumentAccessRequest(BaseModel):
+    """Who may read one document: everyone on the sheet, or named groups and
+    people (by email) in the caller's organisation."""
+
+    source: str = Field(..., min_length=1, max_length=1024)
+    everyone: bool = False
+    groups: list[str] = Field(default_factory=list)
+    people: list[str] = Field(default_factory=list)
+
+
+class DocumentAccessResponse(BaseModel):
+    source: str
+    everyone: bool
+    groups: list[str]
+    people: list[str]
+    passages: int
+    # Readers that no longer resolve to a name: a deleted group, a person who
+    # left the organisation. Counted so the console can say so, never named.
+    others: int = 0
+    # Every group in the caller's organisation, so an editor who is not an
+    # organisation admin can still pick one.
+    choices: list[str] = Field(default_factory=list)
+
+
+class DocumentRemovedResponse(BaseModel):
+    source: str
+    passages_removed: int
