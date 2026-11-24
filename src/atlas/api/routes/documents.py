@@ -1,7 +1,8 @@
 """
 One document's access, and removing it (E2.3, docs/e2-permissions.md §4).
 
-    PUT    /namespaces/{ns}/documents/access   who may read it
+    GET    /namespaces/{ns}/documents/access?source=  who may read it now
+    PUT    /namespaces/{ns}/documents/access   change who may read it
     DELETE /namespaces/{ns}/documents?source=  take it out of the sheet
 
 Both need editor on the sheet, and both answer "not found" for a document
@@ -90,6 +91,49 @@ async def _acl(principal: tenancy.Principal, body: DocumentAccessRequest) -> lis
     return tokens
 
 
+async def _view(principal: tenancy.Principal, source: str, acl: list[str],
+                passages: int) -> DocumentAccessResponse:
+    """A document's access list in the names an editor knows: groups by name,
+    people by email. Tokens that resolve to nothing in the caller's
+    organisation are counted, not shown."""
+    store = tenancy.get_tenancy()
+    try:
+        groups = ({g.id: g.name for g in await store.list_groups(principal.org_id)}
+                  if principal.org_id else {})
+        names: list[str] = []
+        people: list[str] = []
+        others = 0
+        for token in acl:
+            kind, _, ident = token.partition(":")
+            if token == tenancy.ACCESS_ALL:
+                continue
+            if kind == "group" and ident in groups:
+                names.append(groups[ident])
+            elif kind == "user" and (user := await store.get_user(ident)) is not None \
+                    and user.org_id == principal.org_id:
+                people.append(user.email)
+            else:
+                others += 1
+    except Exception as exc:
+        raise access_unavailable() from exc
+    return DocumentAccessResponse(
+        source=source, everyone=tenancy.ACCESS_ALL in acl, groups=sorted(names),
+        people=sorted(people), passages=passages, others=others,
+        choices=sorted(groups.values()))
+
+
+@router.get("/namespaces/{namespace}/documents/access",
+            response_model=DocumentAccessResponse)
+async def get_document_access(namespace: str, request: Request,
+                              source: str = Query(..., min_length=1, max_length=1024),
+                              ) -> DocumentAccessResponse:
+    _ws, corpus, doc_id = await _open(request, namespace, source)
+    indexer = get_registry(request).get(corpus).indexer
+    acl = await indexer.document_acl(doc_id) or []
+    passages = await indexer.readable_passages(doc_id, reader_access() or frozenset())
+    return await _view(get_principal(request), source, acl, passages)
+
+
 @router.put("/namespaces/{namespace}/documents/access",
             response_model=DocumentAccessResponse)
 async def set_document_access(namespace: str, body: DocumentAccessRequest,
@@ -101,10 +145,7 @@ async def set_document_access(namespace: str, body: DocumentAccessRequest,
     await sheet_changed(registry, corpus, ws, get_app_state(request).cache)
     logger.info("document_access_changed", workspace_id=ws.id, doc_id=doc_id,
                 everyone=body.everyone, groups=len(body.groups), people=len(body.people))
-    return DocumentAccessResponse(
-        source=body.source, everyone=body.everyone,
-        groups=[] if body.everyone else sorted(set(body.groups)),
-        people=[] if body.everyone else sorted(set(body.people)), passages=passages)
+    return await _view(get_principal(request), body.source, acl, passages)
 
 
 @router.delete("/namespaces/{namespace}/documents", response_model=DocumentRemovedResponse)

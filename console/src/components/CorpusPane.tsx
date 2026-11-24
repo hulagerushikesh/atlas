@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, FolderInput, Lock, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload } from "lucide-react"
+import { FileText, FolderInput, Lock, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload, UserRoundCog } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +15,13 @@ import { WhatIsThis } from "@/components/WhatIsThis"
 const EASE = [0.23, 1, 0.32, 1] as const
 
 export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { sheet, sheets, sources, sourcesLoading, indexWarning, readOnlyBecause, setSheet, addSheet, loadSources } = useAtlas()
+  const { sheet, sheets, sources, sourcesLoading, indexWarning, readOnlyBecause, setSheet, addSheet, loadSources, me, authConfig, set } = useAtlas()
+  // Who may change a source's readers or remove it. The server decides on
+  // every call; this only hides a control that would be refused. With
+  // sign-in off (a laptop) there is nobody to tell apart.
+  const role = me?.workspaces.find((w) => w.name === sheet)?.role
+  const canManage = !readOnlyBecause && (
+    me?.user ? me.org_admin || role === "editor" || role === "admin" : !authConfig?.enabled)
   const [path, setPath] = useState("")
   const [busy, setBusy] = useState(false)
   const [newSheet, setNewSheet] = useState("")
@@ -185,6 +191,19 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
                       <FileText className="size-3 shrink-0 text-ink-3 transition-colors group-hover:text-blue" />
                       <span className="min-w-0 flex-1 truncate">{s.source}</span>
                       <span className="tabular text-ink-3">{fmt(s.chunks)}</span>
+                      {canManage && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon-sm"
+                              className="press -my-1 -mr-1 size-6 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+                              aria-label={`Readers and removal for ${s.source}`}
+                              onClick={() => set({ documentOpen: s.source })}>
+                              <UserRoundCog className="size-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">Who can read · remove</TooltipContent>
+                        </Tooltip>
+                      )}
                     </motion.li>
                   ))
                 )}

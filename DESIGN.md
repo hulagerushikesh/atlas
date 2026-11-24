@@ -376,6 +376,31 @@ same reason Settings is a dialog.
   copy button; it is never shown again.
 - The dialog grid is `minmax(0, 1fr)` so a long row cannot widen it past a
   phone screen.
+- Groups (E2) sit after people: one row per group with how many people are
+  in it, a delete that warns sources shared only with it go dark, and an
+  add form. Membership is set on each person, as toggle chips in their
+  Change panel; a person's row lists their groups at 12px under the access
+  line.
+
+### Source readers dialog
+
+Who may read one source, and removing it (E2). A dialog, opened from a
+person-and-gear icon at the end of the source's row in the corpus pane;
+the icon shows on row hover or focus, always on touch screens, and only to
+someone who can edit the sheet.
+
+- Reads the source's current readers first; nothing is offered until it has.
+- Two choices as radio cards: "Everyone on this sheet", or "Only the groups
+  and people below". The chosen card takes a `--blue` border and
+  `--blue-soft` fill.
+- Restricted: groups as toggle chips (mono 12px, 3px radius, `--blue` when
+  pressed), people as email addresses one per line. Readers that no longer
+  resolve (a deleted group, someone who left) are counted in a `--warn`
+  note, never named, and saving drops them.
+- "Remove from sheet" is its own section under a pane-header rule, the
+  button outlined in `--bad`, behind a confirm.
+- A source the editor cannot read never reaches the list, and the server
+  answers for it exactly as for one that does not exist.
 
 ### Privacy page
 

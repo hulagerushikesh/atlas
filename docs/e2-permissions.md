@@ -198,6 +198,20 @@ paise of model calls.
   document) are a task of their own** before T26, since the live test needs
   them.
 
+### Decided while building the console controls (T28, 2026-11-24)
+
+- **`GET /namespaces/{ns}/documents/access?source=`** shows a source's
+  current readers by name (groups by name, people by email) and lists the
+  organisation's groups, so an editor who is not an organisation admin can
+  pick one without reading `/org`. Same rules as the write: editor only, and
+  a hidden source is "not found". Readers that no longer resolve (a deleted
+  group, someone who left, anyone from another organisation) are counted,
+  never named; saving drops them.
+- **Deleting a group warns** that sources shared only with it go dark until
+  an editor shares them again: fail closed, as everywhere else.
+- **No per-source control on phones.** Below 760px the corpus pane is gone
+  (DESIGN §5), so changing readers is a tablet or desktop task.
+
 ## 7. Not in E2, on purpose
 
 Drive sharing and Google Groups (E3), the audit record (E4), passage-level

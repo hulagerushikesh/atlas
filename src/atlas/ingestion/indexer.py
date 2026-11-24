@@ -105,6 +105,9 @@ class DocumentIndexer:
     # Qdrant first: it is what every server searches, and what each server's
     # keyword copy is rebuilt from.
 
+    async def document_acl(self, doc_id: str) -> list[str] | None:
+        return await self._dense.document_acl(doc_id)
+
     async def readable_passages(self, doc_id: str, access: frozenset[str]) -> int:
         return await self._dense.readable_passages(doc_id, access)
 

@@ -133,6 +133,11 @@ def _document_access(w: World, who: str, name: str) -> httpx.Response:
                         json={"source": "n.md", "everyone": True})
 
 
+def _read_document_access(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.get(f"/namespaces/{name}/documents/access", params={"source": "n.md"},
+                        headers=w.h(who))
+
+
 def _remove_document(w: World, who: str, name: str) -> httpx.Response:
     return w.client.delete(f"/namespaces/{name}/documents", params={"source": "n.md"},
                            headers=w.h(who))
@@ -143,6 +148,7 @@ ROUTES: dict[tuple[str, str], Call] = {
     ("GET", "/namespaces/{namespace}/sources"): _sources,
     ("POST", "/ingest"): _ingest,
     ("POST", "/ingest/upload"): _upload,
+    ("GET", "/namespaces/{namespace}/documents/access"): _read_document_access,
     ("PUT", "/namespaces/{namespace}/documents/access"): _document_access,
     ("DELETE", "/namespaces/{namespace}/documents"): _remove_document,
 }

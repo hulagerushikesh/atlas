@@ -451,6 +451,12 @@ class DocumentAccessResponse(BaseModel):
     groups: list[str]
     people: list[str]
     passages: int
+    # Readers that no longer resolve to a name: a deleted group, a person who
+    # left the organisation. Counted so the console can say so, never named.
+    others: int = 0
+    # Every group in the caller's organisation, so an editor who is not an
+    # organisation admin can still pick one.
+    choices: list[str] = Field(default_factory=list)
 
 
 class DocumentRemovedResponse(BaseModel):

@@ -117,6 +117,7 @@ def client() -> TestClient:
     # by a test exists unless the test says otherwise.
     mock_indexer.readable_passages = AsyncMock(return_value=2)
     mock_indexer.set_document_acl = AsyncMock(return_value=2)
+    mock_indexer.document_acl = AsyncMock(return_value=["all"])
     mock_indexer.delete_document = AsyncMock(return_value=2)
 
     # Build a mock NamespaceRegistry that returns the mocked pipeline+indexer

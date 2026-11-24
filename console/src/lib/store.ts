@@ -176,6 +176,8 @@ interface AtlasState {
   authConfig: AuthConfig | null
   signInOpen: boolean
   membersOpen: boolean
+  // The source whose readers are being changed (null: dialog closed).
+  documentOpen: string | null
   paletteOpen: boolean
   // The first-visit orientation card. Persisted inverted -- a *dismissal* is
   // what gets stored, so a reader who has never seen it (no key, private
@@ -257,6 +259,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   authConfig: null,
   signInOpen: false,
   membersOpen: false,
+  documentOpen: null,
   paletteOpen: false,
   tourOpen: ls.get("atlas_oriented") !== "1",
   flashChunk: null,

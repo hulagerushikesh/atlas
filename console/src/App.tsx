@@ -6,6 +6,7 @@ import { AnswerPane } from "@/components/AnswerPane"
 import { CommandMenu } from "@/components/CommandMenu"
 import { CorpusPane } from "@/components/CorpusPane"
 import { EvidencePane } from "@/components/EvidencePane"
+import { DocumentDialog } from "@/components/DocumentDialog"
 import { MembersDialog } from "@/components/MembersDialog"
 import { SignInDialog } from "@/components/SignInDialog"
 import { SettingsDialog } from "@/components/SettingsDialog"
@@ -50,6 +51,7 @@ export default function App() {
       <AccessDialog />
       <SignInDialog />
       <MembersDialog />
+      <DocumentDialog />
       <Toaster position="bottom-left" toastOptions={{ className: "font-mono text-[13px]" }} />
     </TooltipProvider>
   )

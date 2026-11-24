@@ -184,11 +184,11 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T23~~ | ~~Build E2.1: access lists on passages, groups, filter in both searches, migration~~ | C | ₹0 | **done 2026-11-23** — 1296 tests green; a reader outside a group gets nothing from a group-only passage by either search, streamed or not; the deploy refuses until `scripts/migrate_acl.py --apply` has run. Not live until T26 | E2.1 |
 | ~~T24~~ | ~~Build E2.2: cache key, source list, citations respect access~~ | C | ₹0 | **done 2026-11-23** — 1307 tests green; someone allowed less never gets an answer built for someone allowed more (typed, streamed, reworded, stale index, pre-E2 entry); same access still shares; the source list hides titles and counts; each protection was removed once to check its test fails. Not live until T26 | E2.2 |
 | ~~T25~~ | ~~Build E2.3: change access, remove a document; decide one server or shared cache (priced first)~~ | C | ₹0 | **done 2026-11-23** — 1372 tests green, 8 of them against a real in-memory Qdrant; a removed or narrowed document stops being answered on every server through a per-sheet version (₹0, one Firestore read per question; no Redis, still two servers). Not live until T26 | E2.3 |
-| T28 | Console: groups on the Members page; "who can read" and "remove" on each document in the sources pane | C | ₹0 | checked in the browser, light, dark and phone | — |
+| ~~T28~~ | ~~Console: groups on the Members page; "who can read" and "remove" on each document in the sources pane~~ | C | ₹0 | **done 2026-11-24** — checked in a browser against a mocked server in light, dark and phone width; 1395 tests green. Phones have no source list (DESIGN §5), so the per-source control is tablet and desktop only. Not live until T26 | — |
 | T26 | E2.4: adversarial suite in CI, migration run, deploy, live run with two test accounts | C + You | a few paise | zero leaks live | E2.4 |
 | T27 | E2.5: evidence-based reuse behind a switch | C | ₹0 | paraphrase hit rate measured; T26's suite still passes | E2.5 |
 
-T28 is next (C, ₹0), then T26: the live test needs the console controls. The owner holds the friend invitation (O1) until Claude signals, after T26 is live. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+T26 is next (C + You, a few paise): merge, run the acl migration, deploy, then the live test with two accounts. The owner holds the friend invitation (O1) until Claude signals, after T26 is live. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -267,6 +267,7 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 8. Log — one line per session, newest first
 
+- 2026-11-24 — T28 done: Members page gains groups (add, delete, who is in each); each source in the corpus pane gains "who can read" and "remove" for editors; a read-only route shows a source's current readers and the organisation's groups to editors who are not admins. Checked light, dark, phone width. Not live. ₹0.
 - 2026-11-23 — T25 done: change a document's readers or remove it (editor only; hidden documents answer "not found"); a per-sheet version makes every server drop old answers and rebuild its keyword copy; re-uploads keep a document's access. Shared cache not needed. T28 (console controls) added before T26. Not live. ₹0.
 - 2026-11-23 — T24 done: cached answers keyed by the access the sheet uses and re-checked against each passage's list on every hit; source list filtered without revealing hidden counts. Owner will send the friend invitation only after Claude's signal (after T26). Not live. ₹0.
 - 2026-11-23 — T23 done: access lists on every passage (`all` by default), groups on the organisation page's API, both searches filtered by the caller's tokens set per request, `scripts/migrate_acl.py` (₹0, owner runs it in T26), deploy guard. Not live. ₹0.

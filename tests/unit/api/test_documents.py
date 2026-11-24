@@ -67,7 +67,7 @@ class TestChangeAccess:
         r = sheet.access(sheet.editor(), groups=["HR"])
         assert r.status_code == 200, r.text
         assert r.json() == {"source": "salaries.md", "everyone": False, "groups": ["HR"],
-                            "people": [], "passages": 2}
+                            "people": [], "passages": 2, "others": 0, "choices": ["HR"]}
         doc_id, acl = sheet.indexer.set_document_acl.await_args.args
         assert acl == [f"group:{sheet.hr}"]
         from atlas.interfaces.document import document_id
@@ -119,6 +119,47 @@ class TestChangeAccess:
         # This server changed its own copy, so it is not made to rebuild it.
         registry = sheet.site.app.state.atlas.registry
         assert registry.mark_generation.call_args.args == ("org_a__docs", sheet.version())
+
+
+class TestReadAccess:
+    """What the console shows before an editor changes anything."""
+
+    def read(self, c: TestClient, source: str = "salaries.md") -> Any:
+        return c.get("/namespaces/docs/documents/access", headers=CONSOLE,
+                     params={"source": source})
+
+    def test_everyone(self, sheet: _Sheet) -> None:
+        r = self.read(sheet.editor())
+        assert r.status_code == 200, r.text
+        assert r.json() == {"source": "salaries.md", "everyone": True, "groups": [],
+                            "people": [], "passages": 2, "others": 0, "choices": ["HR"]}
+
+    def test_names_groups_and_people_and_counts_the_rest(self, sheet: _Sheet) -> None:
+        ed = sheet.editor()
+        stranger = sheet.site.sign_in("admin@bolt.io")
+        sheet.indexer.document_acl = AsyncMock(return_value=[
+            f"group:{sheet.hr}", f"user:{_uid(ed)}", "group:gone", f"user:{_uid(stranger)}"])
+        body = self.read(ed).json()
+        assert (body["everyone"], body["groups"], body["people"], body["others"]) == (
+            False, ["HR"], ["ed@acme.com"], 2)
+        # Another organisation's member is never named, only counted.
+        assert "admin@bolt.io" not in str(body)
+
+    def test_an_editor_who_is_not_an_org_admin_still_sees_the_groups(
+        self, sheet: _Sheet
+    ) -> None:
+        ed = sheet.editor()
+        assert ed.get("/org", headers=CONSOLE).status_code == 403
+        assert self.read(ed).json()["choices"] == ["HR"]
+
+    def test_a_reader_cannot(self, sheet: _Sheet) -> None:
+        assert self.read(sheet.site.sign_in("reader@gmail.com")).status_code == 403
+
+    def test_a_hidden_document_is_not_found(self, sheet: _Sheet) -> None:
+        sheet.indexer.readable_passages = AsyncMock(return_value=0)
+        r = self.read(sheet.editor())
+        assert r.status_code == 404 and r.json()["detail"]["code"] == "document_not_found"
+        sheet.indexer.document_acl.assert_not_awaited()
 
 
 class TestRemove:
