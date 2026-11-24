@@ -15,8 +15,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import httpx
 import pytest
 import qdrant_client
+from qdrant_client.http.exceptions import UnexpectedResponse
 
 _SCRIPT = Path(__file__).resolve().parents[3] / "scripts" / "migrate_acl.py"
 
@@ -46,6 +48,11 @@ class _FakeQdrant:
         return SimpleNamespace(collections=[SimpleNamespace(name=n) for n in self.points])
 
     async def count(self, name: str, count_filter: Any = None, exact: bool = True) -> Any:
+        # Like Qdrant Cloud (production): no filter on a field without an index.
+        if count_filter is not None and name not in self.indexed:
+            raise UnexpectedResponse(400, "Bad Request",
+                                     b'{"status":{"error":"Bad request: Index required '
+                                     b'but not found for \\"acl\\""}}', httpx.Headers())
         pts = self.points[name]
         return SimpleNamespace(count=len([p for p in pts if count_filter is None
                                           or "acl" not in p]))
@@ -88,6 +95,22 @@ def test_a_dry_run_writes_nothing(mig: Any, tmp_path: Path) -> None:
 
 def test_check_refuses_while_any_passage_has_no_list(mig: Any) -> None:
     assert _run(mig, check=True) == 1
+
+
+def test_check_passes_once_apply_has_run(mig: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The deploy's guard, after the owner's --apply, against a strict Qdrant.
+    assert _run(mig, apply=True) == 0
+    applied = _FakeQdrant.last
+    monkeypatch.setattr(qdrant_client, "AsyncQdrantClient", lambda *_, **__: applied)
+    assert _run(mig, check=True) == 0
+
+
+def test_check_still_raises_other_qdrant_errors(mig: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def down(*_: Any, **__: Any) -> Any:
+        raise UnexpectedResponse(503, "Unavailable", b"down", httpx.Headers())
+    monkeypatch.setattr(_FakeQdrant, "count", down)
+    with pytest.raises(UnexpectedResponse):
+        _run(mig, check=True)
 
 
 def test_apply_opens_old_passages_to_the_sheet_and_leaves_narrowed_ones(
