@@ -450,3 +450,18 @@ class TestWhatACitationIsAllowedToName:
         (tmp_path / "a.md").write_text("hello world " * 40)
         await indexer.index_directory(tmp_path, source_root=tmp_path, relative_sources=True)
         assert self._sources(mock_dense) == ["a.md"]
+
+    @pytest.mark.asyncio
+    async def test_the_id_follows_the_listed_source(
+        self, indexer: DocumentIndexer, mock_dense: MagicMock, tmp_path: Path
+    ) -> None:
+        # Found live in T26: the id still came from the temp path, so the
+        # document routes (which look up document_id(listed source)) answered
+        # "not found" for every uploaded file, and re-uploads duplicated.
+        from atlas.interfaces.document import document_id
+
+        f = tmp_path / "a.md"
+        f.write_text("hello world " * 40)
+        await indexer.index_path(f, source_root=tmp_path, relative_sources=True)
+        chunks = mock_dense.upsert.await_args.args[0]
+        assert {c.metadata.doc_id for c in chunks} == {document_id("a.md")}

@@ -34,7 +34,7 @@ import structlog
 from atlas.ingestion.headers import apply_context_headers
 from atlas.ingestion.loaders.registry import get_loader, is_supported
 from atlas.interfaces.chunker import BaseChunker
-from atlas.interfaces.document import Document
+from atlas.interfaces.document import Document, document_id
 from atlas.interfaces.embedder import BaseEmbedder
 from atlas.interfaces.index import BaseIndex
 
@@ -158,6 +158,11 @@ class DocumentIndexer:
         if relative_sources and source_root is not None:
             for document in documents:
                 document.source = _relative_source(document.source, source_root)
+                # The id was derived from the temp path when the loader built
+                # the document. Left alone, every upload of a file got a new
+                # id (duplicates on re-upload) and the document routes, which
+                # look a document up by its listed source, never found one.
+                document.id = document_id(document.source)
         return await self.index_documents(documents, source_root)
 
     async def index_directory(
