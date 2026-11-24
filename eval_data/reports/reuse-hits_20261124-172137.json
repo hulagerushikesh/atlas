@@ -1,0 +1,248 @@
+{
+ "run_at": "2026-11-24T11:51:37+00:00",
+ "namespace": "duckdb",
+ "config": {
+  "enabled": false,
+  "min_shared": 3,
+  "min_similarity": 0.85,
+  "max_entries": 256
+ },
+ "questions": 15,
+ "rewordings": 45,
+ "rewordings_reused_pct": 44.4,
+ "by_style_pct": {
+  "casual": 33.3,
+  "keywords": 53.3,
+  "long": 46.7
+ },
+ "unrelated_pairs": 210,
+ "unrelated_served_wrongly": [],
+ "cost_usd": 0.005,
+ "rows": [
+  {
+   "group": "dq-001",
+   "style": "casual",
+   "reused": true
+  },
+  {
+   "group": "dq-001",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-001",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-002",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-002",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-002",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-003",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-003",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-003",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-004",
+   "style": "casual",
+   "reused": true
+  },
+  {
+   "group": "dq-004",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-004",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-005",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-005",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-005",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-006",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-006",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-006",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-007",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-007",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-007",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-008",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-008",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-008",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-009",
+   "style": "casual",
+   "reused": true
+  },
+  {
+   "group": "dq-009",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-009",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-010",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-010",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-010",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-011",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-011",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-011",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-012",
+   "style": "casual",
+   "reused": true
+  },
+  {
+   "group": "dq-012",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-012",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-013",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-013",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-013",
+   "style": "long",
+   "reused": false
+  },
+  {
+   "group": "dq-014",
+   "style": "casual",
+   "reused": true
+  },
+  {
+   "group": "dq-014",
+   "style": "keywords",
+   "reused": true
+  },
+  {
+   "group": "dq-014",
+   "style": "long",
+   "reused": true
+  },
+  {
+   "group": "dq-015",
+   "style": "casual",
+   "reused": false
+  },
+  {
+   "group": "dq-015",
+   "style": "keywords",
+   "reused": false
+  },
+  {
+   "group": "dq-015",
+   "style": "long",
+   "reused": false
+  }
+ ]
+}

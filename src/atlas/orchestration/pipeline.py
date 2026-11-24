@@ -193,7 +193,10 @@ class RAGPipeline:
         # an extra call per search.
         self._hyde = hyde
 
-    async def run(self, query: str) -> PipelineResult:
+    async def run(self, query: str, probe: RetrievalPass | None = None) -> PipelineResult:
+        """*probe* is a search the caller already ran with the question as
+        asked (evidence reuse, atlas.api.reuse); it stands in for the first
+        attempt when that is the search this run would make anyway."""
         log = logger.bind(query=query[:80])
         stage_ms: dict[str, float] = {}
 
@@ -226,7 +229,8 @@ class RAGPipeline:
 
         # ── Step 3: Retrieve (with grader-driven retry loop) ───────────────────
         retrieval, grader_score, retries = await self._retrieve_with_retry(
-            query, sub_queries, stage_ms
+            query, sub_queries, stage_ms,
+            probe if probe is not None and sub_queries == [query] else None,
         )
         chunks = retrieval.chunks
 
@@ -275,6 +279,7 @@ class RAGPipeline:
         original_query: str,
         sub_queries: list[str],
         stage_ms: dict[str, float],
+        first: RetrievalPass | None = None,
     ) -> tuple[RetrievalPass, float, int]:
         """
         Retrieve for all sub-queries, fuse, grade. Retry up to MAX_RETRIES
@@ -303,7 +308,10 @@ class RAGPipeline:
 
         while True:
             t0 = time.perf_counter()
-            retrieval = await self._retrieve_all(current_queries, original_query)
+            if first is not None:
+                retrieval, first = first, None
+            else:
+                retrieval = await self._retrieve_all(current_queries, original_query)
             # The expander runs inside `_retrieve_all` and so inside this
             # timer. Charging its LLM call to "retrieval" would make turning
             # HyDE on look like the vector store got slower.

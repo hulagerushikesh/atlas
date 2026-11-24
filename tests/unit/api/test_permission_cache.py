@@ -88,6 +88,12 @@ class _Sheet:
 
         self.pipeline.run = run
 
+        async def search(*_: Any, **__: Any) -> RetrievalPass:
+            return RetrievalPass(chunks=list(self.answer_from), evidence=[])
+
+        # What evidence reuse searches with, when it is on.
+        self.pipeline._retrieve_all = AsyncMock(side_effect=search)
+
     def member(self, email: str, groups: list[str]) -> TestClient:
         r = self.admin.post("/org/invitations", headers=CONSOLE,
                             json={"email": email, "roles": {"docs": "reader"}})
@@ -104,9 +110,19 @@ class _Sheet:
         return body
 
 
-@pytest.fixture
-def sheet(site: Site) -> _Sheet:
-    return _Sheet(site)
+@pytest.fixture(params=["reuse off", "reuse on, worst case"])
+def sheet(site: Site, request: pytest.FixtureRequest) -> _Sheet:
+    """Every test below runs twice. The second time evidence reuse (E2.5) is
+    on and as gullible as it can be: one shared passage is enough, every
+    question means the same, and the fit check always says yes. What still
+    stops a leak then is the access check on the stored passages alone."""
+    s = _Sheet(site)
+    if request.param != "reuse off":
+        from tests.unit.api.test_evidence_reuse import StubJudge, _reuse
+
+        site.app.state.atlas.reuse = _reuse(StubJudge(fits=True), min_shared=1,
+                                            min_similarity=0.0)
+    return s
 
 
 class TestCachedAnswers:

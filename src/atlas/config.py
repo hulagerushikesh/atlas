@@ -268,6 +268,23 @@ class BudgetConfig(BaseSettings):
     demo_rpm: int = 3
 
 
+class ReuseConfig(BaseSettings):
+    """Evidence-based reuse (E2.5, atlas.api.reuse): a reworded question
+    served a stored answer that read the same passages. Off by default."""
+
+    model_config = SettingsConfigDict(env_prefix="REUSE_", env_file=_ENV_FILE, extra="ignore")
+
+    enabled: bool = False
+    # Measured 2026-11-19 (docs/company-scale.md §7): 3 of the top 5 shared
+    # and meaning >= 0.85 caught 69% of rewordings and 1 of 120 unrelated
+    # pairs; the fit check exists for that one. T27 (2026-11-24, §9): the fit
+    # check passed that same pair (meaning 0.871) in two of three runs, so the
+    # bar is 0.88: 53% of rewordings reused, 0 of 210 unrelated pairs.
+    min_shared: int = 3
+    min_similarity: float = 0.88
+    max_entries: int = 256
+
+
 class APIConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="API_", env_file=_ENV_FILE, extra="ignore")
 
@@ -330,6 +347,7 @@ class Settings(BaseSettings):
     router: RouterConfig = Field(default_factory=RouterConfig)
     hyde: HyDEConfig = Field(default_factory=HyDEConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
+    reuse: ReuseConfig = Field(default_factory=ReuseConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     ingest: IngestConfig = Field(default_factory=IngestConfig)
 
