@@ -165,3 +165,38 @@ rather than by real employees, one technical manual. How often real people
 re-ask something already answered is still unknown until the S1 logs run
 live, so the cost saving is still an estimate. Atlas today serves
 one public manual to a handful of visitors.
+
+## 9. Built and measured 2026-11-24 (E2.5, T27)
+
+S3 is built as `atlas.api.reuse`, behind `REUSE_ENABLED` (off live). A
+stored answer is served to a new question only if the two searches share 3
+of their top 5 passages, the questions are close in meaning, the asker may
+read every passage the answer was built from, and a short model check says
+the answer fits. Measured with `scripts/measure_reuse_hits.py` against the
+live demo sheet: 15 test questions stored with their reference answers, 45
+rewordings asking, and every other original asked against each stored one
+(210 unrelated pairs). About ₹1.5 for three runs.
+
+| Run | Change | Rewordings reused | Unrelated pairs served wrongly |
+|---|---|---|---|
+| 1 | first fit check | 44% | 0 of 210 |
+| 2 | fit check told not to judge truth | 67% | 1 of 210 |
+| 3 | fit check writes what is asked and what is given | 62% | 1 of 210 |
+| 3 replayed at meaning ≥ 0.88 (shipped) | — | **53%** | **0 of 210** |
+
+- **The fit check judged truth from its own memory.** It turned down
+  correct answers about DuckDB 2.0 as "hallucinated" because 2.0 is newer
+  than the model. Told that the answer was already checked against the
+  documents, it stopped.
+- **The fit check alone does not catch the hard pair.** "Install and load
+  in one statement?" and "is new syntax available right after LOAD?"
+  (§7's warning, meaning 0.871) got each other's answer in runs 2 and 3.
+  A model judge cannot be the only lock.
+- **So the meaning bar went from 0.85 to 0.88.** The last row is run 3's
+  logged checks with every candidate below 0.88 dropped: a higher bar only
+  removes candidates, so no new spend was needed. Four rewordings are lost.
+- The 0.88 is tuned on this one set, which is the weakness: the next pair
+  that fools the judge may sit at 0.89. Reuse stays off live until real
+  questions exist to measure on, and permissions never depend on the judge:
+  the access rule is checked on every stored passage first, and the
+  permission suite passes with reuse on and the judge always saying yes.

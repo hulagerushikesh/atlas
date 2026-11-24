@@ -44,6 +44,7 @@ from atlas.api.middleware.auth_mw import APIKeyMiddleware
 from atlas.api.middleware.metrics_mw import PrometheusMiddleware
 from atlas.api.middleware.tracing import TracingMiddleware
 from atlas.api.namespaces import NamespaceRegistry, SharedComponents
+from atlas.api.reuse import EvidenceReuse
 from atlas.api.routes import (
     auth,
     documents,
@@ -145,6 +146,8 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_model=shared.settings.openai.embedding_model,
         chat_model=shared.settings.openai.primary_model,
         ingest=settings.ingest,
+        reuse=EvidenceReuse(shared.embedder, shared.llm, settings.reuse)
+        if settings.reuse.enabled else None,
         spend=spend,
         demo_namespace=settings.budget.demo_namespace if demo_on else "",
         demo_spend=SpendMeter(

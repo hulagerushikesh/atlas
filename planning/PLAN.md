@@ -121,7 +121,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [x] **E2.3** Delete a document, and its cached answers with it. **Done 2026-11-23** (not live until T26).
 - [x] **E2.4** Adversarial suite (cached and reworded questions) passes live. **Done 2026-11-24** (15 of 15 live, zero leaks).
 - E2.1–E2.3 are live since 2026-11-24.
-- [ ] **E2.5** Evidence-based reuse (old 9.4), permission-aware, behind a switch.
+- [x] **E2.5** Evidence-based reuse (old 9.4), permission-aware, behind a switch. **Done 2026-11-24** (off live; 53% of rewordings reused, 0 wrong of 210).
 
 **E3 First connector** (choice settled by the owner's five conversations, O8).
 - [ ] **E3.1** Google Drive folder synced into a workspace.
@@ -187,9 +187,9 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T25~~ | ~~Build E2.3: change access, remove a document; decide one server or shared cache (priced first)~~ | C | ₹0 | **done 2026-11-23** — 1372 tests green, 8 of them against a real in-memory Qdrant; a removed or narrowed document stops being answered on every server through a per-sheet version (₹0, one Firestore read per question; no Redis, still two servers). Not live until T26 | E2.3 |
 | ~~T28~~ | ~~Console: groups on the Members page; "who can read" and "remove" on each document in the sources pane~~ | C | ₹0 | **done 2026-11-24** — checked in a browser against a mocked server in light, dark and phone width; 1395 tests green. Phones have no source list (DESIGN §5), so the per-source control is tablet and desktop only. Not live until T26 | — |
 | ~~T26~~ | ~~E2.4: adversarial suite in CI, migration run, deploy, live run with two test accounts~~ | C + You | a few paise | **done 2026-11-24** — live 15 of 15, zero leaks: an outsider got nothing from a group-only document asked the same, streamed, reworded or fishing, nor from its listing, readers or removal; the demo still answers. The live run found three bugs the suite missed, all fixed with a test each (#35 migration index, #36 new sheet's first upload, #37 uploaded documents' ids). The suite in CI is the 65 permission tests `make test` already runs | E2.4 |
-| T27 | E2.5: evidence-based reuse behind a switch | C | ₹0 | paraphrase hit rate measured; T26's suite still passes | E2.5 |
+| ~~T27~~ | ~~E2.5: evidence-based reuse behind a switch~~ | C | ≈₹1.5 (owner-approved) | **done 2026-11-24** — off by default (`REUSE_ENABLED`); against the live demo sheet 53% of 45 rewordings reused, 0 of 210 unrelated pairs served wrongly (docs/company-scale.md §9); the permission suite passes with reuse on and its fit check always saying yes. Built to code only, not deployed: nothing live changes while it is off | E2.5 |
 
-T27 is next (C, ₹0). T26 is live, so the friend invitation (O1) can go now. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E2 is finished. No Claude task is queued: E3 waits on the owner's five conversations (O8). The friend invitation (O1) can go now. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -268,6 +268,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A sheet whose Qdrant collection is missing after documents changed answers 503 on every request (the keyword rebuild can't read it), and an upload can't recreate it. Only reachable by deleting a collection by hand (did so in T26, recreated it). Fix: treat a 404 scroll as an empty sheet
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-24 — T27 done: evidence-based reuse behind `REUSE_ENABLED` (off). Three measured runs: the fit check judged truth from memory (rejected DuckDB 2.0 answers) until told not to, then passed §7's hard pair twice, so the meaning bar went 0.85 → 0.88: 53% of rewordings reused, 0 of 210 wrong. ≈₹1.5, approved.
 
 - 2026-11-24 — T26 done: acl migration run (7,995 passages given `all`), E2 deployed, live run with two test keys in "Live check" 15 of 15, zero leaks. Found live and fixed: migration filtered before creating its index (#35); a new sheet's first upload failed (#36); uploads kept a temp-path id, so "who can read" and "remove" never found them (#37). Test keys revoked. O1 may go. A few paise.
 

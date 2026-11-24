@@ -72,6 +72,7 @@ from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midni
 from atlas.api.cache import QueryCache
 from atlas.api.dependencies import AppState, get_app_state, get_cache, get_registry
 from atlas.api.middleware.metrics_mw import COST_USD, TOKEN_USAGE
+from atlas.api.reuse import EvidenceReuse, Probe
 from atlas.api.schemas import (
     CitationResponse,
     EvidenceResponse,
@@ -83,7 +84,12 @@ from atlas.api.schemas import (
 from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
 from atlas.cost import estimate_usage_cost
 from atlas.ingestion.hashing import hash_text
-from atlas.orchestration.pipeline import EvidenceChunk, PipelineResult, RAGPipeline
+from atlas.orchestration.pipeline import (
+    EvidenceChunk,
+    PipelineResult,
+    RAGPipeline,
+    RetrievalPass,
+)
 from atlas.retry_policy import is_credit_exhausted
 from atlas.usage import UsageMeter, counted, usage_scope
 
@@ -184,6 +190,41 @@ def _evidence_fields(chunk_ids: list[str]) -> dict[str, Any]:
         "evidence_fp": hash_text("|".join(sorted(chunk_ids[:_EVIDENCE_TOP])))
         if chunk_ids else None,
     }
+
+
+@dataclass
+class _Probed:
+    """The search evidence reuse ran first, kept so a miss does not search twice."""
+
+    reuse: EvidenceReuse
+    probe: Probe
+    retrieval: RetrievalPass
+    ms: float
+
+
+async def _try_reuse(reuse: EvidenceReuse | None, pipeline: RAGPipeline, query: str,
+                     sheet: str, version: str, access: frozenset[str] | None,
+                     usage: UsageMeter) -> tuple[dict[str, Any] | None, _Probed | None]:
+    """A stored answer to a reworded question (E2.5), and the search behind
+    the decision. (None, None) while reuse is off."""
+    if reuse is None:
+        return None, None
+    t0 = time.perf_counter()
+    retrieval = await counted(usage, pipeline._retrieve_all([query], query))
+    ms = round((time.perf_counter() - t0) * 1000, 1)
+    probe = await counted(usage, reuse.probe(query, [c.chunk_id for c in retrieval.chunks]))
+    hit = await counted(usage, reuse.find(sheet, version, query, probe, access))
+    return hit, _Probed(reuse, probe, retrieval, ms)
+
+
+def _remember(probed: _Probed | None, sheet: str, version: str, query: str,
+              payload: dict[str, Any]) -> None:
+    """Offer a fresh answer to evidence reuse: only a checked, faithful one."""
+    if probed is None or payload.get("is_faithful") is not True \
+            or payload.get("classification") == "out_of_scope":
+        return
+    probed.reuse.remember(sheet, version, query, probed.probe,
+                          payload.get(_EVIDENCE_ACL) or [], payload)
 
 
 def _stage_timings(stage_ms: dict[str, float], total_ms: float) -> StageTimings:
@@ -512,6 +553,8 @@ async def _stream_query(
     cache_key: str | None = None,
     cache_access: frozenset[str] | None = None,
     cache_version: str = "",
+    probed: _Probed | None = None,
+    spent_before: UsageMeter | None = None,
 ) -> AsyncIterator[str]:
     """Stream the answer, and charge the daily cap for the whole request.
 
@@ -551,6 +594,8 @@ async def _stream_query(
     event to, and swallowing them would stop the disconnect propagating.
     """
     usage = UsageMeter()
+    if spent_before is not None:  # evidence reuse's search and check
+        usage.merge(spent_before.by_model)
     t_total = time.perf_counter()
     # Filled in stage by stage as the events go out, and written to the cache
     # below if the run reaches the end. Created here rather than inside
@@ -569,7 +614,8 @@ async def _stream_query(
     # `except` would find nothing.
     request_id = _request_id()
     try:
-        async for event in _stream_events(query, pipeline, usage, chat_model, capture):
+        async for event in _stream_events(query, pipeline, usage, chat_model, capture,
+                                          probed):
             if '"status": "start"' in event:
                 stage = json.loads(event[len("data: "):]).get("name", stage)
             yield event
@@ -618,12 +664,12 @@ async def _stream_query(
     # Guarded on `complete` so only a run that finished and got a verdict is
     # stored — see `_StreamCapture`.
     if cache is not None and capture.complete:
+        entry = {**_cache_entry(capture, usage, total_ms), _EVIDENCE_ACL: capture.evidence_acl}
         spawn(
-            cache.set(query, {**_cache_entry(capture, usage, total_ms),
-                              _EVIDENCE_ACL: capture.evidence_acl},
-                      cache_key or namespace, cache_access, cache_version),
+            cache.set(query, entry, cache_key or namespace, cache_access, cache_version),
             name="cache_set_stream",
         )
+        _remember(probed, cache_key or namespace, cache_version, query, entry)
 
     # Same event name as the non-streaming path, with `stream` to tell them
     # apart. One name is the point: a p95 of cost / query mined from these
@@ -647,6 +693,7 @@ async def _stream_events(
     usage: UsageMeter,
     chat_model: str = "unknown",
     capture: _StreamCapture | None = None,
+    probed: _Probed | None = None,
 ) -> AsyncIterator[str]:
     """
     Streaming path: route → decompose? → retrieve → grade → stream tokens.
@@ -733,9 +780,14 @@ async def _stream_events(
     # ── Stage 3: Retrieve ──────────────────────────────────────────────────────
     yield _evt({"type": "stage", "name": "retrieval", "status": "start"})
     t0 = time.perf_counter()
-    retrieval = await counted(usage, pipeline._retrieve_all(sub_queries, query))
+    if probed is not None and sub_queries == [query]:
+        # Evidence reuse already ran this exact search and found no match.
+        retrieval = probed.retrieval
+        cap.stage_ms["retrieval"] = round(probed.ms)
+    else:
+        retrieval = await counted(usage, pipeline._retrieve_all(sub_queries, query))
+        cap.stage_ms["retrieval"] = round((time.perf_counter() - t0) * 1000)
     chunks = retrieval.chunks
-    cap.stage_ms["retrieval"] = round((time.perf_counter() - t0) * 1000)
     cap.retrieved_chunk_ids = [c.chunk_id for c in chunks]
     cap.evidence_acl = [list(c.metadata.acl) for c in chunks]
     # Evidence goes out as soon as retrieval finishes so the client can
@@ -948,6 +1000,22 @@ async def _enforce_budget(spend: SpendMeter) -> None:
         ) from exc
 
 
+async def _serve_reused(request: Request, query: str, namespace: str,
+                        hit: dict[str, Any], usage: UsageMeter, spend: SpendMeter | None,
+                        cache: QueryCache, cache_key: str,
+                        cache_access: frozenset[str] | None, version: str,
+                        latency_ms: float, *, stream: bool) -> dict[str, Any]:
+    """Charge the search and the fit check, keep the answer under this exact
+    question too (so asking it again is a plain hit), and return it."""
+    await _charge(usage, spend, api_key_id=getattr(request.state, "api_key_id", None),
+                  namespace=namespace, latency_ms=latency_ms)
+    served = {**hit, "query": query, "cached": True}
+    spawn(cache.set(query, served, cache_key, cache_access, version), name="cache_set_reuse")
+    logger.info("query_evidence_reused", stream=stream, namespace=namespace,
+                **_evidence_fields(hit.get("retrieved_chunk_ids") or []))
+    return served
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/query", response_model=None)
@@ -1020,6 +1088,25 @@ async def query(
         # instance is missing from the keyword half of every search this one
         # serves. Within the TTL this is free; see `reconcile_sparse`.
         await bring_keyword_copy_up_to_date(registry, corpus, version)
+        spent = UsageMeter()
+        t_reuse = time.perf_counter()
+        try:
+            hit, probed = await _try_reuse(app_state.reuse, pipeline, body.query, cache_key,
+                                           version, access, spent)
+        except Exception:
+            await _charge(spent, spend, api_key_id=getattr(request.state, "api_key_id", None),
+                          namespace=body.namespace,
+                          latency_ms=(time.perf_counter() - t_reuse) * 1000)
+            raise
+        if hit is not None:
+            served = await _serve_reused(request, body.query, body.namespace, hit, spent,
+                                         spend, cache, cache_key, cache_access, version,
+                                         (time.perf_counter() - t_reuse) * 1000, stream=True)
+            return StreamingResponse(
+                _replay_stream(served), media_type="text/event-stream",
+                headers={"X-Faithfulness": "deferred", "X-Namespace": body.namespace,
+                         "X-Cache": "reuse"},
+            )
         log.info("query_stream_start")
         return StreamingResponse(
             _stream_query(
@@ -1027,7 +1114,7 @@ async def query(
                 api_key_id=getattr(request.state, "api_key_id", None),
                 namespace=body.namespace,
                 cache=cache, cache_key=cache_key, cache_access=cache_access,
-                cache_version=version,
+                cache_version=version, probed=probed, spent_before=spent,
             ),
             media_type="text/event-stream",
             # Was "skipped-streaming", which stopped being true on
@@ -1069,7 +1156,11 @@ async def query(
     # this is a scope rather than a delta on their lifetime counters.
     with usage_scope() as usage:
         try:
-            result = await pipeline.run(body.query)
+            hit, probed = await _try_reuse(app_state.reuse, pipeline, body.query, cache_key,
+                                           version, access, usage)
+            if hit is None:
+                result = await (pipeline.run(body.query) if probed is None
+                                else pipeline.run(body.query, probe=probed.retrieval))
         except Exception as exc:
             log.error("query_pipeline_failed", error=str(exc),
                       error_type=type(exc).__name__)
@@ -1096,6 +1187,14 @@ async def query(
             ) from exc
 
     total_ms = (time.perf_counter() - t_total) * 1000
+    if hit is not None:
+        served = await _serve_reused(request, body.query, body.namespace, hit, usage, spend,
+                                     cache, cache_key, cache_access, version, total_ms,
+                                     stream=False)
+        return QueryResponse.model_validate(served)
+    if probed is not None and result.sub_queries == [body.query]:
+        # The probe was this run's first search; its time belongs there.
+        result.stage_ms["retrieval"] = result.stage_ms.get("retrieval", 0.0) + probed.ms
     timings = _stage_timings(result.stage_ms, total_ms)
 
     response = _build_response(result, timings, usage)
@@ -1119,12 +1218,10 @@ async def query(
     # because the route fixture disables auth, so `api_key_id` is None and
     # the whole block was dead in tests. Pinned now by a test that sets the
     # key id on the request scope.
-    spawn(
-        cache.set(body.query, {**response.model_dump(), _EVIDENCE_ACL: [
-                      list(c.metadata.acl) for c in result.retrieved_chunks]},
-                  cache_key, cache_access, version),
-        name="cache_set",
-    )
+    entry = {**response.model_dump(), _EVIDENCE_ACL: [
+        list(c.metadata.acl) for c in result.retrieved_chunks]}
+    spawn(cache.set(body.query, entry, cache_key, cache_access, version), name="cache_set")
+    _remember(probed, cache_key, version, body.query, entry)
 
     # Tokens and cost are logged here, not only returned in the body and
     # summed into counters, because a sum cannot be turned back into a
