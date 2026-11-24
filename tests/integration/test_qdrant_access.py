@@ -104,3 +104,25 @@ class TestOneDocument:
 
     async def test_a_pre_e2_passage_has_no_list(self, sheet: Any) -> None:
         assert await sheet[0].document_acl("old") is None
+
+
+class TestABrandNewSheet:
+    """Found live in T26: a new sheet's first upload asked for a document's
+    access list before its collection existed, so every file failed (404)."""
+
+    @pytest.fixture
+    def fresh(self) -> QdrantDenseIndex:
+        index = QdrantDenseIndex(QdrantConfig(url="http://unused", collection_name="fresh"),
+                                 dimensions=DIMENSIONS)
+        index._client = AsyncQdrantClient(":memory:")
+        return index
+
+    async def test_the_first_upload_finds_no_access_list(self, fresh: QdrantDenseIndex) -> None:
+        assert await fresh.document_acl("anything") is None
+
+    async def test_document_controls_answer_instead_of_failing(
+        self, fresh: QdrantDenseIndex
+    ) -> None:
+        assert await fresh.readable_passages("anything", frozenset({"all"})) == 0
+        assert await fresh.set_document_acl("anything", ["all"]) == 0
+        assert await fresh.delete_document("anything") == 0

@@ -245,6 +245,9 @@ class QdrantDenseIndex(BaseIndex):
 
     @_retry_transient
     async def document_acl(self, doc_id: str) -> list[str] | None:
+        # A new sheet's first upload asks this before anything else touches
+        # Qdrant, so the collection may not exist yet (404 → every file failed).
+        await self.ensure_collection()
         points, _ = await self._client.scroll(
             collection_name=self._config.collection_name, scroll_filter=self._of(doc_id),
             limit=1, with_payload=["acl"], with_vectors=False,
@@ -258,6 +261,7 @@ class QdrantDenseIndex(BaseIndex):
     async def readable_passages(self, doc_id: str, access: frozenset[str]) -> int:
         from qdrant_client.models import FieldCondition, MatchAny
 
+        await self.ensure_collection()
         result = await self._client.count(
             collection_name=self._config.collection_name, exact=True,
             count_filter=self._of(doc_id, FieldCondition(
@@ -268,6 +272,7 @@ class QdrantDenseIndex(BaseIndex):
     @_retry_transient
     async def set_document_acl(self, doc_id: str, acl: list[str]) -> int:
         # set_payload by filter: no re-embedding, ₹0.
+        await self.ensure_collection()
         await self._client.set_payload(
             collection_name=self._config.collection_name, payload={"acl": list(acl)},
             points=self._of(doc_id), wait=True,
@@ -281,6 +286,7 @@ class QdrantDenseIndex(BaseIndex):
     async def delete_document(self, doc_id: str) -> int:
         from qdrant_client.models import FilterSelector
 
+        await self.ensure_collection()
         result = await self._client.count(
             collection_name=self._config.collection_name, exact=True,
             count_filter=self._of(doc_id))
