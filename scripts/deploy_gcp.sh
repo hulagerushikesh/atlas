@@ -29,6 +29,12 @@ PYTHON="${PYTHON:-.venv/bin/python}"
 # is a plain setting, not a secret. The session secret that signs the cookie
 # is in Secret Manager as atlas-session-secret.
 GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-797295077194-majuoccs6vt4mbmnrdp3ersf6dd3uiec.apps.googleusercontent.com}"
+# Google Drive (E3): its own OAuth client in the atlas-drive-rush project, so
+# publishing sign-in never puts the Drive scope up for review. The id is public;
+# its secret and the key sealing stored Drive grants are in Secret Manager.
+DRIVE_CLIENT_ID="${DRIVE_CLIENT_ID:-448298860606-7jfoqsskgud4h2evcrlpie8djok37idf.apps.googleusercontent.com}"
+DRIVE_PUBLIC_URL="${DRIVE_PUBLIC_URL:-https://atlas.hulage.in}"
+DRIVE_SCHEDULER_EMAIL="atlas-drive-tick@${PROJECT}.iam.gserviceaccount.com"
 
 # ── Index gate ────────────────────────────────────────────────────────────────
 #
@@ -144,12 +150,16 @@ ROUTER_DOMAIN=the DuckDB 2.0 SQL reference and guides: the SQL dialect of the Du
 ROUTER_DOMAIN_NAMESPACE=duckdb,\
 ATLAS_INDEX_DIR=/app/data/index,\
 GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID},\
+DRIVE_CLIENT_ID=${DRIVE_CLIENT_ID},DRIVE_PUBLIC_URL=${DRIVE_PUBLIC_URL},\
+DRIVE_SCHEDULER_EMAIL=${DRIVE_SCHEDULER_EMAIL},\
 REDIS_URL=" \
   --set-secrets "OPENAI_API_KEY=atlas-openai-api-key:latest,\
 QDRANT_URL=atlas-qdrant-url:latest,\
 QDRANT_API_KEY=atlas-qdrant-api-key:latest,\
 ADMIN_SECRET=atlas-admin-secret:latest,\
-SESSION_SECRET=atlas-session-secret:latest" \
+SESSION_SECRET=atlas-session-secret:latest,\
+DRIVE_CLIENT_SECRET=atlas-drive-client-secret:latest,\
+DRIVE_TOKEN_KEY=atlas-drive-token-key:latest" \
   --quiet
 
 gcloud run services describe "${SERVICE}" --project "${PROJECT}" --region "${REGION}" \
