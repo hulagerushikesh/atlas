@@ -1,6 +1,6 @@
 import { useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react"
-import { FileText, FolderInput, Lock, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload, UserRoundCog } from "lucide-react"
+import { FileText, FolderInput, FolderSync, Lock, PanelLeftClose, PanelLeftOpen, Plus, TriangleAlert, Upload, UserRoundCog } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { postIngest, postUpload } from "@/lib/api"
 import { fmt, useAtlas } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import { WhatIsThis } from "@/components/WhatIsThis"
+import { DrivePanel } from "@/components/DrivePanel"
 
 const EASE = [0.23, 1, 0.32, 1] as const
 
@@ -191,7 +192,17 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
                       <FileText className="size-3 shrink-0 text-ink-3 transition-colors group-hover:text-blue" />
                       <span className="min-w-0 flex-1 truncate">{s.source}</span>
                       <span className="tabular text-ink-3">{fmt(s.chunks)}</span>
-                      {canManage && (
+                      {s.synced ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span tabIndex={0} className="-my-1 -mr-1 inline-flex size-6 items-center justify-center text-ink-3"
+                              aria-label={`${s.source} comes from Google Drive`}>
+                              <FolderSync className="size-3.5" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">From Google Drive · readers follow Drive's sharing</TooltipContent>
+                        </Tooltip>
+                      ) : canManage && (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button variant="ghost" size="icon-sm"
@@ -263,6 +274,8 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
                 </span>
                 <span className="font-mono text-[10px] text-ink-3">md · txt · pdf · html</span>
               </div>
+
+              {canManage && me?.user && <DrivePanel />}
 
               <details className="mt-3">
                 <summary className="label cursor-pointer select-none text-[10px]">Server path</summary>

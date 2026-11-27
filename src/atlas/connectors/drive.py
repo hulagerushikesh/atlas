@@ -13,6 +13,8 @@ Three parts, kept apart so each is testable without Google:
 * `sync_folder` — one pass over a connected folder: index new and changed
   files, rewrite access lists that changed (₹0, no re-embedding), remove
   files that left the folder. Returns counts for the console.
+* `touches` — whether anything in Drive's change feed concerns the folder
+  (E3.2), so the 5-minute check skips the walk when nothing did.
 
 A synced file's document id is `document_id("drive:{file id}")`, so a
 rename or a move inside the folder is the same document, and its source is
@@ -69,10 +71,19 @@ class DriveFile:
     size: int = 0
 
 
+@dataclass(frozen=True)
+class DriveChange:
+    file_id: str
+    removed: bool = False                 # deleted, or no longer visible to the connector
+    parents: tuple[str, ...] = ()
+
+
 class DriveSource(Protocol):
     async def walk(self, folder_id: str) -> list[DriveFile]: ...
     async def permissions(self, file_id: str) -> list[DrivePermission] | None: ...
     async def download(self, file: DriveFile) -> bytes: ...
+    async def start_cursor(self) -> str: ...
+    async def changes(self, cursor: str) -> tuple[list[DriveChange], str]: ...
 
 
 def drive_doc_id(file_id: str) -> str:
@@ -95,6 +106,14 @@ def acl_for(perms: list[DrivePermission] | None,
         elif p.type == "group" and p.email.lower() in group_links:
             tokens.add(f"group:{group_links[p.email.lower()]}")
     return sorted(tokens)
+
+
+def touches(changes: Iterable[DriveChange], held: Iterable[str],
+            folders: Iterable[str]) -> bool:
+    """Whether a change concerns the folder: a held file changed, moved or went
+    away, or something was added under one of the folder's folders."""
+    watched = set(held) | set(folders)
+    return any(c.file_id in watched or watched.intersection(c.parents) for c in changes)
 
 
 # ── The real Drive ────────────────────────────────────────────────────────────
@@ -164,6 +183,8 @@ class GoogleDrive:
                     path = f"{prefix}{f['name']}"
                     if f["mimeType"] == FOLDER:
                         pending.append((f["id"], f"{path}/"))
+                        out.append(DriveFile(id=f["id"], name=f["name"], mime_type=FOLDER,
+                                             path=f"{path}/"))
                     else:
                         out.append(DriveFile(id=f["id"], name=f["name"],
                                              mime_type=f["mimeType"], path=path,
@@ -209,6 +230,36 @@ class GoogleDrive:
         r.raise_for_status()
         return r.content
 
+    async def start_cursor(self) -> str:
+        r = await self._get(f"{_API}/changes/startPageToken", {"supportsAllDrives": "true"})
+        r.raise_for_status()
+        return str(r.json()["startPageToken"])
+
+    async def changes(self, cursor: str) -> tuple[list[DriveChange], str]:
+        """Everything that changed for the connector since *cursor*, and the
+        cursor to ask from next time. Sharing changes are listed too."""
+        out: list[DriveChange] = []
+        page = cursor
+        while True:
+            r = await self._get(f"{_API}/changes", {
+                "pageToken": page, "pageSize": 1000, "includeRemoved": "true",
+                "supportsAllDrives": "true", "includeItemsFromAllDrives": "true",
+                "fields": "nextPageToken, newStartPageToken, "
+                          "changes(fileId, removed, file(parents, trashed))"})
+            r.raise_for_status()
+            body = r.json()
+            for c in body.get("changes", []):
+                file = c.get("file") or {}
+                out.append(DriveChange(
+                    file_id=str(c.get("fileId", "")),
+                    removed=bool(c.get("removed")) or bool(file.get("trashed")),
+                    parents=tuple(file.get("parents") or ())))
+            if body.get("newStartPageToken"):
+                return out, str(body["newStartPageToken"])
+            page = body.get("nextPageToken")
+            if not page:
+                return out, cursor
+
     async def aclose(self) -> None:
         await self._http.aclose()
 
@@ -224,6 +275,7 @@ class SyncReport:
     skipped: list[str] = field(default_factory=list)      # unsupported or too big
     closed: list[str] = field(default_factory=list)       # sharing unreadable → nobody
     failed: list[str] = field(default_factory=list)
+    folders: list[str] = field(default_factory=list)      # watched by the change feed
 
     def as_dict(self) -> dict[str, Any]:
         return {"indexed": self.indexed, "unchanged": self.unchanged,
@@ -265,7 +317,9 @@ async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
     sharing change does not change a file's version.
     """
     report = SyncReport()
-    files = await source.walk(folder_id)
+    walked = await source.walk(folder_id)
+    report.folders = [folder_id] + [f.id for f in walked if f.mime_type == FOLDER]
+    files = [f for f in walked if f.mime_type != FOLDER]
     now: dict[str, str] = {}
     supported = [f for f in files if f.mime_type in SUPPORTED]
     report.skipped.extend(f.path for f in files if f.mime_type not in SUPPORTED)

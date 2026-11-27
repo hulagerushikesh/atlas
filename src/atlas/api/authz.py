@@ -33,7 +33,8 @@ from atlas.api.tenancy import (
     resolve_workspace,
 )
 
-Rule = Literal["public", "admin_secret", "authenticated", "org_admin", "read", "write", "manage"]
+Rule = Literal["public", "admin_secret", "scheduler", "authenticated", "org_admin", "read",
+               "write", "manage"]
 
 POLICY: dict[tuple[str, str], Rule] = {
     ("GET", "/"): "public",
@@ -87,6 +88,9 @@ POLICY: dict[tuple[str, str], Rule] = {
     ("DELETE", "/namespaces/{namespace}/connectors/drive"): "write",
     ("GET", "/connectors/google-groups"): "org_admin",
     ("PUT", "/connectors/google-groups"): "org_admin",
+    # E3.2: Cloud Scheduler's 5-minute Drive pass. No key or cookie: the route
+    # itself checks a Google-signed token naming the scheduler's account.
+    ("POST", "/connectors/drive/tick"): "scheduler",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",
     # Lists only what the caller may read.
@@ -101,7 +105,7 @@ POLICY: dict[tuple[str, str], Rule] = {
 # admin-secret route above, plus the static mounts, which are not routes.
 PUBLIC_PATHS = frozenset(
     path for (_, path), rule in POLICY.items()
-    if rule in ("public", "admin_secret") and "{" not in path
+    if rule in ("public", "admin_secret", "scheduler") and "{" not in path
 )
 PUBLIC_PREFIXES = ("/app/", "/out/", "/keys/")
 

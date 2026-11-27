@@ -7,6 +7,7 @@ Google Drive on a sheet (E3.1, docs/e3-drive-connector.md §5).
     PUT    /namespaces/{ns}/connectors/drive      choose the folder; syncs it
     POST   /namespaces/{ns}/connectors/drive/sync sync now
     DELETE /namespaces/{ns}/connectors/drive      disconnect; removes what it synced
+    POST   /connectors/drive/tick                 Cloud Scheduler, every 5 min (E3.2)
     GET    /connectors/google-groups              an admin's Google Group links
     PUT    /connectors/google-groups              link a Google Group to an Atlas group
 
@@ -25,18 +26,25 @@ from urllib.parse import urlencode
 
 import httpx
 import structlog
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from atlas.api import tenancy
+from atlas.api import sessions, tenancy
 from atlas.api.authz import authorize, require_org_admin
 from atlas.api.background import spawn
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
 from atlas.api.sheets import sheet_changed
 from atlas.config import DriveConfig
 from atlas.connectors import connections
-from atlas.connectors.drive import SCOPE, DriveAuthError, DriveSource, GoogleDrive, sync_folder
+from atlas.connectors.drive import (
+    SCOPE,
+    DriveAuthError,
+    DriveSource,
+    GoogleDrive,
+    sync_folder,
+    touches,
+)
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -191,6 +199,7 @@ async def choose_folder(namespace: str, body: FolderRequest,
         # A different folder: what the old one brought in goes first.
         await _remove_synced(request, ws, record)
     record["folder_id"] = folder
+    record.pop("cursor", None)
     await connections.put(record)
     _start_sync(request, ws)
     return connections.public_view({**record, "syncing": True})
@@ -240,11 +249,16 @@ async def _remove_synced(request: Request, ws: tenancy.Workspace,
 # ── The sync itself ──────────────────────────────────────────────────────────
 
 def _start_sync(request: Request, ws: tenancy.Workspace) -> None:
-    spawn(run_sync(request, ws), name=f"drive_sync:{ws.id}")
+    spawn(run_sync(request, ws, full=True), name=f"drive_sync:{ws.id}")
 
 
-async def run_sync(request: Request, ws: tenancy.Workspace) -> dict[str, Any]:
-    """One pass for one sheet. Never raises: the outcome is on the record."""
+async def run_sync(request: Request, ws: tenancy.Workspace, *,
+                   full: bool = False) -> dict[str, Any]:
+    """One pass for one sheet. Never raises: the outcome is on the record.
+
+    Not *full* (the 5-minute pass): Drive's change feed is read first and the
+    folder is walked only if a change concerns it. A full pass is due daily
+    anyway, in case a sharing change never reached the feed."""
     # The indexer's reads and writes by document id are not scoped to a
     # reader, so the editor's tokens carried into this task do not narrow it.
     async with connections.lock_for(ws.id):
@@ -260,17 +274,19 @@ async def run_sync(request: Request, ws: tenancy.Workspace) -> dict[str, Any]:
             if token is None:
                 raise DriveAuthError("the stored Drive grant cannot be read; reconnect Drive")
             source = _source_factory(request)(token)
-            registry = get_registry(request)
-            corpus = tenancy.registry_namespace(ws)
-            report, files = await sync_folder(
-                source, registry.get(corpus).indexer, record["folder_id"],
-                dict(record.get("files") or {}),
-                await connections.group_links(ws.org_id),
-                max_files=cfg.max_files, max_file_bytes=cfg.max_file_bytes)
-            record.update(files=files, report=report.as_dict(), error="",
-                          last_sync=time.time())
-            if report.indexed or report.access_changed or report.removed:
-                await sheet_changed(registry, corpus, ws, get_app_state(request).cache)
+            now = time.time()
+            full = (full or not record.get("cursor")
+                    or now - float(record.get("last_full") or 0) >= cfg.full_every_seconds)
+            walk, cursor = True, ""
+            if not full:
+                walk, cursor = await _feed(source, record)
+            if not cursor:                      # read before the walk: nothing is missed
+                cursor = await source.start_cursor()
+            if walk:
+                await _pass(request, ws, record, source, cfg)
+                if full:
+                    record["last_full"] = now
+            record.update(cursor=cursor, last_check=now, error="")
         except DriveAuthError as exc:
             record["error"] = str(exc)
         except Exception as exc:  # noqa: BLE001 -- reported on the record, retried next pass
@@ -280,6 +296,77 @@ async def run_sync(request: Request, ws: tenancy.Workspace) -> dict[str, Any]:
             record["syncing"] = False
             await connections.put(record)
         return connections.public_view(record)
+
+
+async def _feed(source: DriveSource, record: dict[str, Any]) -> tuple[bool, str]:
+    """(walk the folder?, the cursor to keep) from Drive's change feed. A feed
+    that cannot be read walks the folder and starts a fresh cursor."""
+    try:
+        changes, cursor = await source.changes(str(record["cursor"]))
+    except DriveAuthError:
+        raise
+    except Exception as exc:  # noqa: BLE001 -- an expired cursor: walk instead
+        logger.warning("drive_feed_unreadable", error=str(exc))
+        return True, ""
+    held = (record.get("files") or {}).keys()
+    folders = record.get("folders") or [record["folder_id"]]
+    return touches(changes, held, folders), cursor
+
+
+async def _pass(request: Request, ws: tenancy.Workspace, record: dict[str, Any],
+                source: DriveSource, cfg: DriveConfig) -> None:
+    registry = get_registry(request)
+    corpus = tenancy.registry_namespace(ws)
+    report, files = await sync_folder(
+        source, registry.get(corpus).indexer, record["folder_id"],
+        dict(record.get("files") or {}), await connections.group_links(ws.org_id),
+        max_files=cfg.max_files, max_file_bytes=cfg.max_file_bytes)
+    record.update(files=files, report=report.as_dict(), last_sync=time.time(),
+                  folders=report.folders)
+    if report.indexed or report.access_changed or report.removed:
+        await sheet_changed(registry, corpus, ws, get_app_state(request).cache)
+
+
+# ── Cloud Scheduler's 5-minute call ──────────────────────────────────────────
+
+def _scheduler_verifier(request: Request, audience: str) -> sessions.GoogleVerifier:
+    found = getattr(request.app.state, "drive_tick_verifier", None)
+    if found is None or found.client_id != audience:
+        found = sessions.GoogleVerifier(audience)
+        request.app.state.drive_tick_verifier = found
+    return found
+
+
+@router.post("/connectors/drive/tick")
+async def tick(request: Request, authorization: str = Header("")) -> dict[str, Any]:
+    """Every connected sheet's 5-minute pass, run inside this request so a
+    server that bills by request keeps its processor for the whole pass."""
+    cfg: DriveConfig = get_app_state(request).drive
+    if not (cfg.scheduler_email and cfg.public_url):
+        raise _off()
+    refused = HTTPException(status_code=401, detail={
+        "code": "not_the_scheduler", "message": "Only Atlas's scheduler may call this."})
+    if not authorization.startswith("Bearer "):
+        raise refused
+    try:
+        caller = await _scheduler_verifier(request, cfg.public_url).verify(authorization[7:])
+    except (sessions.InvalidToken, sessions.SignInUnavailable) as exc:
+        logger.info("drive_tick_refused", reason=str(exc))
+        raise refused from exc
+    if caller.email.lower() != cfg.scheduler_email.lower():
+        raise refused
+    store = tenancy.get_tenancy()
+    sheets = failed = 0
+    for record in await connections.all_connections():
+        if not (record.get("folder_id") and record.get("token")):
+            continue
+        ws = await store.get_workspace(record["workspace_id"])
+        if ws is None:
+            continue
+        sheets += 1
+        failed += bool((await run_sync(request, ws)).get("error"))
+    logger.info("drive_tick", sheets=sheets, failed=failed)
+    return {"sheets": sheets, "failed": failed}
 
 
 # ── Google Groups → Atlas groups (organisation admins) ───────────────────────

@@ -97,6 +97,7 @@ def public_view(record: dict[str, Any] | None) -> dict[str, Any]:
         "folder_id": record.get("folder_id", ""),
         "connected_by": record.get("connected_by_email", ""),
         "last_sync": record.get("last_sync"),
+        "last_check": record.get("last_check"),
         "syncing": bool(record.get("syncing")),
         "files": len(record.get("files") or {}),
         "report": record.get("report") or {},

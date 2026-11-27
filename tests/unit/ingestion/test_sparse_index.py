@@ -130,8 +130,8 @@ class TestSources:
         await index.upsert([a1, b1, a2])
 
         assert index.sources() == [
-            {"source": "guide/a.md", "doc_type": "text", "chunks": 2},
-            {"source": "ref/b.md", "doc_type": "markdown", "chunks": 1},
+            {"source": "guide/a.md", "doc_type": "text", "chunks": 2, "synced": False},
+            {"source": "ref/b.md", "doc_type": "markdown", "chunks": 1, "synced": False},
         ]
 
     def test_empty_index_has_no_sources(self, index: BM25SparseIndex) -> None:
@@ -144,7 +144,8 @@ class TestSources:
         await first.upsert([_make_chunk("c1", "persisted")])
 
         reloaded = BM25SparseIndex(persist_path=path)
-        assert reloaded.sources() == [{"source": "test.md", "doc_type": "text", "chunks": 1}]
+        assert reloaded.sources() == [
+            {"source": "test.md", "doc_type": "text", "chunks": 1, "synced": False}]
 
 
 class TestPruneDocument:

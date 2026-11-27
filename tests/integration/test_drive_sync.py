@@ -1,5 +1,5 @@
 """
-E3.1 end to end without Google: a fake Drive folder synced by the real
+E3.1 and E3.2 end to end without Google: a fake Drive folder synced by the real
 indexer into a real (in-memory) Qdrant and BM25 index, then searched by both
 retrievers as different people. Proves the claim the connector exists for:
 a person Drive does not share a file with gets nothing from it.
@@ -166,5 +166,36 @@ class TestSharingReachesSearch:
             assert report.indexed == 1 and report.removed == 0 and held == {"f1": "2"}
             hits = await _found(world, ALICE, "revised wording")
             assert hits == {drive_doc_id("f1")}
+
+        asyncio.run(go())
+
+    def test_re_sharing_brings_it_back(self, world: Any) -> None:
+        drive = FakeDrive()
+        drive.add("f1", "Plan.md", "quarterly plan budget", [user("bob@gmail.com")])
+
+        async def go() -> None:
+            _, held = await sync_folder(drive, world[0], "root", {}, {})
+            drive.add("f1", "Plan.md", "quarterly plan budget", [])      # unshared: nobody
+            _, held = await sync_folder(drive, world[0], "root", held, {})
+            assert await _found(world, BOB, "quarterly plan") == set()
+            drive.add("f1", "Plan.md", "quarterly plan budget", [user("bob@gmail.com")])
+            report, held = await sync_folder(drive, world[0], "root", held, {})
+            assert report.indexed == 1 and held == {"f1": "1"}
+            assert await _found(world, BOB, "quarterly plan") == {drive_doc_id("f1")}
+
+        asyncio.run(go())
+
+    def test_a_re_run_changes_nothing_and_the_list_marks_it_synced(self, world: Any) -> None:
+        drive = FakeDrive()
+        drive.add("f1", "Plan.md", "quarterly plan budget", [DrivePermission(type="anyone")])
+
+        async def go() -> None:
+            _, held = await sync_folder(drive, world[0], "root", {}, {})
+            report, again = await sync_folder(drive, world[0], "root", held, {})
+            assert (report.indexed, report.access_changed, report.removed) == (0, 0, 0)
+            assert again == held and drive.downloads == 1
+            rows = world[0]._sparse.sources(synced=frozenset({drive_doc_id("f1")}))
+            assert rows == [{"source": "Plan.md", "doc_type": "markdown", "chunks": 1,
+                             "synced": True}]
 
         asyncio.run(go())

@@ -118,6 +118,16 @@ Connection (sheet, Drive folder id, connected by, encrypted refresh token,
   minutes (free tier covers it). Side effect: the server is woken every 5
   minutes, which should also remove most of the ~15 s first-question wait
   found on 2026-11-14; to be measured, not assumed.
+  *As built (T32):* one job, `POST /connectors/drive/tick`, with a Google
+  OIDC token whose audience is `DRIVE_PUBLIC_URL` and whose email is
+  `DRIVE_SCHEDULER_EMAIL`; anything else gets 401. Each sheet's pass reads
+  the feed and walks the folder only when a change names a held file or
+  lands under one of the folder's folders; a full walk runs when the last
+  one is older than `DRIVE_FULL_EVERY_SECONDS` (a day), so the daily check
+  needs no second job. The work runs inside the request, because Cloud Run
+  gives a request-billed server its processor only while a request is open.
+  The cursor is read before the walk, so a change made during it is seen
+  next time; an unreadable cursor walks and starts afresh.
 - **Console:** on a sheet, a "Google Drive" panel: connect, pick a folder,
   last sync, files synced / skipped / not readable, disconnect (which
   removes the synced documents).

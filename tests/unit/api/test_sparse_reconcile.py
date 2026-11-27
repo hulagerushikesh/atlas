@@ -137,7 +137,7 @@ class TestTheVectorStoreIsTheTruth:
         )
         await registry.reconcile_sparse("ns")
         assert sparse.sources() == [
-            {"source": "guide/intro.md", "doc_type": "markdown", "chunks": 1}
+            {"source": "guide/intro.md", "doc_type": "markdown", "chunks": 1, "synced": False}
         ]
 
     async def test_every_page_of_a_multi_page_scroll_is_read(self, tmp_path: Path) -> None:

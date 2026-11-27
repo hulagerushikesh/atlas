@@ -15,6 +15,8 @@ from atlas.api.schemas import (
     SourceListResponse,
 )
 from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
+from atlas.connectors import connections
+from atlas.connectors.drive import drive_doc_id
 
 router = APIRouter()
 
@@ -41,6 +43,15 @@ async def list_namespaces(request: Request) -> NamespaceListResponse:
         raise access_unavailable() from exc
     namespaces = [NamespaceInfo(name=w.name, collection=w.collection) for w in found]
     return NamespaceListResponse(namespaces=namespaces, total=len(namespaces))
+
+
+async def _synced(ws: tenancy.Workspace) -> frozenset[str]:
+    """Document ids the sheet's Drive folder keeps in step (E3)."""
+    try:
+        record = await connections.get(ws.id)
+    except Exception:  # noqa: BLE001 -- the list still answers; rows just lack the mark
+        return frozenset()
+    return frozenset(drive_doc_id(f) for f in (record or {}).get("files") or {})
 
 
 @router.get("/namespaces/{namespace}/sources", response_model=SourceListResponse)
@@ -84,7 +95,7 @@ async def list_sources(namespace: str, request: Request) -> SourceListResponse:
     # how much it cannot see: its counts are its own, and a mismatch is
     # reported without numbers.
     every = sparse.sources() if sparse else []
-    rows = sparse.sources(reader_access()) if sparse else []
+    rows = sparse.sources(reader_access(), await _synced(ws)) if sparse else []
     sources = [SourceInfo(**row) for row in rows]
     total_chunks = sum(s.chunks for s in sources)
     whole_sheet = sum(int(r["chunks"]) for r in every)

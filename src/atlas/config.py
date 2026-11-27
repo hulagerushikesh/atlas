@@ -306,6 +306,11 @@ class DriveConfig(BaseSettings):
     # Bounds on one sync, so a huge folder cannot run up an embedding bill.
     max_files: int = 500
     max_file_bytes: int = 10 * 1024 * 1024
+    # E3.2: the service account Cloud Scheduler signs its 5-minute call as.
+    # Empty = no scheduled syncs; "Sync now" still works.
+    scheduler_email: str = ""
+    # How often a scheduled pass ignores the change feed and checks everything.
+    full_every_seconds: int = 24 * 3600
 
 
 class APIConfig(BaseSettings):
