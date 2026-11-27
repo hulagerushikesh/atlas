@@ -1,0 +1,224 @@
+"""
+E3.1 routes: connecting Drive to a sheet, choosing a folder, syncing,
+disconnecting, and linking Google Groups. Google itself is replaced by a
+fake code exchange and a fake Drive.
+"""
+
+# ruff: noqa: F811 -- the sign-in suite's fixtures are imported, then used as arguments
+
+from __future__ import annotations
+
+import asyncio
+from typing import Any
+from unittest.mock import AsyncMock
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
+from pydantic import SecretStr
+
+from atlas.api import tenancy
+from atlas.api.routes import connectors as routes
+from atlas.config import DriveConfig
+from atlas.connectors import connections
+from atlas.connectors.drive import GOOGLE_DOC, DriveFile, DrivePermission, drive_doc_id
+from tests.unit.api.test_sign_in import (  # noqa: F401 -- pytest fixtures
+    CONSOLE,
+    Site,
+    google_key,
+    site,
+)
+
+KEY = Fernet.generate_key().decode()
+
+
+class FakeDrive:
+    def __init__(self, token: str) -> None:
+        self.token = token
+
+    async def walk(self, folder_id: str) -> list[DriveFile]:
+        return [DriveFile(id="f1", name="Leave", mime_type=GOOGLE_DOC, path="Leave",
+                          version="1")]
+
+    async def permissions(self, file_id: str) -> list[DrivePermission]:
+        return [DrivePermission(type="user", email="admin@acme.com")]
+
+    async def download(self, file: DriveFile) -> bytes:
+        return b"# Leave\n\nTwenty days a year."
+
+
+@pytest.fixture
+def drive_site(site: Site, monkeypatch: pytest.MonkeyPatch) -> Site:
+    state = site.app.state.atlas
+    state.drive = DriveConfig(client_secret=SecretStr("cs"), token_key=SecretStr(KEY),
+                              public_url="https://atlas.test")
+    tokens: list[str] = []
+
+    def source(token: str) -> FakeDrive:
+        tokens.append(token)
+        return FakeDrive(token)
+
+    site.app.state.drive_source = source
+    site.app.state.drive_tokens = tokens
+    indexer = state.registry.get.return_value.indexer
+    indexer.index_documents = AsyncMock()
+    indexer.document_acl = AsyncMock(return_value=None)
+
+    async def exchange(code: str, *_: Any) -> str | None:
+        return "refresh-from-google" if code == "good" else None
+
+    monkeypatch.setattr(routes, "exchange_code", exchange)
+    # The sync runs in the background on a live server; here it is run to the
+    # end right after the request that started it, so a test reads its outcome.
+    pending: list[Any] = []
+    monkeypatch.setattr(routes, "spawn", lambda coro, name: pending.append(coro))
+    site.app.state.drive_pending = pending
+    return site
+
+
+def _settle(site: Site) -> None:
+    pending = site.app.state.drive_pending
+    while pending:
+        asyncio.run(pending.pop(0))
+
+
+def _connect(c: TestClient, sheet: str = "docs") -> str:
+    r = c.get("/connectors/drive/connect", params={"namespace": sheet}, follow_redirects=False)
+    assert r.status_code == 303, r.text
+    q = parse_qs(urlparse(r.headers["location"]).query)
+    assert q["scope"] == ["https://www.googleapis.com/auth/drive.readonly"]
+    assert q["access_type"] == ["offline"]
+    assert q["redirect_uri"] == ["https://atlas.test/connectors/drive/callback"]
+    return q["state"][0]
+
+
+def _back(c: TestClient, state: str, code: str = "good") -> Any:
+    return c.get("/connectors/drive/callback", params={"state": state, "code": code},
+                 follow_redirects=False)
+
+
+class TestConnecting:
+    def test_an_editor_connects_and_the_token_is_stored_sealed(self, drive_site: Site) -> None:
+        admin = drive_site.sign_in("admin@acme.com")
+        r = _back(admin, _connect(admin))
+        assert r.status_code == 303 and r.headers["location"].endswith("drive=connected")
+        ws = drive_site.ws["a/docs"]
+        record = asyncio.run(connections.get(ws))
+        assert record is not None and "refresh-from-google" not in str(record)
+        assert connections.unseal(record["token"], KEY) == "refresh-from-google"
+        status = admin.get("/namespaces/docs/connectors/drive").json()
+        assert status["connected"] is True and "token" not in status
+        assert status["connected_by"] == "admin@acme.com"
+
+    def test_someone_elses_consent_link_does_not_work(self, drive_site: Site) -> None:
+        admin = drive_site.sign_in("admin@acme.com")
+        state = _connect(admin)
+        reader = drive_site.sign_in("reader@gmail.com")
+        assert _back(reader, state).status_code == 400
+
+    def test_a_reader_cannot_connect(self, drive_site: Site) -> None:
+        reader = drive_site.sign_in("reader@gmail.com")
+        r = reader.get("/connectors/drive/connect", params={"namespace": "docs"},
+                       follow_redirects=False)
+        assert r.status_code == 403
+
+    def test_a_key_cannot_connect_its_own_drive(self, drive_site: Site) -> None:
+        r = TestClient(drive_site.app).get("/connectors/drive/connect",
+                                           params={"namespace": "docs"},
+                                           headers={"Authorization": "Bearer nope"})
+        assert r.status_code in (401, 403)
+
+    def test_a_declined_consent_stores_nothing(self, drive_site: Site) -> None:
+        admin = drive_site.sign_in("admin@acme.com")
+        r = admin.get("/connectors/drive/callback",
+                      params={"state": _connect(admin), "error": "access_denied"},
+                      follow_redirects=False)
+        assert r.headers["location"].endswith("drive=declined")
+        assert asyncio.run(connections.get(drive_site.ws["a/docs"])) is None
+
+    def test_off_until_configured(self, site: Site) -> None:
+        admin = site.sign_in("admin@acme.com")
+        r = admin.get("/connectors/drive/connect", params={"namespace": "docs"},
+                      follow_redirects=False)
+        assert r.status_code == 503 and r.json()["detail"]["code"] == "drive_off"
+
+
+class TestFolderAndSync:
+    def connected(self, site: Site) -> TestClient:
+        admin = site.sign_in("admin@acme.com")
+        _back(admin, _connect(admin))
+        return admin
+
+    def test_choosing_a_folder_syncs_it_as_the_person_who_connected(
+        self, drive_site: Site
+    ) -> None:
+        admin = self.connected(drive_site)
+        r = admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
+                      json={"folder": "https://drive.google.com/drive/folders/1AbCdEfGhIjKl?x=1"})
+        assert r.status_code == 202, r.text
+        _settle(drive_site)
+        status = admin.get("/namespaces/docs/connectors/drive").json()
+        assert status["folder_id"] == "1AbCdEfGhIjKl"
+        assert status["files"] == 1 and status["report"]["indexed"] == 1, status
+        assert drive_site.app.state.drive_tokens == ["refresh-from-google"]
+        indexer = drive_site.app.state.atlas.registry.get.return_value.indexer
+        doc = indexer.index_documents.await_args.args[0][0]
+        assert doc.id == drive_doc_id("f1") and doc.acl == ["email:admin@acme.com"]
+
+    def test_a_link_that_is_not_a_folder_is_refused(self, drive_site: Site) -> None:
+        admin = self.connected(drive_site)
+        r = admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
+                      json={"folder": "not a link"})
+        assert r.status_code == 422
+
+    def test_a_folder_needs_a_connection_first(self, drive_site: Site) -> None:
+        admin = drive_site.sign_in("admin@acme.com")
+        r = admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
+                      json={"folder": "1AbCdEfGhIjKl"})
+        assert r.status_code == 409
+
+    def test_disconnecting_removes_what_it_brought_in(self, drive_site: Site) -> None:
+        admin = self.connected(drive_site)
+        admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
+                  json={"folder": "1AbCdEfGhIjKl"})
+        _settle(drive_site)
+        r = admin.delete("/namespaces/docs/connectors/drive", headers=CONSOLE)
+        assert r.json() == {"connected": False, "removed": 1}
+        indexer = drive_site.app.state.atlas.registry.get.return_value.indexer
+        indexer.delete_document.assert_awaited_with(drive_doc_id("f1"))
+        assert asyncio.run(connections.get(drive_site.ws["a/docs"])) is None
+
+    def test_a_lost_key_is_reported_not_raised(self, drive_site: Site) -> None:
+        admin = self.connected(drive_site)
+        drive_site.app.state.atlas.drive = DriveConfig(
+            client_secret=SecretStr("cs"), token_key=SecretStr(Fernet.generate_key().decode()),
+            public_url="https://atlas.test")
+        admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
+                  json={"folder": "1AbCdEfGhIjKl"})
+        _settle(drive_site)
+        status = admin.get("/namespaces/docs/connectors/drive").json()
+        assert "reconnect" in status["error"].lower() and status["files"] == 0
+
+
+class TestGoogleGroups:
+    def test_an_admin_links_a_google_group_to_an_atlas_group(self, drive_site: Site) -> None:
+        admin = drive_site.sign_in("admin@acme.com")
+        gid = admin.post("/org/groups", headers=CONSOLE, json={"name": "HR"}).json()["id"]
+        r = admin.put("/connectors/google-groups", headers=CONSOLE,
+                      json={"google_group": "HR-Team@acme.com", "group": "HR"})
+        assert r.status_code == 200
+        assert asyncio.run(connections.group_links("org_a")) == {"hr-team@acme.com": gid}
+        listed = admin.get("/connectors/google-groups").json()["links"]
+        assert listed == [{"google_group": "hr-team@acme.com", "group": "HR"}]
+
+    def test_a_reader_cannot(self, drive_site: Site) -> None:
+        reader = drive_site.sign_in("reader@gmail.com")
+        r = reader.put("/connectors/google-groups", headers=CONSOLE,
+                       json={"google_group": "x@acme.com", "group": "HR"})
+        assert r.status_code == 403
+
+    def test_links_stay_inside_their_organisation(self, drive_site: Site) -> None:
+        asyncio.run(connections.link_group("org_b", "hr@bolt.io", "grp_b"))
+        assert asyncio.run(connections.group_links("org_a")) == {}
+        assert asyncio.run(tenancy.get_tenancy().list_records("google_group", "org_b"))

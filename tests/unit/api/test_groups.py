@@ -140,7 +140,8 @@ class TestEverySearchIsScopedToTheCaller:
                   json={"roles": {"docs": "reader"}, "groups": ["HR"]})
         r = reader.post("/query", headers=CONSOLE, json={"query": "q", "namespace": "docs"})
         assert r.status_code == 200, r.text
-        assert seen == [frozenset({"all", f"user:{uid}", f"group:{gid}"})]
+        assert seen == [frozenset({"all", f"user:{uid}", f"group:{gid}",
+                                    "email:reader@gmail.com"})]
 
     def test_a_streamed_question_is_scoped_too(
         self, site: Site, seen: list[frozenset[str] | None]
@@ -150,7 +151,7 @@ class TestEverySearchIsScopedToTheCaller:
         r = reader.post("/query", headers=CONSOLE,
                         json={"query": "q", "namespace": "docs", "stream": True})
         assert r.status_code == 200
-        assert seen and set(seen) == {frozenset({"all", f"user:{uid}"})}
+        assert seen and set(seen) == {frozenset({"all", f"user:{uid}", "email:reader@gmail.com"})}
 
     def test_the_admin_has_no_bypass(
         self, site: Site, seen: list[frozenset[str] | None]
@@ -159,7 +160,7 @@ class TestEverySearchIsScopedToTheCaller:
         _make_group(admin, "HR")       # managing a group is not being in it
         uid = _uid(admin)
         admin.post("/query", headers=CONSOLE, json={"query": "q", "namespace": "docs"})
-        assert seen == [frozenset({"all", f"user:{uid}"})]
+        assert seen == [frozenset({"all", f"user:{uid}", "email:admin@acme.com"})]
 
     def test_a_service_account_searches_as_itself(
         self, site: Site, seen: list[frozenset[str] | None]

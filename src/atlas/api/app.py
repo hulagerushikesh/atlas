@@ -47,6 +47,7 @@ from atlas.api.namespaces import NamespaceRegistry, SharedComponents
 from atlas.api.reuse import EvidenceReuse
 from atlas.api.routes import (
     auth,
+    connectors,
     documents,
     health,
     ingest,
@@ -146,6 +147,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_model=shared.settings.openai.embedding_model,
         chat_model=shared.settings.openai.primary_model,
         ingest=settings.ingest,
+        drive=settings.drive,
         reuse=EvidenceReuse(shared.embedder, shared.llm, settings.reuse)
         if settings.reuse.enabled else None,
         spend=spend,
@@ -272,6 +274,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(org.router, tags=["organisation"])
     app.include_router(ingest.router, tags=["ingestion"])
     app.include_router(documents.router, tags=["ingestion"])
+    app.include_router(connectors.router, tags=["connectors"])
     app.include_router(query.router, tags=["query"])
 
     # Static console — served at /app (must come after API routes)

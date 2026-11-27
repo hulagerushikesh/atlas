@@ -31,7 +31,7 @@ from atlas.api.cache import QueryCache
 from atlas.api.namespaces import NamespaceRegistry
 from atlas.api.reuse import EvidenceReuse
 from atlas.api.tenancy import ANONYMOUS, Principal
-from atlas.config import IngestConfig
+from atlas.config import DriveConfig, IngestConfig
 from atlas.ingestion.indexer import DocumentIndexer
 from atlas.orchestration.pipeline import RAGPipeline
 
@@ -53,6 +53,8 @@ class AppState:
     ingest: IngestConfig = field(default_factory=IngestConfig)
     # Evidence-based reuse (E2.5); None while REUSE_ENABLED is off.
     reuse: EvidenceReuse | None = None
+    # Google Drive connector settings (E3); off unless fully set.
+    drive: DriveConfig = field(default_factory=DriveConfig)
 
 
 def get_app_state(request: Request) -> AppState:

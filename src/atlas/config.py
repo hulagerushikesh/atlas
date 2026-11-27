@@ -285,6 +285,29 @@ class ReuseConfig(BaseSettings):
     max_entries: int = 256
 
 
+class DriveConfig(BaseSettings):
+    """Google Drive connector (E3, docs/e3-drive-connector.md). Off unless the
+    client secret, the token key and the public URL are all set."""
+
+    model_config = SettingsConfigDict(env_prefix="DRIVE_", env_file=_ENV_FILE, extra="ignore")
+
+    # The sign-in client's secret: the server exchanges the consent code for a
+    # refresh token, which the browser-only sign-in never needed.
+    client_secret: SecretStr | None = None
+    # The Drive OAuth client, kept apart from the sign-in client so publishing
+    # sign-in never puts a restricted scope up for review (§3). Empty = the
+    # sign-in client.
+    client_id: str = ""
+    # Fernet key encrypting stored refresh tokens. A leaked database without
+    # it reads no one's Drive.
+    token_key: SecretStr | None = None
+    # Where Google sends the person back, e.g. https://atlas.hulage.in
+    public_url: str = ""
+    # Bounds on one sync, so a huge folder cannot run up an embedding bill.
+    max_files: int = 500
+    max_file_bytes: int = 10 * 1024 * 1024
+
+
 class APIConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="API_", env_file=_ENV_FILE, extra="ignore")
 
@@ -348,6 +371,7 @@ class Settings(BaseSettings):
     hyde: HyDEConfig = Field(default_factory=HyDEConfig)
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
     reuse: ReuseConfig = Field(default_factory=ReuseConfig)
+    drive: DriveConfig = Field(default_factory=DriveConfig)
     api: APIConfig = Field(default_factory=APIConfig)
     ingest: IngestConfig = Field(default_factory=IngestConfig)
 

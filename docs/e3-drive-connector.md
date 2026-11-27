@@ -55,6 +55,15 @@ without a public review ([audience][g-audience]). So the assessment is only
 needed to sell to companies that will not do that. Decision for later (D11),
 not for E3.
 
+**Keep Drive in its own Google app (found while building E3.1).** The
+sign-in app is about to be published (O7) so that anyone invited can sign
+in; it asks only for name and email, which needs no review. If the Drive
+scope were added to that same app, publishing it would put a restricted
+scope in front of Google's review. So Drive gets its own OAuth client in a
+separate Google Cloud project that stays in Testing, and the sign-in app
+stays reviewable as it is. The code reads the Drive client's id from
+`DRIVE_CLIENT_ID` when set, else the sign-in client's.
+
 ## 4. Drive sharing → Atlas tokens
 
 | Drive permission on a file | Token on its passages | Who holds it |

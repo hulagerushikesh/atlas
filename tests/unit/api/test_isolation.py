@@ -143,6 +143,32 @@ def _remove_document(w: World, who: str, name: str) -> httpx.Response:
                            headers=w.h(who))
 
 
+def _drive_status(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.get(f"/namespaces/{name}/connectors/drive", headers=w.h(who))
+
+
+def _drive_folder(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.put(f"/namespaces/{name}/connectors/drive", headers=w.h(who),
+                        json={"folder": "https://drive.google.com/drive/folders/abcdefghijkl"})
+
+
+def _drive_sync(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.post(f"/namespaces/{name}/connectors/drive/sync", headers=w.h(who))
+
+
+def _drive_disconnect(w: World, who: str, name: str) -> httpx.Response:
+    return w.client.delete(f"/namespaces/{name}/connectors/drive", headers=w.h(who))
+
+
+# E3.1's routes act on a sheet's connection record, not on its corpus, so
+# "which workspace did it open" is read from the records instead.
+DRIVE_ROUTES: dict[tuple[str, str], Call] = {
+    ("GET", "/namespaces/{namespace}/connectors/drive"): _drive_status,
+    ("PUT", "/namespaces/{namespace}/connectors/drive"): _drive_folder,
+    ("POST", "/namespaces/{namespace}/connectors/drive/sync"): _drive_sync,
+    ("DELETE", "/namespaces/{namespace}/connectors/drive"): _drive_disconnect,
+}
+
 ROUTES: dict[tuple[str, str], Call] = {
     ("POST", "/query"): _query,
     ("GET", "/namespaces/{namespace}/sources"): _sources,
@@ -151,6 +177,7 @@ ROUTES: dict[tuple[str, str], Call] = {
     ("GET", "/namespaces/{namespace}/documents/access"): _read_document_access,
     ("PUT", "/namespaces/{namespace}/documents/access"): _document_access,
     ("DELETE", "/namespaces/{namespace}/documents"): _remove_document,
+    **DRIVE_ROUTES,
 }
 WRITES = {k for k, rule in POLICY.items() if rule == "write"}
 
@@ -195,7 +222,8 @@ def test_out_of_reach_reads_exactly_like_nonexistent(
         missing["detail"]["message"].replace("no-such-sheet", "X"))
 
 
-@pytest.mark.parametrize("route", list(ROUTES), ids=lambda r: f"{r[0]} {r[1]}")
+@pytest.mark.parametrize("route", [r for r in ROUTES if r not in DRIVE_ROUTES],
+                         ids=lambda r: f"{r[0]} {r[1]}")
 @pytest.mark.parametrize(("who", "corpus"), [("a", "org_a__docs"), ("b", "org_b__docs")])
 def test_the_same_name_opens_each_callers_own_workspace(
     world: World, route: tuple[str, str], who: str, corpus: str
@@ -203,6 +231,31 @@ def test_the_same_name_opens_each_callers_own_workspace(
     r = ROUTES[route](world, who, "docs")
     assert r.status_code == 200, r.text
     assert set(world.corpora()) == {corpus}
+
+
+@pytest.mark.parametrize("route", list(DRIVE_ROUTES), ids=lambda r: f"{r[0]} {r[1]}")
+@pytest.mark.parametrize("who", ["a", "b"])
+def test_drive_routes_act_on_each_callers_own_connection(
+    world: World, route: tuple[str, str], who: str
+) -> None:
+    store = tenancy.get_tenancy()
+    for org in ("a", "b"):
+        ws = world.ws[f"{org}/docs"]
+        asyncio.run(store.put_record("drive", ws, f"org_{org}", {
+            "workspace_id": ws, "org_id": f"org_{org}", "token": "sealed",
+            "folder_id": f"folder_{org}", "files": {}}))
+    r = DRIVE_ROUTES[route](world, who, "docs")
+    assert r.status_code in (200, 202), r.text
+    other = "b" if who == "a" else "a"
+    mine = asyncio.run(store.get_record("drive", world.ws[f"{who}/docs"]))
+    theirs = asyncio.run(store.get_record("drive", world.ws[f"{other}/docs"]))
+    assert theirs is not None and theirs["folder_id"] == f"folder_{other}"
+    if route[0] == "GET":
+        assert r.json()["folder_id"] == f"folder_{who}"
+    elif route[0] == "PUT":
+        assert mine is not None and mine["folder_id"] == "abcdefghijkl"
+    elif route[0] == "DELETE":
+        assert mine is None
 
 
 @pytest.mark.parametrize("route", sorted(WRITES), ids=lambda r: f"{r[0]} {r[1]}")

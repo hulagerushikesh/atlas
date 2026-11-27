@@ -250,7 +250,8 @@ class DocumentIndexer:
             # E2: a document already in the sheet keeps its access list. New
             # passages default to everyone on the sheet (D9), so without this
             # re-uploading an edited, narrowed document would reopen it.
-            kept = await self._dense.document_acl(document.id)
+            kept = (document.acl if document.acl is not None
+                    else await self._dense.document_acl(document.id))
             if kept is not None:
                 for c in chunks:
                     c.metadata.acl = list(kept)

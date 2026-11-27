@@ -65,7 +65,15 @@ def client() -> TestClient:
     from fastapi import FastAPI
 
     from atlas.api.middleware.tracing import TracingMiddleware
-    from atlas.api.routes import documents, health, ingest, metrics_route, namespaces, query
+    from atlas.api.routes import (
+        connectors,
+        documents,
+        health,
+        ingest,
+        metrics_route,
+        namespaces,
+        query,
+    )
 
     app = FastAPI()
     app.add_middleware(TracingMiddleware)
@@ -75,6 +83,7 @@ def client() -> TestClient:
     app.include_router(metrics_route.router)
     app.include_router(namespaces.router)
     app.include_router(documents.router)
+    app.include_router(connectors.router)
 
     # Mock pipeline
     mock_pipeline = MagicMock()

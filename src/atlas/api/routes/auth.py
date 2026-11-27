@@ -94,7 +94,8 @@ async def sign_in_with_google(body: GoogleSignInRequest, request: Request,
     if subject is None:
         raise access_unavailable()
 
-    _set_cookie(response, sessions.sign_session(user.id, s.secret))
+    _set_cookie(response, sessions.sign_session(
+        user.id, s.secret, email=identity.email, hosted_domain=identity.hosted_domain))
     logger.info("signed_in", org_id=user.org_id)
     return await _describe(tenancy.principal_from_subject(subject), user)
 
