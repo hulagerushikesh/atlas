@@ -16,7 +16,7 @@ import { DrivePanel } from "@/components/DrivePanel"
 const EASE = [0.23, 1, 0.32, 1] as const
 
 export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { sheet, sheets, sources, sourcesLoading, indexWarning, readOnlyBecause, setSheet, addSheet, loadSources, me, authConfig, set } = useAtlas()
+  const { sheet, sheets, sources, sourcesLoading, indexWarning, readOnlyBecause, sheetCovers, setSheet, addSheet, loadSources, me, authConfig, set } = useAtlas()
   // Who may change a source's readers or remove it. The server decides on
   // every call; this only hides a control that would be refused. With
   // sign-in off (a laptop) there is nobody to tell apart.
@@ -232,12 +232,17 @@ export function CorpusPane({ collapsed, onToggle }: { collapsed: boolean; onTogg
               {readOnlyBecause && (
                 <div className="mb-3 flex gap-2 rounded-sm border border-border bg-well px-2.5 py-2 text-[11px] leading-relaxed text-ink-2">
                   <Lock className="mt-px size-3 shrink-0 text-ink-3" />
-                  <span>
-                    Read-only. The router is told this sheet holds{" "}
-                    <span className="text-ink-1">{readOnlyBecause}</span>, and judges every
-                    question against that before searching — so anything else indexed here
-                    would answer nothing. Make a new sheet with <Plus className="inline size-3 -translate-y-px" /> and add documents there.
-                  </span>
+                  {sheetCovers ? (
+                    <span>
+                      Read-only. The router is told this sheet holds{" "}
+                      <span className="text-ink-1">{readOnlyBecause}</span>, and judges every
+                      question against that before searching — so anything else indexed here
+                      would answer nothing. Make a new sheet with <Plus className="inline size-3 -translate-y-px" /> and add documents there.
+                    </span>
+                  ) : (
+                    // Not a described corpus: this person may read the sheet, not add to it.
+                    <span>You can ask this sheet. Adding sources needs an editor's role on it.</span>
+                  )}
                 </div>
               )}
 

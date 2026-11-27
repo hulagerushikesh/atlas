@@ -40,9 +40,17 @@ class TestQueryRouter:
 
     @pytest.mark.asyncio
     async def test_classifies_out_of_scope(self) -> None:
-        router = QueryRouter(_mock_llm("out_of_scope"))
+        described = RouterConfig(domain="the Acme leave policy")
+        router = QueryRouter(_mock_llm("out_of_scope"), described)
         result = await router.classify("Write me a sorting algorithm in Python.")
         assert result == "out_of_scope"
+
+    @pytest.mark.asyncio
+    async def test_a_sheet_nobody_described_is_never_refused_at_the_router(self) -> None:
+        # T33: a Drive sheet about Sardar Patel refused "Who was the Iron Man of
+        # India?" as general knowledge. Without a description, retrieval decides.
+        router = QueryRouter(_mock_llm("out_of_scope"), RouterConfig(domain=GENERIC_DOMAIN))
+        assert await router.classify("Who was the Iron Man of India?") == "simple"
 
     @pytest.mark.asyncio
     async def test_llm_called_once(self) -> None:
