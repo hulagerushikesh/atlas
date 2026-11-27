@@ -71,6 +71,9 @@ PUBLIC_ORG_NAME = "Public"
 
 # The access-list token every reader of a workspace holds (docs/e2-permissions.md §2).
 ACCESS_ALL = "all"
+# E3: Drive shares with addresses and Workspace domains (docs/e3-drive-connector.md §4).
+ACCESS_EMAIL = "email:"
+ACCESS_DOMAIN = "domain:"
 
 
 @dataclass(frozen=True)
@@ -151,6 +154,10 @@ class Principal:
     # and nothing else.
     legacy: bool = False
     groups: tuple[str, ...] = ()
+    # From the verified Google sign-in (E3): a document synced from Drive is
+    # shared with addresses and domains, not with Atlas ids. Empty for keys.
+    email: str = ""
+    hosted_domain: str = ""
 
     @property
     def access(self) -> frozenset[str]:
@@ -165,6 +172,11 @@ class Principal:
         if self.kind in ("user", "service") and self.subject_id and not self.legacy:
             tokens.add(f"user:{self.subject_id}")
             tokens.update(f"group:{g}" for g in self.groups)
+        if self.kind == "user" and not self.legacy:
+            if self.email:
+                tokens.add(f"{ACCESS_EMAIL}{self.email.lower()}")
+            if self.hosted_domain:
+                tokens.add(f"{ACCESS_DOMAIN}{self.hosted_domain.lower()}")
         return frozenset(tokens)
 
     @property
@@ -306,6 +318,14 @@ class TenancyStore(Protocol):
     # access change, so every server notices (docs/e2-permissions.md §4).
     async def get_generation(self, workspace_id: str) -> str: ...
     async def bump_generation(self, workspace_id: str) -> str: ...
+    # E3: small JSON records by kind and key (connector connections, Google
+    # Group links), so a connector needs no schema of its own in either store.
+    async def put_record(self, kind: str, key: str, org_id: str,
+                         data: dict[str, Any]) -> None: ...
+    async def get_record(self, kind: str, key: str) -> dict[str, Any] | None: ...
+    async def list_records(self, kind: str, org_id: str | None = None
+                           ) -> list[dict[str, Any]]: ...
+    async def delete_record(self, kind: str, key: str) -> None: ...
 
 
 def normalise_email(email: str) -> str:
@@ -373,6 +393,10 @@ CREATE TABLE IF NOT EXISTS groups (
 );
 CREATE TABLE IF NOT EXISTS generations (
     workspace_id TEXT PRIMARY KEY, generation TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS records (
+    kind TEXT NOT NULL, key TEXT NOT NULL, org_id TEXT NOT NULL, data TEXT NOT NULL,
+    PRIMARY KEY (kind, key)
 );
 CREATE TABLE IF NOT EXISTS subject_groups (
     kind TEXT NOT NULL, subject_id TEXT NOT NULL, group_id TEXT NOT NULL,
@@ -606,6 +630,31 @@ class SQLiteTenancyStore:
             "DO UPDATE SET generation = excluded.generation", (workspace_id, gen)))
         return gen
 
+    async def put_record(self, kind: str, key: str, org_id: str,
+                         data: dict[str, Any]) -> None:
+        await self._run((
+            "INSERT INTO records VALUES (?, ?, ?, ?) ON CONFLICT (kind, key) "
+            "DO UPDATE SET org_id = excluded.org_id, data = excluded.data",
+            (kind, key, org_id, json.dumps(data))))
+
+    async def get_record(self, kind: str, key: str) -> dict[str, Any] | None:
+        r = await self._one("SELECT data FROM records WHERE kind = ? AND key = ?", (kind, key))
+        return None if r is None else dict(json.loads(r["data"]))
+
+    async def list_records(self, kind: str, org_id: str | None = None
+                           ) -> list[dict[str, Any]]:
+        if org_id is None:
+            rows = await self._all("SELECT data FROM records WHERE kind = ? ORDER BY key",
+                                   (kind,))
+        else:
+            rows = await self._all(
+                "SELECT data FROM records WHERE kind = ? AND org_id = ? ORDER BY key",
+                (kind, org_id))
+        return [dict(json.loads(r["data"])) for r in rows]
+
+    async def delete_record(self, kind: str, key: str) -> None:
+        await self._run(("DELETE FROM records WHERE kind = ? AND key = ?", (kind, key)))
+
     async def delete_group(self, group_id: str) -> None:
         # Membership first: a member left holding a deleted group's id would
         # keep reading documents shared with it if the id were ever reused.
@@ -828,6 +877,33 @@ class FirestoreTenancyStore:
         await self._col("generations").document(workspace_id).set({"generation": gen})
         return gen
 
+    def _record(self, kind: str, key: str) -> Any:
+        # Keys may hold "/" (an email never does, a path might): Firestore
+        # document ids cannot.
+        return self._col(f"records_{kind}").document(key.replace("/", "%2F"))
+
+    async def put_record(self, kind: str, key: str, org_id: str,
+                         data: dict[str, Any]) -> None:
+        await self._record(kind, key).set({"org_id": org_id, "key": key,
+                                           "data": json.dumps(data)})
+
+    async def get_record(self, kind: str, key: str) -> dict[str, Any] | None:
+        snap = await self._record(kind, key).get()
+        if not snap.exists:
+            return None
+        return dict(json.loads((snap.to_dict() or {}).get("data", "{}")))
+
+    async def list_records(self, kind: str, org_id: str | None = None
+                           ) -> list[dict[str, Any]]:
+        col = self._col(f"records_{kind}")
+        snaps = await (col.where(filter=self._eq("org_id", org_id)).get()
+                       if org_id is not None else col.get())
+        docs = sorted((s.to_dict() or {} for s in snaps), key=lambda d: str(d.get("key", "")))
+        return [dict(json.loads(d.get("data", "{}"))) for d in docs]
+
+    async def delete_record(self, kind: str, key: str) -> None:
+        await self._record(kind, key).delete()
+
     async def delete_group(self, group_id: str) -> None:
         group = await self.get_group(group_id)
         if group is not None:
@@ -881,7 +957,8 @@ async def principal_for_key(key_id: object) -> Principal:
     return legacy_key_principal(key_id) if subject is None else principal_from_subject(subject)
 
 
-async def principal_for_user(user_id: str) -> Principal | None:
+async def principal_for_user(user_id: str, *, email: str = "",
+                             hosted_domain: str = "") -> Principal | None:
     """The principal behind a session; None once the member has been removed.
 
     Read on every request, not carried in the cookie, so removing a member or
@@ -892,7 +969,10 @@ async def principal_for_user(user_id: str) -> Principal | None:
     except Exception as exc:
         logger.warning("principal_lookup_failed", error=str(exc))
         raise TenancyUnavailable(str(exc)) from exc
-    return None if subject is None else principal_from_subject(subject)
+    if subject is None:
+        return None
+    return replace(principal_from_subject(subject), email=email,
+                   hosted_domain=hosted_domain)
 
 
 class NotInvited(PermissionError):

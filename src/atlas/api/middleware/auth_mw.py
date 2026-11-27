@@ -104,10 +104,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # A signed-in person. Checked before the Bearer header: a browser that
         # also holds an old key in its settings acts as the person signed in.
-        user_id = sessions.read_session(request.cookies.get(sessions.COOKIE, ""),
-                                        self._session_secret)
-        if user_id:
-            return await self._admit_user(request, call_next, user_id, redis_client)
+        session = sessions.read_session_identity(request.cookies.get(sessions.COOKIE, ""),
+                                                 self._session_secret)
+        if session:
+            return await self._admit_user(request, call_next, session, redis_client)
 
         auth_header = request.headers.get("Authorization", "")
         if not auth_header and _demo_open(request):
@@ -145,8 +145,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     async def _admit_user(
-        self, request: Request, call_next: RequestResponseEndpoint, user_id: str,
-        redis_client: Any,
+        self, request: Request, call_next: RequestResponseEndpoint,
+        session: sessions.Session, redis_client: Any,
     ) -> Response:
         # The cookie rides along on any request to this site, including one a
         # form on another site makes; a write must also carry the header only
@@ -159,7 +159,8 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
                 status_code=403,
             )
         try:
-            principal = await tenancy.principal_for_user(user_id)
+            principal = await tenancy.principal_for_user(
+                session.user_id, email=session.email, hosted_domain=session.hosted_domain)
         except tenancy.TenancyUnavailable:
             return _unavailable()
         if principal is None:
@@ -172,12 +173,12 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             )
             response.delete_cookie(sessions.COOKIE, path="/")
             return response
-        if not await auth_db.check_rate_limit(f"user:{user_id}", _USER_RPM, redis_client):
+        if not await auth_db.check_rate_limit(f"user:{session.user_id}", _USER_RPM, redis_client):
             return JSONResponse(
                 {"error": "Rate limit exceeded", "detail": f"Limit: {_USER_RPM} rpm"},
                 status_code=429, headers={"Retry-After": "60"},
             )
-        request.state.user_id = user_id
+        request.state.user_id = session.user_id
         request.state.principal = principal
         _bind(principal)
         return await call_next(request)

@@ -163,7 +163,25 @@ class SignIn:
 
 # ── Session cookie ────────────────────────────────────────────────────────────
 
-_VERSION = "v1"
+_VERSION = "v2"
+# v1 cookies (user id only) are still read until they expire, at most 8 h
+# after the v2 deploy; they simply carry no email or domain.
+_V1 = "v1"
+
+
+@dataclass(frozen=True)
+class Session:
+    """What a signed cookie says: who, and what Google verified about them.
+
+    `email` and `hosted_domain` come from the verified Google sign-in, so the
+    access tokens built from them (`email:`, `domain:`, E3) are as good as
+    the sign-in itself. They ride in the cookie, not the store, because a
+    domain is only known at sign-in and costs nothing to carry.
+    """
+
+    user_id: str
+    email: str = ""
+    hosted_domain: str = ""
 
 
 def _mac(secret: str, payload: str) -> str:
@@ -171,31 +189,52 @@ def _mac(secret: str, payload: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
-def sign_session(user_id: str, secret: str, *, now: float | None = None,
-                 seconds: int = SESSION_SECONDS) -> str:
+def _b64(text: str) -> str:
+    return base64.urlsafe_b64encode(text.encode()).rstrip(b"=").decode()
+
+
+def _unb64(text: str) -> str:
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4)).decode()
+
+
+def sign_session(user_id: str, secret: str, *, email: str = "", hosted_domain: str = "",
+                 now: float | None = None, seconds: int = SESSION_SECONDS) -> str:
     if not secret:
         raise ValueError("SESSION_SECRET is not set")
     if "." in user_id:
         raise ValueError("user ids never contain '.'")
     expires = int((now if now is not None else time.time()) + seconds)
-    payload = f"{_VERSION}.{user_id}.{expires}"
+    payload = (f"{_VERSION}.{user_id}.{_b64(email.lower())}.{_b64(hosted_domain.lower())}"
+               f".{expires}")
     return f"{payload}.{_mac(secret, payload)}"
+
+
+def read_session_identity(value: str, secret: str, *,
+                          now: float | None = None) -> Session | None:
+    """The session in a cookie Atlas signed and that has not expired, else None."""
+    if not secret or not value:
+        return None
+    parts = value.split(".")
+    if parts[0] == _V1 and len(parts) == 4:
+        fields, mac = parts[:3], parts[3]
+    elif parts[0] == _VERSION and len(parts) == 6:
+        fields, mac = parts[:5], parts[5]
+    else:
+        return None
+    if not hmac.compare_digest(mac, _mac(secret, ".".join(fields))):
+        return None
+    try:
+        expires = int(fields[-1])
+        email = _unb64(fields[2]) if len(fields) == 5 else ""
+        domain = _unb64(fields[3]) if len(fields) == 5 else ""
+    except (ValueError, UnicodeDecodeError):
+        return None
+    if expires <= (now if now is not None else time.time()) or not fields[1]:
+        return None
+    return Session(user_id=fields[1], email=email, hosted_domain=domain)
 
 
 def read_session(value: str, secret: str, *, now: float | None = None) -> str | None:
     """The user id in a cookie Atlas signed and that has not expired, else None."""
-    if not secret or not value:
-        return None
-    parts = value.split(".")
-    if len(parts) != 4 or parts[0] != _VERSION:
-        return None
-    payload = ".".join(parts[:3])
-    if not hmac.compare_digest(parts[3], _mac(secret, payload)):
-        return None
-    try:
-        expires = int(parts[2])
-    except ValueError:
-        return None
-    if expires <= (now if now is not None else time.time()):
-        return None
-    return parts[1] or None
+    session = read_session_identity(value, secret, now=now)
+    return session.user_id if session else None

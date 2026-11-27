@@ -77,6 +77,16 @@ POLICY: dict[tuple[str, str], Rule] = {
     ("PUT", "/namespaces/{namespace}/documents/access"): "write",
     ("DELETE", "/namespaces/{namespace}/documents"): "write",
     ("DELETE", "/org/groups/{group_id}"): "org_admin",
+    # E3.1: Google Drive on a sheet. Connecting needs a signed-in editor; the
+    # callback is checked against the signed state and the session.
+    ("GET", "/connectors/drive/connect"): "authenticated",
+    ("GET", "/connectors/drive/callback"): "authenticated",
+    ("GET", "/namespaces/{namespace}/connectors/drive"): "write",
+    ("PUT", "/namespaces/{namespace}/connectors/drive"): "write",
+    ("POST", "/namespaces/{namespace}/connectors/drive/sync"): "write",
+    ("DELETE", "/namespaces/{namespace}/connectors/drive"): "write",
+    ("GET", "/connectors/google-groups"): "org_admin",
+    ("PUT", "/connectors/google-groups"): "org_admin",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",
     # Lists only what the caller may read.

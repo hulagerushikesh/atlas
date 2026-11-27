@@ -55,6 +55,10 @@ class Document(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     # xxhash of content — used for idempotent indexing
     content_hash: str = ""
+    # Who may read it, when the source says so (E3: Drive sharing). None
+    # means the sheet decides: a document already held keeps its list, a new
+    # one is open to everyone on the sheet (E2, D9).
+    acl: list[str] | None = None
 
     @model_validator(mode="after")
     def _default_id(self) -> Document:
