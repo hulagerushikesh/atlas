@@ -126,7 +126,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 **E3 First connector** (choice settled by the owner's five conversations, O8).
 - [x] **E3.1** Google Drive folder synced into a workspace. **Built 2026-11-27** (not live until T33).
 - [x] **E3.2** Edits, deletions and Drive sharing followed. **Built 2026-11-27** (not live until T33).
-- [ ] **E3.3** A deleted or unshared page stops being answered within 15 min, measured.
+- [x] **E3.3** A deleted or unshared page stops being answered within 15 min, measured. **Done 2026-11-28: about 3 minutes, live.**
 
 **E4 Governance**
 - [ ] **E4.1** Append-only audit record with a retention setting.
@@ -193,9 +193,9 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T30~~ | ~~Google Cloud setup for Drive: a separate Google Cloud project for Drive (so publishing sign-in never puts Drive up for Google's review), Drive API on, an OAuth client with `drive.readonly`, kept in Testing with you as test user; two secrets stored without showing them; a test folder with three Google Docs, one shared with a second address~~ | You | ₹0 (+≈₹10/month for two secret versions) | **done 2026-11-27** — project `atlas-drive-rush`, Drive API on, client in Testing, both secrets stored unseen, test folder with three Docs (one shared with a second address) | — |
 | ~~T31~~ | ~~Build E3.1: connect a folder, first sync, Drive sharing → tokens, email/domain tokens, Google Group links~~ | C | ₹0 | **done 2026-11-27** — 1543 tests green; against a fake Drive synced into a real in-memory Qdrant, each person finds only what Drive shares with them, by both searches; unsharing and deleting take effect on the next sync; sharing the connector cannot read is never fetched; two protections removed once to check their tests fail. Every sync re-reads every file's sharing, so it does not depend on Drive's change feed. No console screen yet (T32). Not live | E3.1 |
 | ~~T32~~ | ~~Build E3.2: change feed every 5 min, daily full check, console Drive panel~~ | C | ₹0 | **done 2026-11-27** — 1555 tests green; one Cloud Scheduler call every 5 min reads Drive's change feed and walks the folder only when a change concerns it, a full check at least daily; the call is refused unless Google signed it for the named scheduler account; console Drive panel checked in a headless browser against a stand-in server, light and dark; Drive sources marked in the list with no per-document access control. Not live | E3.2 |
-| T33 | Deploy, connect your test folder, live unshare and delete test | C + You | ≈₹5/month (one secret) + paise | an unshared and a deleted document stop being answered within 15 min, measured. Also check: "Sync now" runs after its reply, and Cloud Run may starve it of processor until the next request; if so, run it inside the request | E3.3 |
+| ~~T33~~ | ~~Deploy, connect your test folder, live unshare and delete test~~ | C + You | ≈₹10/month (two secrets) + paise | **done 2026-11-28** — live: the second address saw only the document Drive shares with it; a trashed document's passages were gone and an unshared one closed to that address 3 min 13 s and 2 min 55 s after the change in Drive, by the 5-minute check, no button pressed. Found and fixed (PR 44): a sheet with no description refused general-knowledge questions at the router | E3.3 |
 
-T30 done. T33 is next (C + You): setup script and deploy, then the live test. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done. Next: T6 on or after 2026-11-30; D11 (what follows Drive) waits on the owner. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -274,8 +274,13 @@ Write the answer in the table when decided. Claude never decides these.
 - A signed-in person from another organisation cannot open the public demo sheet (their list is their own organisation's); visitors without an account can
 - Sign-in attempts (`/auth/google`) have no per-visitor limit; a refusal costs ≈₹0, so low priority
 - A sheet whose Qdrant collection is missing after documents changed answers 503 on every request (the keyword rebuild can't read it), and an upload can't recreate it. Only reachable by deleting a collection by hand (did so in T26, recreated it). Fix: treat a 404 scroll as an empty sheet
+- Drive's file `version` also moves on a sharing change, so unsharing re-embeds the file (paise each) instead of only rewriting readers; key re-reading on content changes (e.g. `modifiedTime` or the revision id) instead
+- "Sync now" and choosing a folder run after their reply; on Cloud Run that work may stall until the next request (the panel's own polling and the 5-minute check supply one). Not seen in T33 with 3 files; check with a big folder
+- A scheduled pass runs inside a 120 s request: a folder with hundreds of new files needs a longer limit or work split across passes
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T33 done: Drive live; trash and unshare reached Atlas in about 3 min with no button pressed; an undescribed sheet no longer refuses general questions at the router (PR 44). ≈₹10/month for two secrets.
 
 - 2026-11-27 — T32 done: 5-minute Drive pass through Drive's change feed (walks only when the folder is touched, full check daily), scheduler-only route checked against Google's signature, console Drive panel, Drive sources marked in the list. Not live. ₹0.
 
