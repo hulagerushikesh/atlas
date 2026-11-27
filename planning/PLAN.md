@@ -163,8 +163,8 @@ parking lot in section 7 as one line, and the session moves on.
 | T3 | Put the video on README + landing, plus one still from it as the README screenshot; rebuild; deploy | C + You | ₹0 | visible on the live site | 6.1, 6.2 |
 | ~~T4~~ | ~~Rewrite the README first screen; add the numbers check to the tests~~ | C | ₹0 | **done 2026-11-13** — 42 quotes checked; the screenshot comes with T3 | — |
 | ~~T15~~ | ~~Let visitors ask the demo sheet without a key, ₹10/day cap~~ | C + You | ≤₹10/day | **done 2026-11-14** — live; a keyless question answered with 4 citations, faithfulness 1.0, ₹0.20 | — |
-| T5 | Send the invitation in section 5 to five people — **no key needed** (T15 is live) | You | ₹0 | five sent | — |
-| T6 | Read the logs 3 days after T5; write the findings | C | ₹0 | findings in section 8 | 6.3 |
+| ~~T5~~ | ~~Send the invitation in section 5 to five people — **no key needed** (T15 is live)~~ | You | ₹0 | **sent 2026-11-27** | — |
+| T6 | Read the logs 3 days after T5 (**on or after 2026-11-30**); write the findings | C | ₹0 | findings in section 8 | 6.3 |
 | T7 | Fix the top finding; deploy | C + You | ₹0 | live | 6.4 |
 | ~~T8~~ | ~~Write the interview sheet~~ | C | ₹0 | **done 2026-11-13** — `learning/interview-sheet.md`, its numbers checked by tests | 7.1 |
 | ~~T9~~ | ~~Write the case study; publish on the site~~ | C + You | ₹0 | **done 2026-11-13** — `docs/case-study.md`, linked from the landing page, live since 2026-11-13 | 7.2 |
@@ -189,11 +189,17 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T26~~ | ~~E2.4: adversarial suite in CI, migration run, deploy, live run with two test accounts~~ | C + You | a few paise | **done 2026-11-24** — live 15 of 15, zero leaks: an outsider got nothing from a group-only document asked the same, streamed, reworded or fishing, nor from its listing, readers or removal; the demo still answers. The live run found three bugs the suite missed, all fixed with a test each (#35 migration index, #36 new sheet's first upload, #37 uploaded documents' ids). The suite in CI is the 65 permission tests `make test` already runs | E2.4 |
 | ~~T27~~ | ~~E2.5: evidence-based reuse behind a switch~~ | C | ≈₹1.5 (owner-approved) | **done 2026-11-24** — off by default (`REUSE_ENABLED`); against the live demo sheet 53% of 45 rewordings reused, 0 of 210 unrelated pairs served wrongly (docs/company-scale.md §9); the permission suite passes with reuse on and its fit check always saying yes. Built to code only, not deployed: nothing live changes while it is off | E2.5 |
 
-E2 is finished. No Claude task is queued: E3 waits on the owner's five conversations (O8). The friend invitation (O1) can go now. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+| ~~T29~~ | ~~E3 design: Drive access, sharing → tokens, sync, freshness, what comes after~~ | C | ₹0 | **done 2026-11-27** — `docs/e3-drive-connector.md`, researched against Microsoft 365 Copilot connectors and Glean | — |
+| T30 | Google Cloud setup for Drive: enable the Drive API in atlas-rag-rush, add the `drive.readonly` scope to the sign-in app (stays in Testing, you as test user), make a test folder with three Google Docs, one shared with a second address | You | ₹0 | done; steps given by Claude when E3.1's code is ready | — |
+| T31 | Build E3.1: connect a folder, first sync, Drive sharing → tokens, email/domain tokens, Google Group links | C | ₹0 | tests green against a fake Drive; first a one-hour check that unsharing shows in Drive's change feed | E3.1 |
+| T32 | Build E3.2: change feed every 5 min, daily full check, console Drive panel | C | ₹0 | tests green; checked in a browser | E3.2 |
+| T33 | Deploy, connect your test folder, live unshare and delete test | C + You | ≈₹5/month (one secret) + paise | an unshared and a deleted document stop being answered within 15 min, measured | E3.3 |
+
+T31 is next (C, ₹0). T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
-- [ ] **O1 — Send the invitation (T5).** Five people, any mix of engineers
+- [x] **O1 — Send the invitation (T5).** **Sent 2026-11-27.** Five people, any mix of engineers
       and friends. **Ready now:** no key needed, the demo sheet answers
       anyone (₹10/day cap; about 3 questions a minute per visitor). Send by
       WhatsApp, LinkedIn or email, or post once on LinkedIn. Paste this:
@@ -233,7 +239,7 @@ E2 is finished. No Claude task is queued: E3 waits on the owner's five conversat
       client secret was shown once and then deleted and replaced; Atlas never
       uses it, so it is stored nowhere. Left for T21: add the homepage and
       privacy page on Google's Branding page, then press Publish app.
-- [ ] **O8 — Five short conversations before E3** with people who run
+- [ ] **O8 — Five short conversations** (no longer blocks E3: Drive chosen 2026-11-27, D10; still worth doing before choosing what follows Drive, D11) with people who run
       internal tools: where docs live, how people find answers, what would
       stop their security team, what they would pay per user per month.
 
@@ -247,6 +253,8 @@ E2 is finished. No Claude task is queued: E3 waits on the owner's five conversat
 | ~~D7~~ **Decided 2026-11-19: yes, M9 opened** | **Open M9 "Ready for a 10,000-person company"?** Reuse the evidence an answer needs instead of the exact question text, then per-document permissions. Steps S1–S5 and costs in `docs/company-scale.md` | **Yes, measure first:** S1–S2 (≈ ₹3) decide whether S3 is worth building; S4 (permissions) is the blocker for any real company either way. S0 (clean pasted text) is a real-user fix and needs no decision |
 | ~~D8~~ **Decided 2026-11-20: yes, approved** | **Adopt the enterprise phases E1–E6** in `docs/enterprise-product.md` as the plan after M9's first three boxes? Order: identity and organisations → document permissions → Google Drive connector → audit and team budgets → scale and reliability → quality loop. Evidence reuse (9.4) moves behind permissions. Each phase becomes a milestone with its exit test; the footer's denominator grows when approved | **Yes, and start E1 now.** Every later piece (permissions, budgets, audit) needs "who is asking", which does not exist today. Do the five short conversations in section 6 of that note before E3 picks a connector |
 | ~~D9~~ **Decided 2026-11-23: yes to both** | **E2's two choices** (`docs/e2-permissions.md` §2): (a) organisation admins read only the documents their groups allow, no bypass; (b) a new upload is open to everyone on its sheet unless the editor narrows it | **Yes to both.** (a) matches Google Drive and what security teams ask for; (b) keeps today's behaviour, so nothing breaks for current users |
+| ~~D10~~ **Decided 2026-11-27: Google Drive first** | Which connector first (E3)? | The owner chose Drive without waiting for the five conversations; their company's Copilot setup (SharePoint/OneDrive, Confluence, Jira, Teams, MCP servers) is the reference in `docs/e3-drive-connector.md` §2 |
+| D11 | **After Drive, which next?** And whether to pay the yearly Google security assessment (≈₹45,000/year, reported) to let any company connect Drive, or rely on companies marking Atlas "Trusted" | **Next: Atlas as an MCP server, then Confluence** (`docs/e3-drive-connector.md` §7). **Assessment: not yet** — only when a paying company refuses the Trusted route |
 | D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
 | D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
 | ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
@@ -268,6 +276,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A sheet whose Qdrant collection is missing after documents changed answers 503 on every request (the keyword rebuild can't read it), and an upload can't recreate it. Only reachable by deleting a collection by hand (did so in T26, recreated it). Fix: treat a 404 scroll as an empty sheet
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-27 — Invitation sent (T5). Owner chose Drive for E3 (D10). T29 done: `docs/e3-drive-connector.md` — per-user Drive access in Testing (₹0; publishing needs a ≈₹45k/year assessment, D11), Drive sharing mapped to new `email:`/`domain:` tokens, change feed every 5 min, fail closed. ₹0.
 
 - 2026-11-24 — T27 done: evidence-based reuse behind `REUSE_ENABLED` (off). Three measured runs: the fit check judged truth from memory (rejected DuckDB 2.0 answers) until told not to, then passed §7's hard pair twice, so the meaning bar went 0.85 → 0.88: 53% of rewordings reused, 0 of 210 wrong. ≈₹1.5, approved.
 
