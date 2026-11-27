@@ -1,4 +1,4 @@
-import { Command, KeyRound, Layers, LogIn, LogOut, Map, Settings2, SunMoon, TriangleAlert, UserRound, Users } from "lucide-react"
+import { Bot, Command, KeyRound, Layers, LogIn, LogOut, Map, Settings2, SunMoon, TriangleAlert, UserRound, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Kbd } from "@/components/ui/kbd"
@@ -160,6 +160,9 @@ function Account() {
               <Users className="size-3.5" /> Members
             </Button>
           )}
+          <Button variant="ghost" size="sm" className="press justify-start gap-2" onClick={() => set({ assistantsOpen: true })}>
+            <Bot className="size-3.5" /> AI assistants
+          </Button>
           <Button variant="ghost" size="sm" className="press justify-start gap-2" onClick={() => void leave()}>
             <LogOut className="size-3.5" /> Sign out
           </Button>

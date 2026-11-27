@@ -368,6 +368,19 @@ export const syncDrive = (sheet: string) =>
 export const disconnectDrive = (sheet: string) =>
   api(drive(sheet), { method: "DELETE" }, 60000).then((r) => r.json() as Promise<{ connected: false; removed: number }>)
 
+/* ── Personal keys, for AI assistants over MCP (E4) ─────────────────────── */
+
+export interface PersonalKey { key_id: string; name: string; created_at: number | null }
+export const getMyKeys = () =>
+  api("/me/keys", {}, 5000).then((r) => r.json() as Promise<{ keys: PersonalKey[] }>)
+export const createMyKey = (name: string) =>
+  api("/me/keys", { method: "POST", ...json({ name }) }, 10000)
+    .then((r) => r.json() as Promise<{ key: string; key_id: string; name: string }>)
+export const revokeMyKey = (id: string) =>
+  api(`/me/keys/${encodeURIComponent(id)}`, { method: "DELETE" }, 5000)
+/** Where an assistant reaches this Atlas: the page's own origin unless an API base is set. */
+export const mcpUrl = () => `${base() || window.location.origin}/mcp`
+
 export const removeMember = (id: string) =>
   api(`/org/members/${encodeURIComponent(id)}`, { method: "DELETE" }, 5000)
 export const createServiceAccount = (name: string, roles: Grants) =>

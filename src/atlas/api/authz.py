@@ -91,6 +91,14 @@ POLICY: dict[tuple[str, str], Rule] = {
     # E3.2: Cloud Scheduler's 5-minute Drive pass. No key or cookie: the route
     # itself checks a Google-signed token naming the scheduler's account.
     ("POST", "/connectors/drive/tick"): "scheduler",
+    # E4: a signed-in person's own keys, for AI assistants; and the MCP
+    # endpoint those assistants call with one (the tools check each sheet).
+    ("GET", "/me/keys"): "authenticated",
+    ("POST", "/me/keys"): "authenticated",
+    ("DELETE", "/me/keys/{key_id}"): "authenticated",
+    ("GET", "/mcp"): "authenticated",
+    ("POST", "/mcp"): "authenticated",
+    ("DELETE", "/mcp"): "authenticated",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",
     # Lists only what the caller may read.

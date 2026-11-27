@@ -140,6 +140,12 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [ ] **E5.3** Uptime and speed targets; 50 questions a second load test (≈₹50–150, priced first).
 - [ ] **E5.4** Backup with a timed restore drill; request tracing.
 
+**E7 Inside the assistants people use** (opened by the owner 2026-11-28; `docs/e7-mcp-server.md`).
+- [x] **E7.1** Atlas as an MCP server with personal keys; each person's assistant reads only what they can. **Built 2026-11-28** (not live until T35).
+- [ ] **E7.2** A real assistant (Claude Code) searches the live site with a personal key; Drive sharing holds.
+- [ ] **E7.3** Copilot Studio agent connected with a personal key.
+- [ ] **E7.4** OAuth sign-in, so Claude.ai and ChatGPT connectors can add Atlas (when a user asks).
+
 **E6 Quality loop**
 - [ ] **E6.1** Thumbs up/down and "wrong source" in the console.
 - [ ] **E6.2** Unanswered-questions report for knowledge owners.
@@ -194,8 +200,10 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T31~~ | ~~Build E3.1: connect a folder, first sync, Drive sharing → tokens, email/domain tokens, Google Group links~~ | C | ₹0 | **done 2026-11-27** — 1543 tests green; against a fake Drive synced into a real in-memory Qdrant, each person finds only what Drive shares with them, by both searches; unsharing and deleting take effect on the next sync; sharing the connector cannot read is never fetched; two protections removed once to check their tests fail. Every sync re-reads every file's sharing, so it does not depend on Drive's change feed. No console screen yet (T32). Not live | E3.1 |
 | ~~T32~~ | ~~Build E3.2: change feed every 5 min, daily full check, console Drive panel~~ | C | ₹0 | **done 2026-11-27** — 1555 tests green; one Cloud Scheduler call every 5 min reads Drive's change feed and walks the folder only when a change concerns it, a full check at least daily; the call is refused unless Google signed it for the named scheduler account; console Drive panel checked in a headless browser against a stand-in server, light and dark; Drive sources marked in the list with no per-document access control. Not live | E3.2 |
 | ~~T33~~ | ~~Deploy, connect your test folder, live unshare and delete test~~ | C + You | ≈₹10/month (two secrets) + paise | **done 2026-11-28** — live: the second address saw only the document Drive shares with it; a trashed document's passages were gone and an unshared one closed to that address 3 min 13 s and 2 min 55 s after the change in Drive, by the 5-minute check, no button pressed. Found and fixed (PR 44): a sheet with no description refused general-knowledge questions at the router | E3.3 |
+| ~~T34~~ | ~~Build E7.1: MCP server (list sheets, list sources, search) and personal keys~~ | C | ₹0 | **done 2026-11-28** — real SDK client against the app with the auth middleware: tools see only the key owner's sheets and passages, Drive email tokens included; revoked key and removed member refused; session cookie refused; the real app served it locally (protocol 2025-11-25). Console dialog checked in a headless browser | E7.1 |
+| T35 | Deploy; you make a personal key; live search from a real MCP client; second address sees only Patel | C + You | ₹0 + paise | live search answers from the owner's sheets only; the second address's key cannot reach Gandhi | E7.2 |
 
-E3 (Drive) is done. Next: T6 on or after 2026-11-30; D11 (what follows Drive) waits on the owner. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T35 is next (C + You). T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -254,7 +262,7 @@ E3 (Drive) is done. Next: T6 on or after 2026-11-30; D11 (what follows Drive) wa
 | ~~D8~~ **Decided 2026-11-20: yes, approved** | **Adopt the enterprise phases E1–E6** in `docs/enterprise-product.md` as the plan after M9's first three boxes? Order: identity and organisations → document permissions → Google Drive connector → audit and team budgets → scale and reliability → quality loop. Evidence reuse (9.4) moves behind permissions. Each phase becomes a milestone with its exit test; the footer's denominator grows when approved | **Yes, and start E1 now.** Every later piece (permissions, budgets, audit) needs "who is asking", which does not exist today. Do the five short conversations in section 6 of that note before E3 picks a connector |
 | ~~D9~~ **Decided 2026-11-23: yes to both** | **E2's two choices** (`docs/e2-permissions.md` §2): (a) organisation admins read only the documents their groups allow, no bypass; (b) a new upload is open to everyone on its sheet unless the editor narrows it | **Yes to both.** (a) matches Google Drive and what security teams ask for; (b) keeps today's behaviour, so nothing breaks for current users |
 | ~~D10~~ **Decided 2026-11-27: Google Drive first** | Which connector first (E3)? | The owner chose Drive without waiting for the five conversations; their company's Copilot setup (SharePoint/OneDrive, Confluence, Jira, Teams, MCP servers) is the reference in `docs/e3-drive-connector.md` §2 |
-| D11 | **After Drive, which next?** And whether to pay the yearly Google security assessment (≈₹45,000/year, reported) to let any company connect Drive, or rely on companies marking Atlas "Trusted" | **Next: Atlas as an MCP server, then Confluence** (`docs/e3-drive-connector.md` §7). **Assessment: not yet** — only when a paying company refuses the Trusted route |
+| D11 | **After Drive, which next?** *(Next decided 2026-11-28: MCP server, E7.)* And whether to pay the yearly Google security assessment (≈₹45,000/year, reported) to let any company connect Drive, or rely on companies marking Atlas "Trusted" | **Next: Atlas as an MCP server, then Confluence** (`docs/e3-drive-connector.md` §7). **Assessment: not yet** — only when a paying company refuses the Trusted route |
 | D3 | Old FastAPI documents: keep or delete | **Decided 2026-11-13: keep** |
 | D4 | "Depth setting ignored on a repeat question" | **Decided 2026-11-13: accepted** — known, never hit a real user |
 | ~~D5~~ **Decided 2026-11-13: yes, ₹10/day cap; task T15** | **Let visitors ask the demo documents without a key?** Today nobody can try Atlas unless you hand them a key. | **Yes, with a hard limit:** no key needed for the demo documents only, capped at about **₹10 a day** in total and a few questions a minute per visitor; uploads and everything else stay key-only. Worst case ≈ ₹300 a month if someone abuses it every day; the cap can be lowered or switched off in one setting. If no: every invitation and the README must say "ask me for a key". This would become a new task before T5. |
@@ -279,6 +287,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A scheduled pass runs inside a 120 s request: a folder with hundreds of new files needs a longer limit or work split across passes
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T34 done: Atlas as an MCP server (`/mcp`, three read-only tools) with personal keys that act as their owner, Drive sharing included; console "AI assistants" dialog. Not live. ₹0.
 
 - 2026-11-28 — T33 done: Drive live; trash and unshare reached Atlas in about 3 min with no button pressed; an undescribed sheet no longer refuses general questions at the router (PR 44). ≈₹10/month for two secrets.
 
