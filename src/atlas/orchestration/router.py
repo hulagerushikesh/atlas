@@ -50,7 +50,7 @@ from typing import Literal
 
 import structlog
 
-from atlas.config import RouterConfig
+from atlas.config import GENERIC_DOMAIN, RouterConfig
 from atlas.interfaces.llm import BaseLLMProvider, GenerationRequest, Message
 from atlas.orchestration.llm import parse_json_response
 
@@ -106,6 +106,10 @@ class QueryRouter:
         self._llm = llm
         domain = (config or RouterConfig()).domain
         self._system_prompt = _SYSTEM_PROMPT.format(domain=domain)
+        # With no description of the sheet, the model cannot know what it holds
+        # and calls any general-knowledge question out of scope (T33: a Drive
+        # sheet about Patel refused "Who was the Iron Man of India?").
+        self._may_refuse = domain != GENERIC_DOMAIN
 
     async def classify(self, query: str) -> QueryClass:
         request = GenerationRequest(
@@ -120,6 +124,8 @@ class QueryRouter:
         response = await self._llm.generate(request)
         parsed = parse_json_response(response.content)
         classification: QueryClass = parsed.get("classification", "simple")
+        if classification == "out_of_scope" and not self._may_refuse:
+            classification = "simple"       # retrieval decides; no evidence → no answer
 
         logger.info(
             "query_classified",
