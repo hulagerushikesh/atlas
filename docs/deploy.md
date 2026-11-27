@@ -244,6 +244,29 @@ GET /metrics
 Standard Prometheus text exposition. Scrape from your Prometheus instance or
 use the bundled `monitoring/prometheus.yml` with `make monitor-up`.
 
+## Google Drive (E3)
+
+Drive's OAuth client lives in its own project, `atlas-drive-rush` (Drive API
+on, consent screen in Testing, scope `drive.readonly`, redirect URI
+`https://atlas.hulage.in/connectors/drive/callback`), so publishing sign-in
+never puts the Drive scope up for Google's review. Its client id is a plain
+setting in `scripts/deploy_gcp.sh`. Two secrets, created without being shown:
+
+```bash
+python3 -c "import json,glob;print(json.load(open(glob.glob('$HOME/Downloads/client_secret_*.json')[0]))['web']['client_secret'],end='')" \
+  | gcloud secrets create atlas-drive-client-secret --data-file=- --project=atlas-rag-rush
+python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode(),end='')" \
+  | gcloud secrets create atlas-drive-token-key --data-file=- --project=atlas-rag-rush
+```
+
+Replacing `atlas-drive-token-key` makes every stored Drive grant unreadable:
+each sheet then asks its editor to reconnect. `scripts/setup_drive_gcp.sh`
+(re-runnable) lets the service read both, creates the `atlas-drive-tick`
+service account, and creates the 5-minute `atlas-drive-tick` Scheduler job,
+whose OIDC audience must equal `DRIVE_PUBLIC_URL`. While the consent screen
+is in Testing, a Drive grant lapses after 7 days; the panel then says
+"Reconnect Drive".
+
 ## The keep-warm job
 
 `atlas-keepwarm` is a Cloud Scheduler job, created by hand rather than by
