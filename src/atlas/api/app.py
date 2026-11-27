@@ -34,8 +34,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.routing import Route
 
 from atlas import __version__
+from atlas.api import mcp_server
 from atlas.api.background import drain
 from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
@@ -52,6 +54,7 @@ from atlas.api.routes import (
     health,
     ingest,
     keys,
+    me,
     metrics_route,
     namespaces,
     org,
@@ -187,7 +190,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.reranker_warm_task = warm_task
 
     logger.info("atlas_ready")
-    yield
+    # E4: the MCP endpoint's session manager lives as long as the app.
+    async with app.state.mcp.session_manager.run():
+        yield
     if warm_task is not None and not warm_task.done():
         # Shutdown should not wait on a model nobody is going to use.
         warm_task.cancel()
@@ -276,6 +281,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(documents.router, tags=["ingestion"])
     app.include_router(connectors.router, tags=["connectors"])
     app.include_router(query.router, tags=["query"])
+    app.include_router(me.router, tags=["auth"])
+
+    # E4: Atlas as an MCP server, for the AI assistants people already use.
+    app.state.mcp, mcp_app = mcp_server.build()
+    app.router.routes.append(Route("/mcp", endpoint=mcp_app, methods=["GET", "POST", "DELETE"]))
 
     # Static console — served at /app (must come after API routes)
     import pathlib

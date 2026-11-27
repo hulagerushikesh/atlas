@@ -176,6 +176,7 @@ interface AtlasState {
   authConfig: AuthConfig | null
   signInOpen: boolean
   membersOpen: boolean
+  assistantsOpen: boolean
   // The source whose readers are being changed (null: dialog closed).
   documentOpen: string | null
   paletteOpen: boolean
@@ -259,6 +260,7 @@ export const useAtlas = create<AtlasState>((set, get) => ({
   authConfig: null,
   signInOpen: false,
   membersOpen: false,
+  assistantsOpen: false,
   documentOpen: null,
   paletteOpen: false,
   tourOpen: ls.get("atlas_oriented") !== "1",

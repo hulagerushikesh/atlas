@@ -8,6 +8,7 @@ import { CorpusPane } from "@/components/CorpusPane"
 import { EvidencePane } from "@/components/EvidencePane"
 import { DocumentDialog } from "@/components/DocumentDialog"
 import { MembersDialog } from "@/components/MembersDialog"
+import { AssistantsDialog } from "@/components/AssistantsDialog"
 import { SignInDialog } from "@/components/SignInDialog"
 import { SettingsDialog } from "@/components/SettingsDialog"
 import { SurveyBar } from "@/components/SurveyBar"
@@ -51,6 +52,7 @@ export default function App() {
       <AccessDialog />
       <SignInDialog />
       <MembersDialog />
+      <AssistantsDialog />
       <DocumentDialog />
       <Toaster position="bottom-left" toastOptions={{ className: "font-mono text-[13px]" }} />
     </TooltipProvider>

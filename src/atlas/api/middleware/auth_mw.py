@@ -41,7 +41,7 @@ from starlette.types import ASGIApp
 
 from atlas.access import set_reader_access
 from atlas.api import auth as auth_db
-from atlas.api import sessions, tenancy
+from atlas.api import personal_keys, sessions, tenancy
 from atlas.api.authz import is_public
 
 # A caller on a public path, before or without a key. Not legacy: it can
@@ -110,6 +110,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             return await self._admit_user(request, call_next, session, redis_client)
 
         auth_header = request.headers.get("Authorization", "")
+        if not auth_header and (raw := request.headers.get("X-API-Key", "").strip()):
+            # Copilot Studio's "API key" option sends the bare key in a header
+            # it names; Authorization would need the "Bearer " it cannot add.
+            auth_header = f"Bearer {raw}"
         if not auth_header and _demo_open(request):
             return await self._admit_demo(request, call_next, redis_client)
         if not auth_header.startswith("Bearer "):
@@ -137,9 +141,16 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         request.state.api_key_id = api_key.id
         request.state.api_key_name = api_key.name
         try:
-            principal = await tenancy.principal_for_key(api_key.id)
+            # A personal key (E4) acts as its owner; any other key as itself.
+            principal = await personal_keys.principal_for_key(api_key.id)
         except tenancy.TenancyUnavailable:
             return _unavailable()
+        if principal is None:
+            return JSONResponse(
+                {"error": "Key no longer valid",
+                 "detail": {"code": "key_revoked",
+                            "message": "This key was revoked, or its owner left Atlas."}},
+                status_code=401)
         request.state.principal = principal
         _bind(principal)
         return await call_next(request)
