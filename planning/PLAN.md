@@ -125,7 +125,7 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 
 **E3 First connector** (choice settled by the owner's five conversations, O8).
 - [x] **E3.1** Google Drive folder synced into a workspace. **Built 2026-11-27** (not live until T33).
-- [ ] **E3.2** Edits, deletions and Drive sharing followed.
+- [x] **E3.2** Edits, deletions and Drive sharing followed. **Built 2026-11-27** (not live until T33).
 - [ ] **E3.3** A deleted or unshared page stops being answered within 15 min, measured.
 
 **E4 Governance**
@@ -192,10 +192,10 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T29~~ | ~~E3 design: Drive access, sharing → tokens, sync, freshness, what comes after~~ | C | ₹0 | **done 2026-11-27** — `docs/e3-drive-connector.md`, researched against Microsoft 365 Copilot connectors and Glean | — |
 | T30 | Google Cloud setup for Drive: a separate Google Cloud project for Drive (so publishing sign-in never puts Drive up for Google's review), Drive API on, an OAuth client with `drive.readonly`, kept in Testing with you as test user; two secrets stored without showing them; a test folder with three Google Docs, one shared with a second address | You | ₹0 (+≈₹10/month for two secret versions) | done; exact steps given by Claude before T33 | — |
 | ~~T31~~ | ~~Build E3.1: connect a folder, first sync, Drive sharing → tokens, email/domain tokens, Google Group links~~ | C | ₹0 | **done 2026-11-27** — 1543 tests green; against a fake Drive synced into a real in-memory Qdrant, each person finds only what Drive shares with them, by both searches; unsharing and deleting take effect on the next sync; sharing the connector cannot read is never fetched; two protections removed once to check their tests fail. Every sync re-reads every file's sharing, so it does not depend on Drive's change feed. No console screen yet (T32). Not live | E3.1 |
-| T32 | Build E3.2: change feed every 5 min, daily full check, console Drive panel | C | ₹0 | tests green; checked in a browser | E3.2 |
-| T33 | Deploy, connect your test folder, live unshare and delete test | C + You | ≈₹5/month (one secret) + paise | an unshared and a deleted document stop being answered within 15 min, measured | E3.3 |
+| ~~T32~~ | ~~Build E3.2: change feed every 5 min, daily full check, console Drive panel~~ | C | ₹0 | **done 2026-11-27** — 1555 tests green; one Cloud Scheduler call every 5 min reads Drive's change feed and walks the folder only when a change concerns it, a full check at least daily; the call is refused unless Google signed it for the named scheduler account; console Drive panel checked in a headless browser against a stand-in server, light and dark; Drive sources marked in the list with no per-document access control. Not live | E3.2 |
+| T33 | Deploy, connect your test folder, live unshare and delete test | C + You | ≈₹5/month (one secret) + paise | an unshared and a deleted document stop being answered within 15 min, measured. Also check: "Sync now" runs after its reply, and Cloud Run may starve it of processor until the next request; if so, run it inside the request | E3.3 |
 
-T32 is next (C, ₹0). T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+T32 done. Next is T30 (yours, ₹0): Claude gives the exact Google Cloud steps, then T33 together. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -276,6 +276,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A sheet whose Qdrant collection is missing after documents changed answers 503 on every request (the keyword rebuild can't read it), and an upload can't recreate it. Only reachable by deleting a collection by hand (did so in T26, recreated it). Fix: treat a 404 scroll as an empty sheet
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-27 — T32 done: 5-minute Drive pass through Drive's change feed (walks only when the folder is touched, full check daily), scheduler-only route checked against Google's signature, console Drive panel, Drive sources marked in the list. Not live. ₹0.
 
 - 2026-11-27 — T31 done: Drive connect/sync/disconnect routes, Drive sharing → `email:`/`domain:`/`all`/linked-group tokens, the sign-in cookie now carries the verified email and domain, refresh tokens sealed with a separate key. Found: Drive must live in its own Google project so publishing sign-in is not held up by a restricted-scope review. Not live. ₹0.
 

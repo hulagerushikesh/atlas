@@ -185,7 +185,8 @@ class BM25SparseIndex(BaseIndex):
         ]
         return await self.delete(stale) if stale else 0
 
-    def sources(self, access: frozenset[str] | None = None) -> list[dict[str, Any]]:
+    def sources(self, access: frozenset[str] | None = None,
+                synced: frozenset[str] = frozenset()) -> list[dict[str, Any]]:
         """
         Chunk counts grouped by source document, in first-seen order.
 
@@ -195,6 +196,8 @@ class BM25SparseIndex(BaseIndex):
 
         *access* (E2): only passages the caller may read are counted, so a
         document it cannot open is not listed, not even by title.
+        *synced*: document ids a connector keeps in step (E3); their rows say
+        so, because their readers follow the source system, not this sheet.
         """
         counts: dict[str, dict[str, Any]] = {}
         for entry in self._corpus:
@@ -204,7 +207,8 @@ class BM25SparseIndex(BaseIndex):
             src = meta["source"]
             row = counts.get(src)
             if row is None:
-                row = {"source": src, "doc_type": meta["doc_type"], "chunks": 0}
+                row = {"source": src, "doc_type": meta["doc_type"], "chunks": 0,
+                       "synced": meta["doc_id"] in synced}
                 counts[src] = row
             row["chunks"] += 1
         return list(counts.values())

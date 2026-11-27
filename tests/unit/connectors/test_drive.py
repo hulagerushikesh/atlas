@@ -199,7 +199,7 @@ class TestGoogleDrive:
         drive = GoogleDrive("rt", "cid", "cs", http=_drive_http(routes, []))
         files = asyncio.run(drive.walk("root"))
         assert {(f.id, f.path, f.version) for f in files} == {
-            ("a", "Intro", "3"), ("b", "Policies/Leave.pdf", "")}
+            ("a", "Intro", "3"), ("b", "Policies/Leave.pdf", ""), ("sub", "Policies/", "")}
 
     def test_sharing_hidden_from_the_connector_is_none(self) -> None:
         routes = {"/drive/v3/files/x/permissions": (403, {})}

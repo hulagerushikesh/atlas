@@ -210,6 +210,9 @@ class SourceInfo(BaseModel):
     source: str
     doc_type: str
     chunks: int
+    # Kept in step with a connector (Google Drive): its readers and its removal
+    # follow the source system, so the per-document controls do not apply.
+    synced: bool = False
 
 
 class SourceListResponse(BaseModel):

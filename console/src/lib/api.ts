@@ -66,7 +66,11 @@ export interface QueryResponse {
   hypotheses?: string[]
 }
 
-export interface SourceInfo { source: string; doc_type: string; chunks: number }
+export interface SourceInfo {
+  source: string; doc_type: string; chunks: number
+  /** Kept in step with Google Drive: its readers follow Drive's sharing. */
+  synced?: boolean
+}
 export interface SourceList {
   namespace: string; sources: SourceInfo[]; total_sources: number
   // total_chunks is the keyword index's count; dense_chunks is the vector
@@ -332,6 +336,38 @@ export const setDocumentAccess = (sheet: string, source: string, everyone: boole
 export const removeDocument = (sheet: string, source: string) =>
   api(`${docs(sheet)}?source=${encodeURIComponent(source)}`, { method: "DELETE" }, 10000)
     .then((r) => r.json() as Promise<{ source: string; passages_removed: number }>)
+/* ── Google Drive on a sheet (E3) ──────────────────────────────────────────
+ * Editors only. Connecting leaves the console for Google's consent page and
+ * comes back to /app with ?drive=connected|declined|failed. 503 = switched off.
+ */
+
+export interface DriveReport {
+  indexed: number; unchanged: number; access_changed: number; removed: number
+  skipped: string[]; closed: string[]; failed: string[]
+}
+export interface DriveStatus {
+  connected: boolean
+  folder_id?: string
+  connected_by?: string
+  last_sync?: number | null
+  last_check?: number | null
+  syncing?: boolean
+  files?: number
+  report?: Partial<DriveReport>
+  error?: string
+}
+const drive = (sheet: string) => `/namespaces/${encodeURIComponent(sheet)}/connectors/drive`
+export const driveConnectUrl = (sheet: string) =>
+  `${base()}/connectors/drive/connect?namespace=${encodeURIComponent(sheet)}`
+export const getDrive = (sheet: string) =>
+  api(drive(sheet), {}, 5000).then((r) => r.json() as Promise<DriveStatus>)
+export const setDriveFolder = (sheet: string, folder: string) =>
+  api(drive(sheet), { method: "PUT", ...json({ folder }) }, 10000).then((r) => r.json() as Promise<DriveStatus>)
+export const syncDrive = (sheet: string) =>
+  api(`${drive(sheet)}/sync`, { method: "POST" }, 10000).then((r) => r.json() as Promise<DriveStatus>)
+export const disconnectDrive = (sheet: string) =>
+  api(drive(sheet), { method: "DELETE" }, 60000).then((r) => r.json() as Promise<{ connected: false; removed: number }>)
+
 export const removeMember = (id: string) =>
   api(`/org/members/${encodeURIComponent(id)}`, { method: "DELETE" }, 5000)
 export const createServiceAccount = (name: string, roles: Grants) =>
