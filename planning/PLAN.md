@@ -141,8 +141,8 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [ ] **E5.4** Backup with a timed restore drill; request tracing.
 
 **E7 Inside the assistants people use** (opened by the owner 2026-11-28; `docs/e7-mcp-server.md`).
-- [x] **E7.1** Atlas as an MCP server with personal keys; each person's assistant reads only what they can. **Built 2026-11-28** (not live until T35).
-- [ ] **E7.2** A real assistant (Claude Code) searches the live site with a personal key; Drive sharing holds.
+- [x] **E7.1** Atlas as an MCP server with personal keys; each person's assistant reads only what they can. **Built 2026-11-28** (live since T35).
+- [x] **E7.2** A real MCP client searches the live site with a personal key; Drive sharing holds. **Done 2026-11-28.**
 - [ ] **E7.3** Copilot Studio agent connected with a personal key.
 - [ ] **E7.4** OAuth sign-in, so Claude.ai and ChatGPT connectors can add Atlas (when a user asks).
 
@@ -201,9 +201,9 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T32~~ | ~~Build E3.2: change feed every 5 min, daily full check, console Drive panel~~ | C | ₹0 | **done 2026-11-27** — 1555 tests green; one Cloud Scheduler call every 5 min reads Drive's change feed and walks the folder only when a change concerns it, a full check at least daily; the call is refused unless Google signed it for the named scheduler account; console Drive panel checked in a headless browser against a stand-in server, light and dark; Drive sources marked in the list with no per-document access control. Not live | E3.2 |
 | ~~T33~~ | ~~Deploy, connect your test folder, live unshare and delete test~~ | C + You | ≈₹10/month (two secrets) + paise | **done 2026-11-28** — live: the second address saw only the document Drive shares with it; a trashed document's passages were gone and an unshared one closed to that address 3 min 13 s and 2 min 55 s after the change in Drive, by the 5-minute check, no button pressed. Found and fixed (PR 44): a sheet with no description refused general-knowledge questions at the router | E3.3 |
 | ~~T34~~ | ~~Build E7.1: MCP server (list sheets, list sources, search) and personal keys~~ | C | ₹0 | **done 2026-11-28** — real SDK client against the app with the auth middleware: tools see only the key owner's sheets and passages, Drive email tokens included; revoked key and removed member refused; session cookie refused; the real app served it locally (protocol 2025-11-25). Console dialog checked in a headless browser | E7.1 |
-| T35 | Deploy; you make a personal key; live search from a real MCP client; second address sees only Patel | C + You | ₹0 + paise | live search answers from the owner's sheets only; the second address's key cannot reach Gandhi | E7.2 |
+| ~~T35~~ | ~~Deploy; personal keys; live search from a real MCP client~~ | C + You | ₹0 + paise | **done 2026-11-28** — the official MCP client against https://atlas.hulage.in/mcp with two personal keys (read from files, never shown): your key found both your Drive documents and answered a Gandhi question from Gandhi's passages only; the second address's key listed the same two sheets but no sources on `drive-test` and got 0 passages for Gandhi and for Patel (unshared in T33) | E7.2 |
 
-E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T35 is next (C + You). T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T35 done. Next: T6 on or after 2026-11-30; E7.3 (Copilot Studio) when you want to try it at work. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -287,6 +287,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A scheduled pass runs inside a 120 s request: a folder with hundreds of new files needs a longer limit or work split across passes
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T35 done: MCP server live; two personal keys showed each person's assistant only what Drive shares with them. Paise.
 
 - 2026-11-28 — T34 done: Atlas as an MCP server (`/mcp`, three read-only tools) with personal keys that act as their owner, Drive sharing included; console "AI assistants" dialog. Not live. ₹0.
 
