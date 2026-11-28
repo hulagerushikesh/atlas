@@ -10,6 +10,7 @@ import asyncio
 import json
 import time
 from typing import Any
+from unittest.mock import AsyncMock
 
 import httpx
 import pytest
@@ -25,6 +26,7 @@ from atlas.connectors.drive import (
     DrivePermission,
     GoogleDrive,
     acl_for,
+    drive_doc_id,
     sync_folder,
 )
 
@@ -196,6 +198,29 @@ class TestOnePass:
         report, held = asyncio.run(sync_folder(Folder([_f("a", version="2")]), idx, "r",
                                                {"a": "1"}, {}))
         assert report.indexed == 1 and held["a"].startswith("2|")
+
+    def test_over_the_sheet_limit_new_text_waits_and_sharing_still_applies(self) -> None:
+        class Budget:
+            def __init__(self) -> None:
+                self.left, self.charged = True, 0
+
+            async def allows(self) -> bool:
+                return self.left
+
+            async def charge(self, embedding_tokens: int) -> None:
+                self.charged += 1
+
+        idx, budget = FakeIndexer(), Budget()
+        _, held = asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", {}, {}, budget=budget))
+        assert budget.charged == 1
+        budget.left = False
+        folder = Folder([_f("a", version="2"), _f("b")], text=b"# Title\n\nnew words")
+        folder.permissions = AsyncMock(return_value=[DrivePermission(type="user",  # type: ignore[method-assign]
+                                                                     email="a@b.c")])
+        report, now = asyncio.run(sync_folder(folder, idx, "r", held, {}, budget=budget))
+        assert (report.over_limit, report.indexed, report.removed) == (2, 0, 0)
+        assert now == held and idx.indexed == ["dir/a"] and budget.charged == 1
+        assert idx.acl[drive_doc_id("a")] == ["email:a@b.c"]     # access still follows Drive
 
     def test_out_of_time_it_stops_and_keeps_what_it_has(self) -> None:
         idx = FakeIndexer()

@@ -19,7 +19,7 @@ from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
-from atlas.api import sessions, tenancy
+from atlas.api import sessions, sheet_budget, tenancy
 from atlas.api.routes import connectors as routes
 from atlas.api.routes import namespaces
 from atlas.config import DriveConfig
@@ -206,6 +206,20 @@ class TestFolderAndSync:
         indexer.delete_document.assert_awaited_with(drive_doc_id("f1"))
         assert asyncio.run(connections.get(drive_site.ws["a/docs"])) is None
 
+    def test_a_sheet_over_its_limit_brings_in_nothing_new(self, drive_site: Site) -> None:
+        admin = self.connected(drive_site)
+        admin.put("/org/spending/docs", headers=CONSOLE, json={"daily_inr": 1})
+        ws = asyncio.run(tenancy.get_tenancy().get_workspace(drive_site.ws["a/docs"]))
+        assert ws is not None
+        meter = asyncio.run(sheet_budget.meter_for(ws, drive_site.app.state.atlas.spend))
+        asyncio.run(meter.add(1.0))
+        r = admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
+                      json={"folder": "1AbCdEfGhIjKl"})
+        assert r.json()["report"]["over_limit"] == 1 and r.json()["files"] == 0
+        indexer = drive_site.app.state.atlas.registry.get.return_value.indexer
+        indexer.index_documents.assert_not_awaited()
+        assert asyncio.run(connections.get(drive_site.ws["a/docs"]))["walk_after"] > 0
+
     def test_a_lost_key_is_reported_not_raised(self, drive_site: Site) -> None:
         admin = self.connected(drive_site)
         drive_site.app.state.atlas.drive = DriveConfig(
@@ -343,6 +357,19 @@ class TestScheduledPass:
         world = synced.app.state.drive_world
         assert world["walks"] == 2 and world["asked"] == []   # walked, feed skipped
         assert self.record(synced)["resume"] is False
+
+    def test_text_held_back_by_the_limit_is_walked_after_the_reset(self, synced: Site) -> None:
+        record = self.record(synced)
+        record["walk_after"] = 1.0              # the reset has passed
+        asyncio.run(connections.put(record))
+        self.tick(synced)
+        assert synced.app.state.drive_world["walks"] == 2
+        assert "walk_after" not in self.record(synced)
+        record = self.record(synced)
+        record["walk_after"] = 4e9              # not yet
+        asyncio.run(connections.put(record))
+        self.tick(synced)
+        assert synced.app.state.drive_world["walks"] == 2
 
     def test_a_sheet_without_a_folder_is_left_alone(self, drive_site: Site) -> None:
         drive_site.app.state.drive_tick_verifier = FakeScheduler()

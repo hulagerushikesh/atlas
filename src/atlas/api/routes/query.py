@@ -65,7 +65,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from atlas.access import readable, reader_access
-from atlas.api import audit, tenancy
+from atlas.api import audit, sheet_budget, tenancy
 from atlas.api.authz import authorize
 from atlas.api.background import spawn
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
@@ -975,6 +975,10 @@ DEMO_CAP = (
     "Today's questions without a key are used up. They start again at "
     "midnight UTC; questions answered before still load."
 )
+SHEET_CAP = (
+    "This sheet has used today's spending limit, set by your organisation's admin. "
+    "It starts again at midnight UTC (5:30 am in India); answers asked before still load."
+)
 KEY_REQUIRED = "Without a key, Atlas answers questions about the demo sheet only."
 
 
@@ -1007,6 +1011,8 @@ async def _enforce_budget(spend: SpendMeter) -> None:
         detail: str | dict[str, str] = str(exc)
         if exc.scope == "demo":
             detail = {"code": "demo_cap", "message": DEMO_CAP}
+        elif exc.scope.startswith("sheet-"):
+            detail = {"code": "sheet_cap", "message": SHEET_CAP}
         raise HTTPException(
             status_code=429,
             detail=detail,
@@ -1051,6 +1057,7 @@ async def query(
     audit.note(request, "query", sheet=body.namespace, question=body.query)
     spend = _meter_for(request, app_state, body.namespace)
     ws = await authorize(request, body.namespace, "read")
+    spend = await sheet_budget.meter_for(ws, spend)     # E4.3: the sheet's own limit
     # Cached answers are keyed by workspace id, not name: two organisations
     # may both have a "docs", and must never be served each other's answers.
     cache_key = ws.id

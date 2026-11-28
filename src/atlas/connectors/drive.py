@@ -81,6 +81,13 @@ class DriveChange:
     parents: tuple[str, ...] = ()
 
 
+class Budget(Protocol):
+    """The sheet's spending limit, as a sync sees it (E4.3)."""
+
+    async def allows(self) -> bool: ...
+    async def charge(self, embedding_tokens: int) -> None: ...
+
+
 class DriveSource(Protocol):
     async def walk(self, folder_id: str) -> list[DriveFile]: ...
     async def permissions(self, file_id: str) -> list[DrivePermission] | None: ...
@@ -280,11 +287,12 @@ class SyncReport:
     failed: list[str] = field(default_factory=list)
     folders: list[str] = field(default_factory=list)      # watched by the change feed
     left: int = 0             # not reached before the deadline; the next pass carries on
+    over_limit: int = 0       # new text held back by the sheet's daily limit
 
     def as_dict(self) -> dict[str, Any]:
         return {"indexed": self.indexed, "unchanged": self.unchanged,
                 "access_changed": self.access_changed, "removed": self.removed,
-                "left": self.left, "skipped": self.skipped[:50],
+                "left": self.left, "over_limit": self.over_limit, "skipped": self.skipped[:50],
                 "closed": self.closed[:50], "failed": self.failed[:50]}
 
 
@@ -323,7 +331,7 @@ def _digest(raw: bytes) -> str:
 async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
                       held: dict[str, str], group_links: dict[str, str], *,
                       max_files: int = 500, max_file_bytes: int = 10 * 1024 * 1024,
-                      deadline: float | None = None,
+                      deadline: float | None = None, budget: Budget | None = None,
                       ) -> tuple[SyncReport, dict[str, str]]:
     """Bring the sheet in line with the folder.
 
@@ -337,6 +345,10 @@ async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
     Past *deadline* (a `time.monotonic()` value) no further file is started:
     what is held stays held, nothing unreached is removed, and `report.left`
     says how many files the next pass must still look at.
+
+    Once *budget* says the sheet's daily limit is reached, new text is not
+    embedded (`report.over_limit`); sharing changes and removals still apply,
+    as they cost nothing and taking access away must not wait for a reset.
     """
     report = SyncReport()
     walked = await source.walk(folder_id)
@@ -376,14 +388,25 @@ async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
                 text_same = was is not None and digest == _digest(raw)
             if text_same:
                 report.unchanged += 1
+            elif budget is not None and not await budget.allows():
+                report.over_limit += 1
+                if was is not None:
+                    # What is indexed stays, under the sharing read just now.
+                    if (await indexer.document_acl(doc_id) or []) != acl:
+                        await indexer.set_document_acl(doc_id, acl)
+                        report.access_changed += 1
+                    now[f.id] = was
+                continue
             else:
                 doc = await _read(f, raw)
                 if doc is None:
                     report.failed.append(f.path)
                     continue
                 doc.acl = acl
-                await indexer.index_documents([doc])
+                result = await indexer.index_documents([doc])
                 report.indexed += 1
+                if budget is not None:
+                    await budget.charge(int(getattr(result, "total_tokens", 0) or 0))
             # Unchanged passages are not rewritten by an index, so the list is
             # set here whenever it differs, new file or old.
             if (await indexer.document_acl(doc_id) or []) != acl:

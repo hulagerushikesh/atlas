@@ -34,8 +34,9 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from atlas.api import audit, sessions, tenancy
+from atlas.api import audit, sessions, sheet_budget, tenancy
 from atlas.api.authz import authorize, require_org_admin
+from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
 from atlas.api.sheets import sheet_changed
 from atlas.config import DriveConfig
@@ -48,6 +49,7 @@ from atlas.connectors.drive import (
     sync_folder,
     touches,
 )
+from atlas.cost import estimate_cost
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -283,7 +285,10 @@ async def run_sync(request: Request, ws: tenancy.Workspace, *, full: bool = Fals
             full = (full or not record.get("cursor")
                     or now - float(record.get("last_full") or 0) >= cfg.full_every_seconds)
             walk, cursor = True, ""
-            if not (full or record.get("resume")):
+            # A pass cut short, or new text held back until the sheet's limit
+            # resets, is walked again: the feed will not list those files twice.
+            limit_reset = now >= float(record.get("walk_after") or float("inf"))
+            if not (full or record.get("resume") or limit_reset):
                 walk, cursor = await _feed(source, record)
             if not cursor:                      # read before the walk: nothing is missed
                 cursor = await source.start_cursor()
@@ -319,17 +324,44 @@ async def _feed(source: DriveSource, record: dict[str, Any]) -> tuple[bool, str]
     return touches(changes, held, folders), cursor
 
 
+class _SheetBudget:
+    """The sheet's spending limit (E4.3), as `sync_folder` asks about it."""
+
+    def __init__(self, meter: SpendMeter, embedding_model: str) -> None:
+        self._meter, self._model = meter, embedding_model
+
+    async def allows(self) -> bool:
+        try:
+            await self._meter.check()
+        except BudgetExceeded:
+            return False
+        return True
+
+    async def charge(self, embedding_tokens: int) -> None:
+        await self._meter.add(estimate_cost(
+            model="", prompt_tokens=0, completion_tokens=0,
+            embedding_model=self._model, embedding_tokens=embedding_tokens))
+
+
 async def _pass(request: Request, ws: tenancy.Workspace, record: dict[str, Any],
                 source: DriveSource, cfg: DriveConfig, deadline: float | None) -> bool:
     """Walk and sync the folder; False if time ran out before every file."""
     registry = get_registry(request)
     corpus = tenancy.registry_namespace(ws)
+    app_state = get_app_state(request)
+    budget = _SheetBudget(await sheet_budget.meter_for(ws, app_state.spend),
+                          app_state.embedding_model)
     report, files = await sync_folder(
         source, registry.get(corpus).indexer, record["folder_id"],
         dict(record.get("files") or {}), await connections.group_links(ws.org_id),
-        max_files=cfg.max_files, max_file_bytes=cfg.max_file_bytes, deadline=deadline)
+        max_files=cfg.max_files, max_file_bytes=cfg.max_file_bytes, deadline=deadline,
+        budget=budget)
     record.update(files=files, report=report.as_dict(), last_sync=time.time(),
                   folders=report.folders)
+    if report.over_limit:
+        record["walk_after"] = time.time() + seconds_until_utc_midnight()
+    else:
+        record.pop("walk_after", None)
     if report.indexed or report.access_changed or report.removed:
         await sheet_changed(registry, corpus, ws, get_app_state(request).cache)
     return report.left == 0

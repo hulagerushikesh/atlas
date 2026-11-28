@@ -35,10 +35,10 @@ from pathlib import Path
 import structlog
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
-from atlas.api import audit, tenancy
+from atlas.api import audit, sheet_budget, tenancy
 from atlas.api.authz import authorize
-from atlas.api.budget import BudgetExceeded, seconds_until_utc_midnight
 from atlas.api.dependencies import get_app_state, get_registry
+from atlas.api.routes.query import _enforce_budget
 from atlas.api.schemas import (
     IngestRequest,
     IngestResponse,
@@ -145,14 +145,8 @@ async def ingest(
     if not path.exists():
         raise HTTPException(status_code=404, detail=f"Path not found: {body.path}")
 
-    try:
-        await app_state.spend.check()
-    except BudgetExceeded as exc:
-        raise HTTPException(
-            status_code=429,
-            detail=str(exc),
-            headers={"Retry-After": str(seconds_until_utc_midnight())},
-        ) from exc
+    spend = await sheet_budget.meter_for(ws, app_state.spend)
+    await _enforce_budget(spend)
 
     registry = get_registry(request)
     # Adopt whatever the vector store already holds before adding to it. The
@@ -180,7 +174,7 @@ async def ingest(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     duration = round(time.perf_counter() - start, 2)
-    await app_state.spend.add(estimate_cost(
+    await spend.add(estimate_cost(
         model="",
         prompt_tokens=0,
         completion_tokens=0,
@@ -249,14 +243,8 @@ async def ingest_upload(
     corpus = tenancy.registry_namespace(ws)
     _writable(corpus, get_registry(request).settings.router)
 
-    try:
-        await app_state.spend.check()
-    except BudgetExceeded as exc:
-        raise HTTPException(
-            status_code=429,
-            detail=str(exc),
-            headers={"Retry-After": str(seconds_until_utc_midnight())},
-        ) from exc
+    spend = await sheet_budget.meter_for(ws, app_state.spend)
+    await _enforce_budget(spend)
 
     rejected: list[RejectedUpload] = []
     accepted: list[str] = []
@@ -335,7 +323,7 @@ async def ingest_upload(
     finally:
         shutil.rmtree(tmpdir, ignore_errors=True)
 
-    await app_state.spend.add(estimate_cost(
+    await spend.add(estimate_cost(
         model="",
         prompt_tokens=0,
         completion_tokens=0,

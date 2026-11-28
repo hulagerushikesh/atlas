@@ -7,8 +7,9 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  createGroup, createServiceAccount, createSheet, deleteGroup, getAudit, getOrg, getUnanswered, invite, messageOf, removeMember,
-  revokeServiceAccount, setAuditRetention, updateMember, withdrawInvitation, type AuditEntry, type Grants, type Unanswered, type Org, type Role,
+  createGroup, createServiceAccount, createSheet, deleteGroup, getAudit, getOrg, getSpending, getUnanswered, invite, messageOf, removeMember,
+  revokeServiceAccount, setAuditRetention, setSheetLimit, updateMember, withdrawInvitation, type AuditEntry, type Grants, type Spending,
+  type Unanswered, type Org, type Role,
 } from "@/lib/api"
 import { GroupToggle } from "@/components/DocumentDialog"
 import { useAtlas } from "@/lib/store"
@@ -72,6 +73,7 @@ export function MembersDialog() {
             <Invited org={org} act={act} />
             <Invite sheets={sheets} act={act} domain={org.domain} />
             <Sheets org={org} act={act} />
+            <SpendingLimits />
             <Machines org={org} sheets={sheets} act={act} />
             <UnansweredList />
             <Activity />
@@ -396,6 +398,7 @@ const DOING: Record<string, string> = {
   "mcp.list_sources": "listed sources through an assistant", sign_in: "signed in", upload: "uploaded",
   ingest: "indexed a server path", "document.access": "changed readers of", "document.remove": "removed",
   "audit.retention": "changed how long this record is kept",
+  "sheet.limit": "changed a sheet's daily spending limit",
   feedback: "gave feedback on an answer", unanswered: "got no answer",
   "POST /org/groups": "made a group", "DELETE /org/groups/{group_id}": "deleted a group",
   "POST /org/invitations": "invited someone", "DELETE /org/invitations/{email}": "withdrew an invitation",
@@ -485,6 +488,64 @@ const WHY: Record<string, string> = {
  * first. The list a knowledge owner works from: each row is a document
  * someone should write, fix or add to a sheet.
  */
+const rupees = (n: number) => `₹${n < 10 ? n.toFixed(2) : Math.round(n).toLocaleString("en-IN")}`
+
+/** E4.3: what each sheet spent today, and a daily limit of its own. */
+function SpendingLimits() {
+  const [data, setData] = useState<Spending | null>(null)
+  const [draft, setDraft] = useState<Record<string, string>>({})
+  const load = useCallback(() => {
+    getSpending().then((d) => { setData(d); setDraft({}) })
+      .catch((e) => toast.error("Spending not loaded", { description: messageOf(e) }))
+  }, [])
+  useEffect(load, [load])
+
+  const save = async (sheet: string) => {
+    const text = (draft[sheet] ?? "").trim()
+    const value = text === "" ? 0 : Number(text)
+    if (!Number.isFinite(value) || value < 0) { toast.error("Enter rupees a day, or leave it empty for no limit."); return }
+    try {
+      await setSheetLimit(sheet, value)
+      toast.success(value ? `${sheet}: ${rupees(value)} a day` : `${sheet}: no limit of its own`,
+        { description: "Applies within a minute." })
+      load()
+    } catch (e) { toast.error("Limit not saved.", { description: messageOf(e) }) }
+  }
+
+  const o = data?.overall
+  return (
+    <Section title="Spending today">
+      <p className="label normal-case tracking-normal text-[12px] leading-snug">
+        A sheet that reaches its limit stops answering new questions and adding documents until midnight UTC (5:30 am in India).
+        {o && o.daily_inr > 0 && <> All sheets together: {rupees(o.spent_today_inr)} of {rupees(o.daily_inr)}.</>}
+      </p>
+      {data === null ? <p className="label normal-case tracking-normal">Reading…</p> : (
+        <ul className="divide-y font-mono text-[13px]">
+          {data.sheets.map((s) => {
+            const full = s.daily_inr > 0 && s.spent_today_inr >= s.daily_inr
+            const dirty = draft[s.sheet] !== undefined
+            return (
+              <li key={s.sheet} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
+                <span className="min-w-0 flex-1 truncate">{s.sheet}</span>
+                <span className={cn("tabular text-[12px]", full ? "text-bad" : "text-ink-3")}>
+                  {rupees(s.spent_today_inr)}{s.daily_inr > 0 ? ` of ${rupees(s.daily_inr)}` : " · no limit"}
+                </span>
+                <form className="flex items-center gap-1.5" onSubmit={(e) => { e.preventDefault(); void save(s.sheet) }}>
+                  <span className="text-ink-3">₹</span>
+                  <Input inputMode="decimal" className="h-8 w-20 font-mono text-[13px]" aria-label={`Daily limit for ${s.sheet} in rupees`}
+                    placeholder="none" value={draft[s.sheet] ?? (s.daily_inr ? String(s.daily_inr) : "")}
+                    onChange={(e) => setDraft((d) => ({ ...d, [s.sheet]: e.target.value }))} />
+                  <Button type="submit" size="sm" variant="secondary" className="press" disabled={!dirty}>Set</Button>
+                </form>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Section>
+  )
+}
+
 function UnansweredList() {
   const [rows, setRows] = useState<Unanswered[] | null>(null)
   useEffect(() => {

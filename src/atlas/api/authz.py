@@ -75,6 +75,9 @@ POLICY: dict[tuple[str, str], Rule] = {
     # E4.1: the organisation's audit record and how long it is kept.
     ("GET", "/org/audit"): "org_admin",
     ("PUT", "/org/audit/settings"): "org_admin",
+    # E4.3: what each sheet spends today, and its own daily limit.
+    ("GET", "/org/spending"): "org_admin",
+    ("PUT", "/org/spending/{sheet}"): "org_admin",
     # E2.3: one document's access, and removing it. The route also needs the
     # caller to be able to read the document itself.
     ("GET", "/namespaces/{namespace}/documents/access"): "write",
