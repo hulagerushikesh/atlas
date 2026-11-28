@@ -36,7 +36,7 @@ from starlette.requests import Request
 
 from atlas import __version__
 from atlas.access import set_reader_access
-from atlas.api import tenancy
+from atlas.api import audit, tenancy
 from atlas.api.authz import authorize
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
 from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
@@ -84,6 +84,7 @@ def _refused(exc: HTTPException) -> ToolError:
 async def list_sheets(ctx: Context) -> list[dict[str, str]]:
     """The sheets you may read. Search one by name."""
     request = _caller(ctx)
+    audit.note(request, "mcp.list_sheets")
     registry = get_registry(request)
     try:
         found = await tenancy.readable_workspaces(get_principal(request),
@@ -96,6 +97,7 @@ async def list_sheets(ctx: Context) -> list[dict[str, str]]:
 async def list_sources(sheet: str, ctx: Context) -> list[dict[str, Any]]:
     """The documents on a sheet that you may read, with how many passages each holds."""
     request = _caller(ctx)
+    audit.note(request, "mcp.list_sources", sheet=sheet)
     try:
         ws = await authorize(request, sheet, "read")
     except HTTPException as exc:
@@ -116,6 +118,7 @@ async def search(question: str, sheet: str, ctx: Context, limit: int = 8) -> dic
 
     request = _caller(ctx)
     question = question.strip()
+    audit.note(request, "mcp.search", sheet=sheet, question=question)
     if not question:
         raise ToolError("Ask a question.")
     try:
@@ -136,6 +139,7 @@ async def search(question: str, sheet: str, ctx: Context, limit: int = 8) -> dic
     await _charge(usage, spend, api_key_id=None if key_id is None else str(key_id),
                   namespace=sheet, latency_ms=ms)
     chunks = found.chunks[:max(1, min(limit, MAX_RESULTS))]
+    request.state.audit["passages"] = len(chunks)
     logger.info("mcp_search", sheet=sheet, passages=len(chunks), ms=round(ms))
     return {
         "sheet": ws.name,

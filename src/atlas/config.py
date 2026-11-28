@@ -347,6 +347,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     log_level: str = "INFO"
+    # E4.2: question text in the general logs. Off unless a laptop asks for it.
+    log_questions: bool = False
     enable_prometheus: bool = True
     sentry_dsn: str = ""             # optional: set to enable Sentry error tracking
 

@@ -326,6 +326,11 @@ class TenancyStore(Protocol):
     async def list_records(self, kind: str, org_id: str | None = None
                            ) -> list[dict[str, Any]]: ...
     async def delete_record(self, kind: str, key: str) -> None: ...
+    # E4.1: the audit record. Append and read only; entries leave by expiry.
+    async def append_audit(self, org_id: str, entry: dict[str, Any]) -> None: ...
+    async def list_audit(self, org_id: str, *, before: float | None = None,
+                         limit: int = 100) -> list[dict[str, Any]]: ...
+    async def prune_audit(self, now: float) -> int: ...
 
 
 def normalise_email(email: str) -> str:
@@ -398,6 +403,11 @@ CREATE TABLE IF NOT EXISTS records (
     kind TEXT NOT NULL, key TEXT NOT NULL, org_id TEXT NOT NULL, data TEXT NOT NULL,
     PRIMARY KEY (kind, key)
 );
+CREATE TABLE IF NOT EXISTS audit (
+    id TEXT PRIMARY KEY, org_id TEXT NOT NULL, ts REAL NOT NULL, expires_at REAL NOT NULL,
+    data TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS audit_org_ts ON audit (org_id, ts);
 CREATE TABLE IF NOT EXISTS subject_groups (
     kind TEXT NOT NULL, subject_id TEXT NOT NULL, group_id TEXT NOT NULL,
     PRIMARY KEY (kind, subject_id, group_id)
@@ -655,6 +665,24 @@ class SQLiteTenancyStore:
     async def delete_record(self, kind: str, key: str) -> None:
         await self._run(("DELETE FROM records WHERE kind = ? AND key = ?", (kind, key)))
 
+    async def append_audit(self, org_id: str, entry: dict[str, Any]) -> None:
+        await self._run(("INSERT INTO audit VALUES (?, ?, ?, ?, ?)",
+                         (entry["id"], org_id, entry["ts"], entry["expires_at"],
+                          json.dumps(entry))))
+
+    async def list_audit(self, org_id: str, *, before: float | None = None,
+                         limit: int = 100) -> list[dict[str, Any]]:
+        rows = await self._all(
+            "SELECT data FROM audit WHERE org_id = ? AND ts < ? ORDER BY ts DESC LIMIT ?",
+            (org_id, before if before is not None else float("inf"), limit))
+        return [dict(json.loads(r["data"])) for r in rows]
+
+    async def prune_audit(self, now: float) -> int:
+        expired = await self._all("SELECT id FROM audit WHERE expires_at <= ?", (now,))
+        if expired:
+            await self._run(("DELETE FROM audit WHERE expires_at <= ?", (now,)))
+        return len(expired)
+
     async def delete_group(self, group_id: str) -> None:
         # Membership first: a member left holding a deleted group's id would
         # keep reading documents shared with it if the id were ever reused.
@@ -903,6 +931,34 @@ class FirestoreTenancyStore:
 
     async def delete_record(self, kind: str, key: str) -> None:
         await self._record(kind, key).delete()
+
+    def _audit(self, org_id: str) -> Any:
+        # Per organisation, so reading one org's newest entries needs only
+        # Firestore's automatic single-field index on ts.
+        return self._col("audit").document(org_id).collection("audit_entries")
+
+    async def append_audit(self, org_id: str, entry: dict[str, Any]) -> None:
+        import datetime as _dt  # noqa: PLC0415
+
+        await self._audit(org_id).document(entry["id"]).set({
+            "ts": entry["ts"], "data": json.dumps(entry),
+            # A Timestamp, so a Firestore TTL policy on audit_entries.expires_at
+            # deletes expired entries (docs/deploy.md).
+            "expires_at": _dt.datetime.fromtimestamp(entry["expires_at"], tz=_dt.UTC)})
+
+    async def list_audit(self, org_id: str, *, before: float | None = None,
+                         limit: int = 100) -> list[dict[str, Any]]:
+        from google.cloud.firestore_v1.base_query import FieldFilter  # noqa: PLC0415
+        from google.cloud.firestore_v1.query import Query  # noqa: PLC0415
+
+        q = self._audit(org_id)
+        if before is not None:
+            q = q.where(filter=FieldFilter("ts", "<", before))
+        snaps = await q.order_by("ts", direction=Query.DESCENDING).limit(limit).get()
+        return [dict(json.loads((s.to_dict() or {}).get("data", "{}"))) for s in snaps]
+
+    async def prune_audit(self, now: float) -> int:
+        return 0    # Firestore's TTL policy removes expired entries
 
     async def delete_group(self, group_id: str) -> None:
         group = await self.get_group(group_id)

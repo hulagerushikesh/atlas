@@ -35,7 +35,7 @@ from pathlib import Path
 import structlog
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
-from atlas.api import tenancy
+from atlas.api import audit, tenancy
 from atlas.api.authz import authorize
 from atlas.api.budget import BudgetExceeded, seconds_until_utc_midnight
 from atlas.api.dependencies import get_app_state, get_registry
@@ -135,6 +135,7 @@ async def ingest(
     app_state = get_app_state(request)
     # Before anything else: a caller who may not write here learns nothing
     # about the server's files or the corpus by trying.
+    audit.note(request, "ingest", sheet=body.namespace, path=body.path)
     ws = await authorize(request, body.namespace, "write")
     corpus = tenancy.registry_namespace(ws)
     _writable(corpus, get_registry(request).settings.router)
@@ -243,6 +244,7 @@ async def ingest_upload(
     # Before the budget check and before a byte is read: a write that cannot
     # be accepted should not spend, and should not make the caller wait for
     # an upload first.
+    audit.note(request, "upload", sheet=namespace, files=[f.filename for f in files][:50])
     ws = await authorize(request, namespace, "write")
     corpus = tenancy.registry_namespace(ws)
     _writable(corpus, get_registry(request).settings.router)

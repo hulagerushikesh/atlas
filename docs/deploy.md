@@ -267,6 +267,22 @@ whose OIDC audience must equal `DRIVE_PUBLIC_URL`. While the consent screen
 is in Testing, a Drive grant lapses after 7 days; the panel then says
 "Reconnect Drive".
 
+## The audit record (E4.1)
+
+Entries live in Firestore under `atlas_audit/{org}/audit_entries`, each with
+an `expires_at` timestamp set from the organisation's retention setting
+(default 90 days; admins change it in Members → Activity). One TTL policy,
+once, makes Firestore delete expired entries (free; deletion happens within
+about a day of expiry):
+
+```bash
+gcloud firestore fields ttls update expires_at --collection-group=audit_entries \
+  --enable-ttl --project=atlas-rag-rush
+```
+
+Question text is withheld from the general logs (E4.2); set
+`LOG_QUESTIONS=true` only on a laptop.
+
 ## The keep-warm job
 
 `atlas-keepwarm` is a Cloud Scheduler job, created by hand rather than by

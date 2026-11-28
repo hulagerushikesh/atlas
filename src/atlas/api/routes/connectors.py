@@ -30,7 +30,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from atlas.api import sessions, tenancy
+from atlas.api import audit, sessions, tenancy
 from atlas.api.authz import authorize, require_org_admin
 from atlas.api.background import spawn
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
@@ -158,6 +158,7 @@ async def callback(request: Request, state: str = "", code: str = "",
     if ws is None or not person.can(ws, "write"):
         raise HTTPException(status_code=404, detail={
             "code": "workspace_not_found", "message": "That sheet is no longer yours to edit."})
+    audit.note(request, "drive.connect", sheet=ws.name)
     back = f"/app?namespace={ws.name}"
     if error or not code:
         return RedirectResponse(f"{back}&drive=declined", status_code=303)

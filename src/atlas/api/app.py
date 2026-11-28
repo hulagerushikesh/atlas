@@ -38,6 +38,7 @@ from starlette.routing import Route
 
 from atlas import __version__
 from atlas.api import mcp_server
+from atlas.api.audit import AuditMiddleware
 from atlas.api.background import drain
 from atlas.api.budget import SpendMeter
 from atlas.api.cache import QueryCache
@@ -97,7 +98,7 @@ async def connect_redis(settings: Settings) -> object | None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state._settings
-    configure_logging(level=settings.log_level, json=True)
+    configure_logging(level=settings.log_level, json=True, log_questions=settings.log_questions)
 
     logger.info("atlas_startup", version=__version__)
 
@@ -236,6 +237,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.add_middleware(TracingMiddleware)
     app.add_middleware(PrometheusMiddleware)
+    # Inside the key middleware, so each entry knows who made the request.
+    app.add_middleware(AuditMiddleware)
     app.add_middleware(APIKeyMiddleware, enabled=cfg.auth_enabled, demo_rpm=cfg.budget.demo_rpm,
                        session_secret=cfg.session_secret)
     # Sign-in needs the key middleware to read its cookie, so it is on only
