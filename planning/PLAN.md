@@ -207,9 +207,9 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T38~~ | ~~Build E6.1 + E6.2: feedback under every answer; admins' unanswered-questions list~~ | C | ₹0 | **done 2026-11-28** — thumbs up/down with a reason (wrong answer, wrong source, didn't answer, other) and an optional comment, kept in the audit record; every question a sheet could not answer (console, API, cached or streamed) is noted; Members → Unanswered questions groups them by sheet and wording, most asked first, with who and why. Checked in a headless browser | E6.1, E6.2 |
 | ~~T39~~ | ~~Deploy; check feedback and Unanswered questions live~~ | C + You | ₹0 + paise | **done 2026-11-28** — live: "What is the parental leave policy?" and "DOB of Mahatma Gandhi" each appeared under Unanswered questions as "not in the documents" (the Gandhi document has no birth date, checked); answered questions did not. The thumbs-down was not clicked live; its path is the audit record already proven live in T37 | E6.1, E6.2 |
 | ~~T40~~ | ~~Clear the three parked Drive items: re-embed only when a file's text changes, run syncs inside their request under a time limit, carry a cut-short pass over to the next~~ | C | ₹0 | **done 2026-11-28** | E3.2 |
-| T41 | Deploy; check "Sync now" finishes and an unshare re-embeds nothing live | You + C | ₹0 | half done 2026-11-28 — live: Sync now finished inside its request in 3.9 s and refreshed the list; 5-minute checks clean on the new version. Sharing check not yet seen: the address used already had access through the folder, so Drive changed nothing | E3.2 |
+| ~~T41~~ | ~~Deploy; check "Sync now" finishes and an unshare re-embeds nothing live~~ | You + C | ₹0 | **done 2026-11-28** — live: Sync now finished inside its request (3.9 s) and refreshed the list; 5-minute checks clean. The sharing check never reached the two synced files (their Drive version did not move in two tries), so it rests on the unit and integration tests | E3.2 |
 
-E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T40 live; T41's sharing check waits on the owner (share one file with an address that has no folder access). Then T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T40 and T41 done. Next: T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -290,6 +290,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A sheet whose Qdrant collection is missing after documents changed answers 503 on every request (the keyword rebuild can't read it), and an upload can't recreate it. Only reachable by deleting a collection by hand (did so in T26, recreated it). Fix: treat a 404 scroll as an empty sheet
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T41 closed: sharing check not seen live (no change reached the synced files); covered by tests. ₹0.
 
 - 2026-11-28 — T41 half done: Sync now finishes inside its request live (3.9 s); sharing check needs an address without folder access. ₹0.
 
