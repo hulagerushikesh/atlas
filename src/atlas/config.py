@@ -311,6 +311,10 @@ class DriveConfig(BaseSettings):
     scheduler_email: str = ""
     # How often a scheduled pass ignores the change feed and checks everything.
     full_every_seconds: int = 24 * 3600
+    # Time limits on work done inside one request (Cloud Run allows 120 s).
+    # A pass that runs out stops cleanly; the next one carries on.
+    sync_seconds: int = 50      # "Sync now" and choosing a folder
+    tick_seconds: int = 90      # the 5-minute pass, across every sheet
 
 
 class APIConfig(BaseSettings):

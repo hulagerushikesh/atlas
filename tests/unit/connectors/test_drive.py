@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Any
 
 import httpx
@@ -120,8 +121,10 @@ class FakeIndexer:
 
 
 class Folder:
-    def __init__(self, files: list[DriveFile], broken: set[str] | None = None) -> None:
-        self.files, self.broken = files, broken or set()
+    def __init__(self, files: list[DriveFile], broken: set[str] | None = None,
+                 text: bytes = b"# Title\n\nsome text here") -> None:
+        self.files, self.broken, self.text = files, broken or set(), text
+        self.downloads = 0
 
     async def walk(self, folder_id: str) -> list[DriveFile]:
         return self.files
@@ -132,7 +135,8 @@ class Folder:
     async def download(self, file: DriveFile) -> bytes:
         if file.id in self.broken:
             raise RuntimeError("network")
-        return b"# Title\n\nsome text here"
+        self.downloads += 1
+        return self.text
 
 
 def _f(fid: str, mime: str = GOOGLE_DOC, size: int = 10, version: str = "1") -> DriveFile:
@@ -146,7 +150,7 @@ class TestOnePass:
                          _f("big", "application/pdf", size=10**9)])
         report, held = asyncio.run(sync_folder(folder, FakeIndexer(), "r", {}, {}))
         assert report.indexed == 1 and set(report.skipped) == {"dir/sheet", "dir/big"}
-        assert held == {"doc": "1"}
+        assert list(held) == ["doc"] and held["doc"].startswith("1|")
 
     def test_a_folder_bigger_than_the_cap_stops_at_the_cap(self) -> None:
         folder = Folder([_f(f"d{i}") for i in range(5)])
@@ -157,8 +161,9 @@ class TestOnePass:
         idx = FakeIndexer()
         _, held = asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", {}, {}))
         folder = Folder([_f("a", version="2")], broken={"a"})
+        before = dict(held)
         report, held = asyncio.run(sync_folder(folder, idx, "r", held, {}))
-        assert report.failed == ["dir/a"] and report.removed == 0 and held == {"a": "1"}
+        assert report.failed == ["dir/a"] and report.removed == 0 and held == before
 
     def test_a_second_pass_with_nothing_changed_reads_nothing(self) -> None:
         idx = FakeIndexer()
@@ -166,6 +171,42 @@ class TestOnePass:
         report, _ = asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", held, {}))
         assert (report.indexed, report.unchanged, report.access_changed) == (0, 1, 0)
         assert idx.indexed == ["dir/a"]
+
+    def test_a_new_version_with_the_same_text_is_not_embedded_again(self) -> None:
+        # Drive moves the version on a sharing change too.
+        idx = FakeIndexer()
+        _, held = asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", {}, {}))
+        folder = Folder([_f("a", version="2")])
+        report, held = asyncio.run(sync_folder(folder, idx, "r", held, {}))
+        assert report.indexed == 0 and report.unchanged == 1 and folder.downloads == 1
+        assert idx.indexed == ["dir/a"] and held["a"].startswith("2|")
+        report, _ = asyncio.run(sync_folder(Folder([_f("a", version="2")]), idx, "r", held, {}))
+        assert report.unchanged == 1          # and the new version is now the one held
+
+    def test_new_text_is_embedded_again(self) -> None:
+        idx = FakeIndexer()
+        _, held = asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", {}, {}))
+        folder = Folder([_f("a", version="2")], text=b"# Title\n\nnew words")
+        report, _ = asyncio.run(sync_folder(folder, idx, "r", held, {}))
+        assert report.indexed == 1 and idx.indexed == ["dir/a", "dir/a"]
+
+    def test_an_entry_from_before_the_text_check_is_embedded_once(self) -> None:
+        idx = FakeIndexer()
+        asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", {}, {}))
+        report, held = asyncio.run(sync_folder(Folder([_f("a", version="2")]), idx, "r",
+                                               {"a": "1"}, {}))
+        assert report.indexed == 1 and held["a"].startswith("2|")
+
+    def test_out_of_time_it_stops_and_keeps_what_it_has(self) -> None:
+        idx = FakeIndexer()
+        _, held = asyncio.run(sync_folder(Folder([_f("a")]), idx, "r", {}, {}))
+        folder = Folder([_f("a", version="2"), _f("b"), _f("c")])
+        report, now = asyncio.run(sync_folder(folder, idx, "r", held, {},
+                                              deadline=time.monotonic() - 1))
+        assert (report.left, report.removed, report.indexed) == (3, 0, 0)
+        assert now == held and folder.downloads == 0
+        report, now = asyncio.run(sync_folder(folder, idx, "r", now, {}))
+        assert report.left == 0 and set(now) == {"a", "b", "c"}
 
 
 # ── The real client, against recorded responses ─────────────────────────────

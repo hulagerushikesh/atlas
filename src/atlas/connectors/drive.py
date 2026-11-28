@@ -12,7 +12,8 @@ Three parts, kept apart so each is testable without Google:
   an empty list, which nobody can read.
 * `sync_folder` — one pass over a connected folder: index new and changed
   files, rewrite access lists that changed (₹0, no re-embedding), remove
-  files that left the folder. Returns counts for the console.
+  files that left the folder. Returns counts for the console. A pass that
+  runs out of time stops cleanly and the next one carries on.
 * `touches` — whether anything in Drive's change feed concerns the folder
   (E3.2), so the 5-minute check skips the walk when nothing did.
 
@@ -23,7 +24,9 @@ the file's path in the folder, which is what a citation shows.
 
 from __future__ import annotations
 
+import hashlib
 import tempfile
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -276,12 +279,13 @@ class SyncReport:
     closed: list[str] = field(default_factory=list)       # sharing unreadable → nobody
     failed: list[str] = field(default_factory=list)
     folders: list[str] = field(default_factory=list)      # watched by the change feed
+    left: int = 0             # not reached before the deadline; the next pass carries on
 
     def as_dict(self) -> dict[str, Any]:
         return {"indexed": self.indexed, "unchanged": self.unchanged,
                 "access_changed": self.access_changed, "removed": self.removed,
-                "skipped": self.skipped[:50], "closed": self.closed[:50],
-                "failed": self.failed[:50]}
+                "left": self.left, "skipped": self.skipped[:50],
+                "closed": self.closed[:50], "failed": self.failed[:50]}
 
 
 class Indexer(Protocol):
@@ -306,15 +310,33 @@ async def _read(file: DriveFile, raw: bytes) -> Any:
     return doc
 
 
+def _held(value: str) -> tuple[str, str]:
+    """A held entry is "version|digest"; entries from before the digest have none."""
+    version, _, digest = value.partition("|")
+    return version, digest
+
+
+def _digest(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()[:32]
+
+
 async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
                       held: dict[str, str], group_links: dict[str, str], *,
                       max_files: int = 500, max_file_bytes: int = 10 * 1024 * 1024,
+                      deadline: float | None = None,
                       ) -> tuple[SyncReport, dict[str, str]]:
     """Bring the sheet in line with the folder.
 
-    *held* maps each Drive file id already synced to the version indexed; the
-    returned map replaces it. Access lists are re-read every pass, because a
-    sharing change does not change a file's version.
+    *held* maps each Drive file id already synced to "version|digest" of what
+    was indexed; the returned map replaces it. Access lists are re-read every
+    pass, because a sharing change does not change a file's text.
+
+    Drive moves a file's version on a sharing change too, so a new version is
+    downloaded (free) and re-embedded (paise) only if its text differs.
+
+    Past *deadline* (a `time.monotonic()` value) no further file is started:
+    what is held stays held, nothing unreached is removed, and `report.left`
+    says how many files the next pass must still look at.
     """
     report = SyncReport()
     walked = await source.walk(folder_id)
@@ -326,6 +348,11 @@ async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
     for f in supported[max_files:]:
         report.skipped.append(f.path)
     for f in supported[:max_files]:
+        if deadline is not None and time.monotonic() >= deadline:
+            report.left += 1
+            if f.id in held:
+                now[f.id] = held[f.id]
+            continue
         if f.size > max_file_bytes:
             report.skipped.append(f.path)
             continue
@@ -338,23 +365,33 @@ async def sync_folder(source: DriveSource, indexer: Indexer, folder_id: str,
                 report.closed.append(f.path)
                 continue
             doc_id = drive_doc_id(f.id)
-            if held.get(f.id) != f.version or not f.version:
-                doc = await _read(f, await source.download(f))
+            was = held.get(f.id)
+            version, digest = _held(was) if was is not None else ("", "")
+            text_same = was is not None and bool(f.version) and version == f.version
+            if text_same:
+                entry = was
+            else:
+                raw = await source.download(f)
+                entry = f"{f.version}|{_digest(raw)}"
+                text_same = was is not None and digest == _digest(raw)
+            if text_same:
+                report.unchanged += 1
+            else:
+                doc = await _read(f, raw)
                 if doc is None:
                     report.failed.append(f.path)
                     continue
                 doc.acl = acl
                 await indexer.index_documents([doc])
                 report.indexed += 1
-            else:
-                report.unchanged += 1
             # Unchanged passages are not rewritten by an index, so the list is
             # set here whenever it differs, new file or old.
             if (await indexer.document_acl(doc_id) or []) != acl:
                 await indexer.set_document_acl(doc_id, acl)
-                if held.get(f.id) == f.version:
+                if text_same:
                     report.access_changed += 1
-            now[f.id] = f.version
+            assert entry is not None
+            now[f.id] = entry
         except Exception as exc:  # noqa: BLE001 -- one bad file must not stop the folder
             logger.warning("drive_file_failed", file_id=f.id, error=str(exc))
             report.failed.append(f.path)

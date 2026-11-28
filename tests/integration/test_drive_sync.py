@@ -89,6 +89,10 @@ async def _found(world: Any, who: Principal, query: str) -> set[str]:
     return await asyncio.create_task(search())
 
 
+def _versions(held: dict[str, str]) -> dict[str, str]:
+    return {k: v.partition("|")[0] for k, v in held.items()}
+
+
 ALICE = Principal(kind="user", subject_id="u1", org_id="o", email="alice@acme.com",
                   hosted_domain="acme.com")
 BOB = Principal(kind="user", subject_id="u2", org_id="o", email="bob@gmail.com")
@@ -129,6 +133,31 @@ class TestSharingReachesSearch:
 
         asyncio.run(go())
 
+    def test_an_unshare_that_moves_the_version_embeds_nothing(self, world: Any) -> None:
+        # Real Drive moves a file's version on a sharing change too.
+        drive = FakeDrive()
+        drive.add("f1", "Plan.md", "quarterly plan budget", [user("bob@gmail.com")])
+
+        async def go() -> None:
+            _, held = await sync_folder(drive, world[0], "root", {}, {})
+            indexed: list[Any] = []
+            real = world[0].index_documents
+
+            async def spy(docs: list[Any]) -> Any:
+                indexed.append(docs)
+                return await real(docs)
+
+            world[0].index_documents = spy
+            drive.add("f1", "Plan.md", "quarterly plan budget", [user("alice@acme.com")],
+                      version="2")
+            report, held = await sync_folder(drive, world[0], "root", held, {})
+            assert (report.indexed, report.access_changed) == (0, 1)
+            assert indexed == [] and drive.downloads == 2    # read, compared, kept
+            assert await _found(world, BOB, "quarterly plan") == set()
+            assert await _found(world, ALICE, "quarterly plan") == {drive_doc_id("f1")}
+
+        asyncio.run(go())
+
     def test_deleting_in_drive_removes_every_passage(self, world: Any) -> None:
         drive = FakeDrive()
         drive.add("f1", "Plan.md", "quarterly plan budget", [DrivePermission(type="anyone")])
@@ -163,7 +192,7 @@ class TestSharingReachesSearch:
             drive.add("f1", "New name.md", "revised wording entirely",
                       [DrivePermission(type="anyone")], version="2")
             report, held = await sync_folder(drive, world[0], "root", held, {})
-            assert report.indexed == 1 and report.removed == 0 and held == {"f1": "2"}
+            assert report.indexed == 1 and report.removed == 0 and _versions(held) == {"f1": "2"}
             hits = await _found(world, ALICE, "revised wording")
             assert hits == {drive_doc_id("f1")}
 
@@ -180,7 +209,7 @@ class TestSharingReachesSearch:
             assert await _found(world, BOB, "quarterly plan") == set()
             drive.add("f1", "Plan.md", "quarterly plan budget", [user("bob@gmail.com")])
             report, held = await sync_folder(drive, world[0], "root", held, {})
-            assert report.indexed == 1 and held == {"f1": "1"}
+            assert report.indexed == 1 and _versions(held) == {"f1": "1"}
             assert await _found(world, BOB, "quarterly plan") == {drive_doc_id("f1")}
 
         asyncio.run(go())
