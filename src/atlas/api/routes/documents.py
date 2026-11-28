@@ -20,7 +20,7 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from atlas.access import reader_access
-from atlas.api import tenancy
+from atlas.api import audit, tenancy
 from atlas.api.authz import access_unavailable, authorize
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
 from atlas.api.routes.ingest import _writable
@@ -138,6 +138,7 @@ async def get_document_access(namespace: str, request: Request,
             response_model=DocumentAccessResponse)
 async def set_document_access(namespace: str, body: DocumentAccessRequest,
                               request: Request) -> DocumentAccessResponse:
+    audit.note(request, "document.access", sheet=namespace, source=body.source)
     ws, corpus, doc_id = await _open(request, namespace, body.source)
     acl = await _acl(get_principal(request), body)
     registry = get_registry(request)
@@ -152,6 +153,7 @@ async def set_document_access(namespace: str, body: DocumentAccessRequest,
 async def remove_document(namespace: str, request: Request,
                           source: str = Query(..., min_length=1, max_length=1024),
                           ) -> DocumentRemovedResponse:
+    audit.note(request, "document.remove", sheet=namespace, source=source)
     ws, corpus, doc_id = await _open(request, namespace, source)
     registry = get_registry(request)
     removed = await registry.get(corpus).indexer.delete_document(doc_id)

@@ -368,6 +368,19 @@ export const syncDrive = (sheet: string) =>
 export const disconnectDrive = (sheet: string) =>
   api(drive(sheet), { method: "DELETE" }, 60000).then((r) => r.json() as Promise<{ connected: false; removed: number }>)
 
+/* ── The audit record (E4.1): organisation admins only ──────────────────── */
+
+export interface AuditEntry {
+  id: string; ts: number; action: string; status: number; sheet?: string
+  actor: { kind: string; id: string; email?: string; key_name?: string }
+  detail?: { question?: string; source?: string; files?: string[]; passages?: number; [k: string]: unknown }
+}
+export const getAudit = (before?: number) =>
+  api(`/org/audit?limit=50${before ? `&before=${before}` : ""}`, {}, 8000)
+    .then((r) => r.json() as Promise<{ entries: AuditEntry[]; retention_days: number }>)
+export const setAuditRetention = (days: number) =>
+  api("/org/audit/settings", { method: "PUT", ...json({ retention_days: days }) }, 5000)
+
 /* ── Personal keys, for AI assistants over MCP (E4) ─────────────────────── */
 
 export interface PersonalKey { key_id: string; name: string; created_at: number | null }

@@ -18,10 +18,11 @@ import httpx
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
+from starlette.middleware import Middleware
 from starlette.routing import Route
 
 from atlas.access import reader_access
-from atlas.api import mcp_server, personal_keys, tenancy
+from atlas.api import audit, mcp_server, personal_keys, tenancy
 from atlas.api.routes import me
 from atlas.interfaces.document import ChunkMetadata, DocumentType
 from atlas.interfaces.retriever import RetrievedChunk
@@ -35,7 +36,7 @@ from tests.unit.api.test_sign_in import (  # noqa: F401 -- pytest fixtures
 
 
 @pytest.fixture
-def mcp_site(site: Site) -> Site:
+def mcp_site(site: Site, monkeypatch: pytest.MonkeyPatch) -> Site:
     site.app.include_router(me.router)
     server, asgi = mcp_server.build()
     site.app.state.mcp = server
@@ -51,6 +52,15 @@ def mcp_site(site: Site) -> Site:
 
     state = site.app.state.atlas
     state.registry.get.return_value.pipeline._retrieve_all = AsyncMock(side_effect=retrieve)
+    site.app.user_middleware.append(Middleware(audit.AuditMiddleware))
+    site.app.middleware_stack = None
+    written: list[dict[str, Any]] = []
+
+    async def keep(entry: dict[str, Any]) -> None:
+        written.append(entry)
+
+    monkeypatch.setattr(audit, "write", keep)
+    site.app.state.audit_written = written
     site.app.state.mcp_seen = seen
     return site
 
@@ -158,6 +168,14 @@ class TestMcp:
             "text": "Twenty days a year."}
         [access] = mcp_site.app.state.mcp_seen
         assert access is not None and "email:admin@acme.com" in access
+
+    def test_each_search_is_in_the_audit_record(self, mcp_site: Site) -> None:
+        _calls(mcp_site, _key(mcp_site),
+               [("search", {"question": "How much leave?", "sheet": "docs"})])
+        [entry] = [e for e in mcp_site.app.state.audit_written if e["action"] == "mcp.search"]
+        assert entry["detail"] == {"question": "How much leave?", "passages": 1}
+        assert entry["sheet"] == "docs" and entry["actor"]["email"] == "admin@acme.com"
+        assert entry["actor"]["key_name"] == "Claude Code"
 
     def test_a_sheet_the_owner_cannot_read_is_refused(self, mcp_site: Site) -> None:
         [r] = _calls(mcp_site, _key(mcp_site, "reader@gmail.com"),

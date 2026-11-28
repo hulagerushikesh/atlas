@@ -17,13 +17,14 @@ from __future__ import annotations
 
 import re
 from collections.abc import Awaitable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
+from pydantic import BaseModel, Field
 
+from atlas.api import audit, tenancy
 from atlas.api import auth as auth_db
-from atlas.api import tenancy
 from atlas.api.authz import access_unavailable, require_org_admin
 from atlas.api.routes.keys import _require_admin
 from atlas.api.schemas import (
@@ -335,6 +336,32 @@ async def revoke_service_account(key_id: str, request: Request) -> Response:
         raise _not_found("service account")
     logger.info("service_account_revoked", org_id=principal.org_id)
     return Response(status_code=204)
+
+
+# ── The audit record (E4.1) ───────────────────────────────────────────────────
+
+class AuditSettings(BaseModel):
+    retention_days: int = Field(..., ge=audit.MIN_RETENTION_DAYS, le=audit.MAX_RETENTION_DAYS)
+
+
+@router.get("/org/audit")
+async def read_audit(request: Request, before: float | None = None,
+                     limit: int = Query(100, ge=1, le=500)) -> dict[str, Any]:
+    """The organisation's newest entries, newest first; page with `before`."""
+    principal = require_org_admin(request)
+    entries = await _s(tenancy.get_tenancy().list_audit(principal.org_id, before=before,
+                                                        limit=limit))
+    return {"entries": entries,
+            "retention_days": await _s(audit.retention_days(principal.org_id))}
+
+
+@router.put("/org/audit/settings")
+async def set_audit_settings(body: AuditSettings, request: Request) -> dict[str, Any]:
+    """How long new entries are kept. Entries already written keep their date."""
+    principal = require_org_admin(request)
+    await _s(audit.set_retention_days(principal.org_id, body.retention_days))
+    audit.note(request, "audit.retention", retention_days=body.retention_days)
+    return {"retention_days": body.retention_days}
 
 
 # ── Break-glass: the shared admin secret ──────────────────────────────────────

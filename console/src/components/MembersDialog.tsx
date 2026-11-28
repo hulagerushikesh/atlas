@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  createGroup, createServiceAccount, createSheet, deleteGroup, getOrg, invite, messageOf, removeMember,
-  revokeServiceAccount, updateMember, withdrawInvitation, type Grants, type Org, type Role,
+  createGroup, createServiceAccount, createSheet, deleteGroup, getAudit, getOrg, invite, messageOf, removeMember,
+  revokeServiceAccount, setAuditRetention, updateMember, withdrawInvitation, type AuditEntry, type Grants, type Org, type Role,
 } from "@/lib/api"
 import { GroupToggle } from "@/components/DocumentDialog"
 import { useAtlas } from "@/lib/store"
@@ -73,6 +73,7 @@ export function MembersDialog() {
             <Invite sheets={sheets} act={act} domain={org.domain} />
             <Sheets org={org} act={act} />
             <Machines org={org} sheets={sheets} act={act} />
+            <Activity />
           </div>
         )}
       </DialogContent>
@@ -385,6 +386,89 @@ function Machines({ org, sheets, act }: { org: Org; sheets: string[]; act: Act }
         </div>
         <GrantsEditor sheets={sheets} roles={roles} onRoles={setRoles} />
       </form>
+    </Section>
+  )
+}
+
+const DOING: Record<string, string> = {
+  query: "asked", "mcp.search": "searched through an assistant", "mcp.list_sheets": "listed sheets through an assistant",
+  "mcp.list_sources": "listed sources through an assistant", sign_in: "signed in", upload: "uploaded",
+  ingest: "indexed a server path", "document.access": "changed readers of", "document.remove": "removed",
+  "audit.retention": "changed how long this record is kept",
+  "POST /org/groups": "made a group", "DELETE /org/groups/{group_id}": "deleted a group",
+  "POST /org/invitations": "invited someone", "DELETE /org/invitations/{email}": "withdrew an invitation",
+  "PUT /org/members/{user_id}": "changed a member's access", "DELETE /org/members/{user_id}": "removed a member",
+  "POST /org/workspaces": "added a sheet", "POST /org/service-accounts": "made a service account key",
+  "DELETE /org/service-accounts/{key_id}": "revoked a service account key",
+  "POST /me/keys": "made a personal key", "DELETE /me/keys/{key_id}": "revoked a personal key",
+  "PUT /namespaces/{namespace}/connectors/drive": "chose a Drive folder for",
+  "POST /namespaces/{namespace}/connectors/drive/sync": "synced Drive for",
+  "DELETE /namespaces/{namespace}/connectors/drive": "disconnected Drive from",
+  "drive.connect": "connected Drive to",
+}
+const KEEP = [30, 90, 365, 730, 2555]
+
+/**
+ * The organisation's audit record (E4.1): newest first, questions included,
+ * readable only by organisation admins. Entries leave by age alone.
+ */
+function Activity() {
+  const [entries, setEntries] = useState<AuditEntry[] | null>(null)
+  const [days, setDays] = useState<number | null>(null)
+  const [more, setMore] = useState(true)
+  const load = useCallback(async (before?: number) => {
+    try {
+      const r = await getAudit(before)
+      setEntries((old) => (before && old ? [...old, ...r.entries] : r.entries))
+      setDays(r.retention_days); setMore(r.entries.length === 50)
+    } catch (e) { toast.error("Activity not loaded", { description: messageOf(e) }) }
+  }, [])
+  useEffect(() => { void load() }, [load])
+
+  const keep = async (v: string) => {
+    try { await setAuditRetention(Number(v)); setDays(Number(v)); toast.success(`New entries kept ${v} days`) } catch (e) {
+      toast.error("Not saved", { description: messageOf(e) })
+    }
+  }
+
+  return (
+    <Section title="Activity">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="label normal-case tracking-normal text-[12px] leading-snug">
+          Who asked what, and who changed what, on every sheet. Only organisation admins see this.
+        </p>
+        {days !== null && (
+          <Select value={String(days)} onValueChange={(v) => void keep(v)}>
+            <SelectTrigger className="h-8 w-auto gap-2 font-mono text-[12px]" aria-label="Keep entries for"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {(KEEP.includes(days) ? KEEP : [...KEEP, days].sort((a, b) => a - b)).map((d) => (
+                <SelectItem key={d} value={String(d)} className="font-mono text-[12px]">keep {d} days</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {entries === null ? <p className="label normal-case tracking-normal">Reading activity…</p> : entries.length === 0 ? (
+        <p className="label normal-case tracking-normal">Nothing yet.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {entries.map((e) => (
+            <li key={e.id} className="border-b border-border/60 py-1.5 font-mono text-[12px] leading-relaxed text-ink-2">
+              <span className="text-ink-3">{new Date(e.ts * 1000).toLocaleString()}</span>{" · "}
+              <span className="text-ink-1">{e.actor.email ?? e.actor.key_name ?? e.actor.kind}</span>
+              {e.actor.key_name && e.actor.email && <span className="text-ink-3"> (key: {e.actor.key_name})</span>}{" "}
+              {DOING[e.action] ?? e.action}
+              {e.detail?.source && <> <span className="text-ink-1">{e.detail.source}</span></>}
+              {e.sheet && <> on <span className="text-ink-1">{e.sheet}</span></>}
+              {e.status >= 400 && <span className="text-bad"> · refused ({e.status})</span>}
+              {e.detail?.question && <div className="truncate pl-3 text-ink-3" title={e.detail.question}>“{e.detail.question}”</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {entries && more && (
+        <Button variant="ghost" size="sm" className="press" onClick={() => void load(entries[entries.length - 1]?.ts)}>Older</Button>
+      )}
     </Section>
   )
 }

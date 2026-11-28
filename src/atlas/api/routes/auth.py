@@ -11,10 +11,12 @@ Who a verified account becomes: tenancy.place_user.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from atlas.api import sessions, tenancy
+from atlas.api import audit, sessions, tenancy
 from atlas.api.authz import access_unavailable
 from atlas.api.dependencies import get_principal
 from atlas.api.schemas import (
@@ -97,7 +99,10 @@ async def sign_in_with_google(body: GoogleSignInRequest, request: Request,
     _set_cookie(response, sessions.sign_session(
         user.id, s.secret, email=identity.email, hosted_domain=identity.hosted_domain))
     logger.info("signed_in", org_id=user.org_id)
-    return await _describe(tenancy.principal_from_subject(subject), user)
+    admitted = tenancy.principal_from_subject(subject)
+    audit.note(request, "sign_in")
+    request.state.audit_principal = replace(admitted, email=identity.email)
+    return await _describe(admitted, user)
 
 
 @router.post("/auth/logout", status_code=204)

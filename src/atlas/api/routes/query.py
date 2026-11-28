@@ -65,7 +65,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from atlas.access import readable, reader_access
-from atlas.api import tenancy
+from atlas.api import audit, tenancy
 from atlas.api.authz import authorize
 from atlas.api.background import spawn
 from atlas.api.budget import BudgetExceeded, SpendMeter, seconds_until_utc_midnight
@@ -1034,6 +1034,7 @@ async def query(
     app_state = get_app_state(request)
     # Before the access check, so a visitor naming another sheet still hears
     # that it needs a key rather than that it does not exist.
+    audit.note(request, "query", sheet=body.namespace, question=body.query)
     spend = _meter_for(request, app_state, body.namespace)
     ws = await authorize(request, body.namespace, "read")
     # Cached answers are keyed by workspace id, not name: two organisations
