@@ -23,9 +23,10 @@ import structlog
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
-from atlas.api import audit, tenancy
+from atlas.api import audit, sheet_budget, tenancy
 from atlas.api import auth as auth_db
 from atlas.api.authz import access_unavailable, require_org_admin
+from atlas.api.dependencies import get_app_state
 from atlas.api.routes.keys import _require_admin
 from atlas.api.schemas import (
     AdminInvitationRequest,
@@ -47,6 +48,7 @@ from atlas.api.schemas import (
     WorkspaceCreateRequest,
 )
 from atlas.api.tenancy import Invitation, Role, Subject, normalise_email
+from atlas.cost import USD_TO_INR
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -362,6 +364,41 @@ async def set_audit_settings(body: AuditSettings, request: Request) -> dict[str,
     await _s(audit.set_retention_days(principal.org_id, body.retention_days))
     audit.note(request, "audit.retention", retention_days=body.retention_days)
     return {"retention_days": body.retention_days}
+
+
+# ── Spending limits per sheet (E4.3) ─────────────────────────────────────────
+
+class SpendingLimit(BaseModel):
+    daily_inr: float = Field(..., ge=0, le=sheet_budget.MAX_DAILY_INR,
+                             description="Rupees a day; 0 = no limit of its own")
+
+
+@router.get("/org/spending")
+async def read_spending(request: Request) -> dict[str, Any]:
+    """Today's spend on each sheet, its own limit, and the overall limit."""
+    principal = require_org_admin(request)
+    overall = get_app_state(request).spend
+    sheets = await _s(tenancy.get_tenancy().list_workspaces(principal.org_id))
+    return {
+        "overall": {"daily_inr": round(overall.budget_usd * USD_TO_INR, 2),
+                    "spent_today_inr": round(await overall.today_usd() * USD_TO_INR, 2)},
+        "sheets": [await _s(sheet_budget.view(ws, overall)) for ws in sheets],
+    }
+
+
+@router.put("/org/spending/{sheet}")
+async def set_spending(sheet: str, body: SpendingLimit, request: Request) -> dict[str, Any]:
+    """Give a sheet its own daily limit, inside the overall one. Applies within a minute."""
+    principal = require_org_admin(request)
+    found = [ws for ws in await _s(tenancy.get_tenancy().list_workspaces(principal.org_id))
+             if ws.name == sheet]
+    if not found:
+        raise HTTPException(status_code=404, detail={
+            "code": "workspace_not_found", "message": f"No sheet called '{sheet}'."})
+    limit = round(body.daily_inr, 2)
+    await _s(sheet_budget.set_daily_inr(found[0], limit, principal.email or principal.subject_id))
+    audit.note(request, "sheet.limit", sheet=sheet, daily_inr=limit)
+    return await _s(sheet_budget.view(found[0], get_app_state(request).spend))
 
 
 # ── Break-glass: the shared admin secret ──────────────────────────────────────

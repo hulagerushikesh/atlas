@@ -394,6 +394,15 @@ export interface Unanswered {
 export const getUnanswered = (days = 30) =>
   api(`/org/unanswered?days=${days}`, {}, 8000).then((r) => r.json() as Promise<{ days: number; questions: Unanswered[] }>)
 
+/* ── Spending limits per sheet (E4.3) ───────────────────────────────────── */
+
+export interface SheetSpend { sheet: string; daily_inr: number; spent_today_inr: number }
+export interface Spending { overall: { daily_inr: number; spent_today_inr: number }; sheets: SheetSpend[] }
+export const getSpending = () => api("/org/spending", {}, 8000).then((r) => r.json() as Promise<Spending>)
+export const setSheetLimit = (sheet: string, daily_inr: number) =>
+  api(`/org/spending/${encodeURIComponent(sheet)}`, { method: "PUT", ...json({ daily_inr }) }, 8000)
+    .then((r) => r.json() as Promise<SheetSpend>)
+
 /* ── Personal keys, for AI assistants over MCP (E4) ─────────────────────── */
 
 export interface PersonalKey { key_id: string; name: string; created_at: number | null }

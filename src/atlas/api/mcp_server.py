@@ -36,7 +36,7 @@ from starlette.requests import Request
 
 from atlas import __version__
 from atlas.access import set_reader_access
-from atlas.api import audit, tenancy
+from atlas.api import audit, sheet_budget, tenancy
 from atlas.api.authz import authorize
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
 from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
@@ -123,7 +123,7 @@ async def search(question: str, sheet: str, ctx: Context, limit: int = 8) -> dic
         raise ToolError("Ask a question.")
     try:
         ws = await authorize(request, sheet, "read")
-        spend = get_app_state(request).spend
+        spend = await sheet_budget.meter_for(ws, get_app_state(request).spend)
         await _enforce_budget(spend)
     except HTTPException as exc:
         raise _refused(exc) from exc

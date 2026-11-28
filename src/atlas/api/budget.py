@@ -70,6 +70,18 @@ class SpendMeter:
         self._day = _today()
         self._local = 0.0
 
+    def adopt_mirror(self, other: SpendMeter) -> None:
+        """Carry *other*'s count of today's local charges into this meter."""
+        self._day, self._local = other._day, other._local
+
+    @property
+    def scope(self) -> str:
+        return self._scope
+
+    @property
+    def parent(self) -> SpendMeter | None:
+        return self._parent
+
     @property
     def budget_usd(self) -> float:
         return self._budget

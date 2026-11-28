@@ -27,7 +27,7 @@ from fastapi.testclient import TestClient
 from google.auth import crypt
 from google.auth import jwt as gjwt
 
-from atlas.api import auth, sessions, tenancy
+from atlas.api import auth, sessions, sheet_budget, tenancy
 from atlas.api.middleware.auth_mw import APIKeyMiddleware
 from atlas.api.routes import auth as auth_routes
 from atlas.api.routes import keys as key_routes
@@ -200,6 +200,7 @@ def site(client: TestClient, tmp_path: Path, google_key: Key,
     get_settings.cache_clear()
     asyncio.run(auth.configure_store("sqlite", sqlite_path=tmp_path / "k.db").init())
     auth._windows.clear()
+    sheet_budget.reset()
     store = tenancy.get_tenancy()
 
     async def build() -> dict[str, str]:
