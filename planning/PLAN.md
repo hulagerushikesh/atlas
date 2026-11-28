@@ -206,8 +206,10 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T37~~ | ~~Deploy; Firestore expiry for audit entries; check Activity live~~ | C + You | ₹0 | **done 2026-11-28** — your sign-in and your question appeared in Members → Activity; Firestore's expiry policy is active; the live log lines for that question read "[withheld, 37 chars]" and no log line holds its text | E4.1, E4.2 |
 | ~~T38~~ | ~~Build E6.1 + E6.2: feedback under every answer; admins' unanswered-questions list~~ | C | ₹0 | **done 2026-11-28** — thumbs up/down with a reason (wrong answer, wrong source, didn't answer, other) and an optional comment, kept in the audit record; every question a sheet could not answer (console, API, cached or streamed) is noted; Members → Unanswered questions groups them by sheet and wording, most asked first, with who and why. Checked in a headless browser | E6.1, E6.2 |
 | ~~T39~~ | ~~Deploy; check feedback and Unanswered questions live~~ | C + You | ₹0 + paise | **done 2026-11-28** — live: "What is the parental leave policy?" and "DOB of Mahatma Gandhi" each appeared under Unanswered questions as "not in the documents" (the Gandhi document has no birth date, checked); answered questions did not. The thumbs-down was not clicked live; its path is the audit record already proven live in T37 | E6.1, E6.2 |
+| T40 | Clear the three parked Drive items: re-embed only when a file's text changes, run syncs inside their request under a time limit, carry a cut-short pass over to the next | C | ₹0 | built 2026-11-28, waiting for deploy | E3.2 |
+| T41 | Deploy; check "Sync now" finishes and an unshare re-embeds nothing live | You + C | ₹0 | | E3.2 |
 
-E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T39 done. Next: T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T40 built; T41 (deploy) waits on the owner. Then T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -286,11 +288,10 @@ Write the answer in the table when decided. Claude never decides these.
 - A signed-in person from another organisation cannot open the public demo sheet (their list is their own organisation's); visitors without an account can
 - Sign-in attempts (`/auth/google`) have no per-visitor limit; a refusal costs ≈₹0, so low priority
 - A sheet whose Qdrant collection is missing after documents changed answers 503 on every request (the keyword rebuild can't read it), and an upload can't recreate it. Only reachable by deleting a collection by hand (did so in T26, recreated it). Fix: treat a 404 scroll as an empty sheet
-- Drive's file `version` also moves on a sharing change, so unsharing re-embeds the file (paise each) instead of only rewriting readers; key re-reading on content changes (e.g. `modifiedTime` or the revision id) instead
-- "Sync now" and choosing a folder run after their reply; on Cloud Run that work may stall until the next request (the panel's own polling and the 5-minute check supply one). Not seen in T33 with 3 files; check with a big folder
-- A scheduled pass runs inside a 120 s request: a folder with hundreds of new files needs a longer limit or work split across passes
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T40 built: Drive re-embeds only on new text, syncs run inside their request with time limits, cut-short passes resume. Not live. ₹0.
 
 - 2026-11-28 — T39 done: Unanswered questions live; two questions the documents do not cover listed, answered ones not. Paise.
 

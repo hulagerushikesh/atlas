@@ -342,7 +342,7 @@ export const removeDocument = (sheet: string, source: string) =>
  */
 
 export interface DriveReport {
-  indexed: number; unchanged: number; access_changed: number; removed: number
+  indexed: number; unchanged: number; access_changed: number; removed: number; left: number
   skipped: string[]; closed: string[]; failed: string[]
 }
 export interface DriveStatus {
@@ -362,9 +362,9 @@ export const driveConnectUrl = (sheet: string) =>
 export const getDrive = (sheet: string) =>
   api(drive(sheet), {}, 5000).then((r) => r.json() as Promise<DriveStatus>)
 export const setDriveFolder = (sheet: string, folder: string) =>
-  api(drive(sheet), { method: "PUT", ...json({ folder }) }, 10000).then((r) => r.json() as Promise<DriveStatus>)
+  api(drive(sheet), { method: "PUT", ...json({ folder }) }, 90000).then((r) => r.json() as Promise<DriveStatus>)
 export const syncDrive = (sheet: string) =>
-  api(`${drive(sheet)}/sync`, { method: "POST" }, 10000).then((r) => r.json() as Promise<DriveStatus>)
+  api(`${drive(sheet)}/sync`, { method: "POST" }, 90000).then((r) => r.json() as Promise<DriveStatus>)
 export const disconnectDrive = (sheet: string) =>
   api(drive(sheet), { method: "DELETE" }, 60000).then((r) => r.json() as Promise<{ connected: false; removed: number }>)
 

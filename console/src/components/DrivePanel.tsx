@@ -45,8 +45,8 @@ export function DrivePanel() {
 
   useEffect(() => { setStatus(null); void load() }, [load])
 
-  // A sync runs in the background on the server: poll until it finishes,
-  // then re-read the source list so new and removed sources show at once.
+  // A sync started elsewhere (the 5-minute check) shows as syncing: poll
+  // until it finishes, then re-read the source list.
   useEffect(() => {
     if (!status?.syncing) return
     const t = setInterval(() => void load(), 3000)
@@ -77,9 +77,9 @@ export function DrivePanel() {
   const choose = (e: React.FormEvent) => {
     e.preventDefault()
     if (!folder.trim()) return
-    void act(async () => { setStatus(await setDriveFolder(sheet, folder.trim())); setFolder("") }, "Folder not saved.")
+    void act(async () => { setStatus(await setDriveFolder(sheet, folder.trim())); setFolder(""); void loadSources() }, "Folder not saved.")
   }
-  const sync = () => void act(async () => setStatus(await syncDrive(sheet)), "Sync not started.")
+  const sync = () => void act(async () => { setStatus(await syncDrive(sheet)); void loadSources() }, "Sync did not finish.")
   const disconnect = () => {
     if (!confirm(`Disconnect Google Drive from ${sheet}? Every source it brought in is removed from the sheet.`)) return
     void act(async () => {
@@ -94,6 +94,7 @@ export function DrivePanel() {
     r.skipped?.length ? { n: r.skipped.length, what: "skipped (not a Doc, PDF or text, or too big)", names: r.skipped } : null,
     r.closed?.length ? { n: r.closed.length, what: "left out: sharing hidden from you", names: r.closed } : null,
     r.failed?.length ? { n: r.failed.length, what: "could not be read; retried next sync", names: r.failed } : null,
+    r.left ? { n: r.left, what: "not reached yet; the next check carries on", names: [] } : null,
   ].filter((x): x is { n: number; what: string; names: string[] } => x !== null)
 
   return (
@@ -102,7 +103,7 @@ export function DrivePanel() {
         <span>Google Drive</span>
         {status?.connected && status.folder_id && (
           <span className="font-mono text-[10px] normal-case tracking-normal text-ink-3">
-            {status.syncing ? "syncing…" : `checked ${ago(status.last_check ?? status.last_sync)}`}
+            {status.syncing || busy ? "syncing…" : `checked ${ago(status.last_check ?? status.last_sync)}`}
           </span>
         )}
       </div>
@@ -164,7 +165,7 @@ export function DrivePanel() {
           <div className="flex gap-1.5">
             {status.folder_id && (
               <Button size="sm" variant="outline" className="press flex-1 font-mono text-[11px]" disabled={busy || status.syncing} onClick={sync}>
-                <RefreshCw className="size-3.5" />Sync now
+                <RefreshCw className={`size-3.5 ${busy ? "animate-spin" : ""}`} />Sync now
               </Button>
             )}
             <Button size="sm" variant="outline" className="press flex-1 border-bad font-mono text-[11px] text-bad" disabled={busy} onClick={disconnect}>

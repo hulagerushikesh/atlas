@@ -6,6 +6,10 @@ Google Drive on a sheet (E3.1, docs/e3-drive-connector.md §5).
     GET    /namespaces/{ns}/connectors/drive      the connection, without its token
     PUT    /namespaces/{ns}/connectors/drive      choose the folder; syncs it
     POST   /namespaces/{ns}/connectors/drive/sync sync now
+
+Every sync runs inside the request that asked for it, under a time limit: a
+server that bills by request (Cloud Run) slows work done after the reply to
+a crawl. A pass that runs out of time stops cleanly and the next carries on.
     DELETE /namespaces/{ns}/connectors/drive      disconnect; removes what it synced
     POST   /connectors/drive/tick                 Cloud Scheduler, every 5 min (E3.2)
     GET    /connectors/google-groups              an admin's Google Group links
@@ -32,7 +36,6 @@ from pydantic import BaseModel, Field
 
 from atlas.api import audit, sessions, tenancy
 from atlas.api.authz import authorize, require_org_admin
-from atlas.api.background import spawn
 from atlas.api.dependencies import get_app_state, get_principal, get_registry
 from atlas.api.sheets import sheet_changed
 from atlas.config import DriveConfig
@@ -184,7 +187,7 @@ async def status(namespace: str, request: Request) -> dict[str, Any]:
     return connections.public_view(await connections.get(ws.id))
 
 
-@router.put("/namespaces/{namespace}/connectors/drive", status_code=202)
+@router.put("/namespaces/{namespace}/connectors/drive")
 async def choose_folder(namespace: str, body: FolderRequest,
                         request: Request) -> dict[str, Any]:
     ws = await authorize(request, namespace, "write")
@@ -202,19 +205,17 @@ async def choose_folder(namespace: str, body: FolderRequest,
     record["folder_id"] = folder
     record.pop("cursor", None)
     await connections.put(record)
-    _start_sync(request, ws)
-    return connections.public_view({**record, "syncing": True})
+    return await _sync_now(request, ws)
 
 
-@router.post("/namespaces/{namespace}/connectors/drive/sync", status_code=202)
+@router.post("/namespaces/{namespace}/connectors/drive/sync")
 async def sync_now(namespace: str, request: Request) -> dict[str, Any]:
     ws = await authorize(request, namespace, "write")
     record = await connections.get(ws.id)
     if record is None or not record.get("folder_id"):
         raise HTTPException(status_code=409, detail={
             "code": "drive_not_connected", "message": "Connect Drive and choose a folder first."})
-    _start_sync(request, ws)
-    return connections.public_view({**record, "syncing": True})
+    return await _sync_now(request, ws)
 
 
 @router.delete("/namespaces/{namespace}/connectors/drive")
@@ -249,17 +250,20 @@ async def _remove_synced(request: Request, ws: tenancy.Workspace,
 
 # ── The sync itself ──────────────────────────────────────────────────────────
 
-def _start_sync(request: Request, ws: tenancy.Workspace) -> None:
-    spawn(run_sync(request, ws, full=True), name=f"drive_sync:{ws.id}")
+async def _sync_now(request: Request, ws: tenancy.Workspace) -> dict[str, Any]:
+    cfg: DriveConfig = get_app_state(request).drive
+    return await run_sync(request, ws, full=True,
+                          deadline=time.monotonic() + cfg.sync_seconds)
 
 
-async def run_sync(request: Request, ws: tenancy.Workspace, *,
-                   full: bool = False) -> dict[str, Any]:
+async def run_sync(request: Request, ws: tenancy.Workspace, *, full: bool = False,
+                   deadline: float | None = None) -> dict[str, Any]:
     """One pass for one sheet. Never raises: the outcome is on the record.
 
     Not *full* (the 5-minute pass): Drive's change feed is read first and the
     folder is walked only if a change concerns it. A full pass is due daily
-    anyway, in case a sharing change never reached the feed."""
+    anyway, in case a sharing change never reached the feed. A pass cut short
+    by *deadline* leaves `resume` on the record, so the next one walks."""
     # The indexer's reads and writes by document id are not scoped to a
     # reader, so the editor's tokens carried into this task do not narrow it.
     async with connections.lock_for(ws.id):
@@ -279,13 +283,14 @@ async def run_sync(request: Request, ws: tenancy.Workspace, *,
             full = (full or not record.get("cursor")
                     or now - float(record.get("last_full") or 0) >= cfg.full_every_seconds)
             walk, cursor = True, ""
-            if not full:
+            if not (full or record.get("resume")):
                 walk, cursor = await _feed(source, record)
             if not cursor:                      # read before the walk: nothing is missed
                 cursor = await source.start_cursor()
             if walk:
-                await _pass(request, ws, record, source, cfg)
-                if full:
+                finished = await _pass(request, ws, record, source, cfg, deadline)
+                record["resume"] = not finished
+                if full and finished:
                     record["last_full"] = now
             record.update(cursor=cursor, last_check=now, error="")
         except DriveAuthError as exc:
@@ -315,17 +320,19 @@ async def _feed(source: DriveSource, record: dict[str, Any]) -> tuple[bool, str]
 
 
 async def _pass(request: Request, ws: tenancy.Workspace, record: dict[str, Any],
-                source: DriveSource, cfg: DriveConfig) -> None:
+                source: DriveSource, cfg: DriveConfig, deadline: float | None) -> bool:
+    """Walk and sync the folder; False if time ran out before every file."""
     registry = get_registry(request)
     corpus = tenancy.registry_namespace(ws)
     report, files = await sync_folder(
         source, registry.get(corpus).indexer, record["folder_id"],
         dict(record.get("files") or {}), await connections.group_links(ws.org_id),
-        max_files=cfg.max_files, max_file_bytes=cfg.max_file_bytes)
+        max_files=cfg.max_files, max_file_bytes=cfg.max_file_bytes, deadline=deadline)
     record.update(files=files, report=report.as_dict(), last_sync=time.time(),
                   folders=report.folders)
     if report.indexed or report.access_changed or report.removed:
         await sheet_changed(registry, corpus, ws, get_app_state(request).cache)
+    return report.left == 0
 
 
 # ── Cloud Scheduler's 5-minute call ──────────────────────────────────────────
@@ -341,7 +348,9 @@ def _scheduler_verifier(request: Request, audience: str) -> sessions.GoogleVerif
 @router.post("/connectors/drive/tick")
 async def tick(request: Request, authorization: str = Header("")) -> dict[str, Any]:
     """Every connected sheet's 5-minute pass, run inside this request so a
-    server that bills by request keeps its processor for the whole pass."""
+    server that bills by request keeps its processor for the whole pass.
+    Least recently checked first, under one time limit: sheets not reached
+    go first next time."""
     cfg: DriveConfig = get_app_state(request).drive
     if not (cfg.scheduler_email and cfg.public_url):
         raise _off()
@@ -357,16 +366,21 @@ async def tick(request: Request, authorization: str = Header("")) -> dict[str, A
     if caller.email.lower() != cfg.scheduler_email.lower():
         raise refused
     store = tenancy.get_tenancy()
-    sheets = failed = 0
-    for record in await connections.all_connections():
-        if not (record.get("folder_id") and record.get("token")):
+    deadline = time.monotonic() + cfg.tick_seconds
+    sheets = failed = waiting = 0
+    due = [r for r in await connections.all_connections()
+           if r.get("folder_id") and r.get("token")]
+    due.sort(key=lambda r: float(r.get("last_check") or 0))
+    for record in due:
+        if time.monotonic() >= deadline:
+            waiting += 1
             continue
         ws = await store.get_workspace(record["workspace_id"])
         if ws is None:
             continue
         sheets += 1
-        failed += bool((await run_sync(request, ws)).get("error"))
-    logger.info("drive_tick", sheets=sheets, failed=failed)
+        failed += bool((await run_sync(request, ws, deadline=deadline)).get("error"))
+    logger.info("drive_tick", sheets=sheets, failed=failed, waiting=waiting)
     return {"sheets": sheets, "failed": failed}
 
 

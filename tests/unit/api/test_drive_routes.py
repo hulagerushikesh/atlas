@@ -93,18 +93,7 @@ def drive_site(site: Site, monkeypatch: pytest.MonkeyPatch) -> Site:
         return "refresh-from-google" if code == "good" else None
 
     monkeypatch.setattr(routes, "exchange_code", exchange)
-    # The sync runs in the background on a live server; here it is run to the
-    # end right after the request that started it, so a test reads its outcome.
-    pending: list[Any] = []
-    monkeypatch.setattr(routes, "spawn", lambda coro, name: pending.append(coro))
-    site.app.state.drive_pending = pending
     return site
-
-
-def _settle(site: Site) -> None:
-    pending = site.app.state.drive_pending
-    while pending:
-        asyncio.run(pending.pop(0))
 
 
 def _connect(c: TestClient, sheet: str = "docs") -> str:
@@ -180,8 +169,9 @@ class TestFolderAndSync:
         admin = self.connected(drive_site)
         r = admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
                       json={"folder": "https://drive.google.com/drive/folders/1AbCdEfGhIjKl?x=1"})
-        assert r.status_code == 202, r.text
-        _settle(drive_site)
+        assert r.status_code == 200, r.text
+        # Done inside the request: the reply is the finished pass.
+        assert r.json()["syncing"] is False and r.json()["report"]["indexed"] == 1
         status = admin.get("/namespaces/docs/connectors/drive").json()
         assert status["folder_id"] == "1AbCdEfGhIjKl"
         assert status["files"] == 1 and status["report"]["indexed"] == 1, status
@@ -210,7 +200,6 @@ class TestFolderAndSync:
         admin = self.connected(drive_site)
         admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
                   json={"folder": "1AbCdEfGhIjKl"})
-        _settle(drive_site)
         r = admin.delete("/namespaces/docs/connectors/drive", headers=CONSOLE)
         assert r.json() == {"connected": False, "removed": 1}
         indexer = drive_site.app.state.atlas.registry.get.return_value.indexer
@@ -224,7 +213,6 @@ class TestFolderAndSync:
             public_url="https://atlas.test")
         admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
                   json={"folder": "1AbCdEfGhIjKl"})
-        _settle(drive_site)
         status = admin.get("/namespaces/docs/connectors/drive").json()
         assert "reconnect" in status["error"].lower() and status["files"] == 0
 
@@ -276,7 +264,6 @@ class TestScheduledPass:
         _back(admin, _connect(admin))
         admin.put("/namespaces/docs/connectors/drive", headers=CONSOLE,
                   json={"folder": "1AbCdEfGhIjKl"})
-        _settle(drive_site)
         assert drive_site.app.state.drive_world["walks"] == 1
         return drive_site
 
@@ -338,6 +325,24 @@ class TestScheduledPass:
         self.tick(synced)
         assert synced.app.state.drive_world["walks"] == 2
         assert synced.app.state.drive_world["asked"] == []   # feed not consulted
+
+    def test_out_of_time_the_rest_waits_and_the_next_pass_walks(self, synced: Site) -> None:
+        synced.app.state.atlas.drive = DriveConfig(
+            client_secret=SecretStr("cs"), token_key=SecretStr(KEY),
+            public_url="https://atlas.test",
+            scheduler_email="cron@atlas.iam.gserviceaccount.com", tick_seconds=0)
+        assert self.tick(synced).json() == {"sheets": 0, "failed": 0}
+        world = synced.app.state.drive_world
+        assert world["walks"] == 1 and world["asked"] == []
+
+    def test_a_pass_cut_short_is_resumed_by_a_walk(self, synced: Site) -> None:
+        record = self.record(synced)
+        record["resume"] = True
+        asyncio.run(connections.put(record))
+        self.tick(synced)
+        world = synced.app.state.drive_world
+        assert world["walks"] == 2 and world["asked"] == []   # walked, feed skipped
+        assert self.record(synced)["resume"] is False
 
     def test_a_sheet_without_a_folder_is_left_alone(self, drive_site: Site) -> None:
         drive_site.app.state.drive_tick_verifier = FakeScheduler()
