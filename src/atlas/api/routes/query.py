@@ -84,6 +84,7 @@ from atlas.api.schemas import (
 from atlas.api.sheets import bring_keyword_copy_up_to_date, sheet_version
 from atlas.cost import estimate_usage_cost
 from atlas.ingestion.hashing import hash_text
+from atlas.orchestration.generator import is_non_answer
 from atlas.orchestration.pipeline import (
     EvidenceChunk,
     PipelineResult,
@@ -555,6 +556,7 @@ async def _stream_query(
     cache_version: str = "",
     probed: _Probed | None = None,
     spent_before: UsageMeter | None = None,
+    trail: dict[str, Any] | None = None,
 ) -> AsyncIterator[str]:
     """Stream the answer, and charge the daily cap for the whole request.
 
@@ -658,6 +660,9 @@ async def _stream_query(
     total_ms = (time.perf_counter() - t_total) * 1000
     cost = await _charge(usage, spend, api_key_id=api_key_id,
                          namespace=namespace, latency_ms=total_ms)
+
+    if capture.complete:
+        _note_unanswered(trail, query, capture.answer, capture.classification)
 
     # Fire-and-forget, like the non-streaming path's write: the client has the
     # whole answer already, and nothing it does next should wait on Redis.
@@ -985,6 +990,15 @@ def _meter_for(request: Request, app_state: AppState, namespace: str) -> SpendMe
     return app_state.demo_spend
 
 
+def _note_unanswered(trail: dict[str, Any] | None, question: str, answer: str,
+                     classification: str) -> None:
+    """E6.2: a question the sheet could not answer goes to its admins' list."""
+    if classification == "out_of_scope":
+        audit.emit(trail, "unanswered", question=question, reason="out_of_scope")
+    elif is_non_answer(answer):
+        audit.emit(trail, "unanswered", question=question, reason="not_covered")
+
+
 async def _enforce_budget(spend: SpendMeter) -> None:
     """429 with Retry-After until UTC midnight once the daily cap is hit."""
     try:
@@ -1064,6 +1078,9 @@ async def query(
             log.info("query_cache_hit", stream=True,
                      **_evidence_fields(cached_payload.get("retrieved_chunk_ids") or []))
             _log_cache_hit(request, body.namespace)
+            _note_unanswered(audit.base(request, body.namespace), body.query,
+                             str(cached_payload.get("answer", "")),
+                             str(cached_payload.get("classification", "")))
             return StreamingResponse(
                 _replay_stream(cached_payload),
                 media_type="text/event-stream",
@@ -1116,6 +1133,7 @@ async def query(
                 namespace=body.namespace,
                 cache=cache, cache_key=cache_key, cache_access=cache_access,
                 cache_version=version, probed=probed, spent_before=spent,
+                trail=audit.base(request, body.namespace),
             ),
             media_type="text/event-stream",
             # Was "skipped-streaming", which stopped being true on
@@ -1143,6 +1161,8 @@ async def query(
         response = QueryResponse.model_validate(cached_payload)
         response.cached = True
         _log_cache_hit(request, body.namespace)
+        _note_unanswered(audit.base(request, body.namespace), body.query, response.answer,
+                         response.classification)
         return response
 
     # Cache hits are free, so the cap is checked only once we know we will
@@ -1193,6 +1213,8 @@ async def query(
                                      cache, cache_key, cache_access, version, total_ms,
                                      stream=False)
         return QueryResponse.model_validate(served)
+    _note_unanswered(audit.base(request, body.namespace), body.query, result.answer,
+                     result.classification)
     if probed is not None and result.sub_queries == [body.query]:
         # The probe was this run's first search; its time belongs there.
         result.stage_ms["retrieval"] = result.stage_ms.get("retrieval", 0.0) + probed.ms

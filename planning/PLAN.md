@@ -147,8 +147,8 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [ ] **E7.4** OAuth sign-in, so Claude.ai and ChatGPT connectors can add Atlas (when a user asks).
 
 **E6 Quality loop**
-- [ ] **E6.1** Thumbs up/down and "wrong source" in the console.
-- [ ] **E6.2** Unanswered-questions report for knowledge owners.
+- [x] **E6.1** Thumbs up/down and "wrong source" in the console. **Built 2026-11-28** (not live until T39).
+- [x] **E6.2** Unanswered-questions report for knowledge owners. **Built 2026-11-28** (not live until T39).
 - [ ] **E6.3** 40-question set, release blocked on a drop, answers correct ≥0.85 (≈₹30).
 
 ### The stop rule
@@ -204,8 +204,10 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T35~~ | ~~Deploy; personal keys; live search from a real MCP client~~ | C + You | ₹0 + paise | **done 2026-11-28** — the official MCP client against https://atlas.hulage.in/mcp with two personal keys (read from files, never shown): your key found both your Drive documents and answered a Gandhi question from Gandhi's passages only; the second address's key listed the same two sheets but no sources on `drive-test` and got 0 passages for Gandhi and for Patel (unshared in T33) | E7.2 |
 | ~~T36~~ | ~~Build E4.1 + E4.2: audit record (who asked or changed what, when, where; retention 7–3650 days, default 90) and question text out of the general logs~~ | C | ₹0 | **done 2026-11-28** — every question (console, API, MCP) and every change is recorded with who, sheet and outcome, refusals included; only org admins read it (Members → Activity); entries expire by the setting; log lines show "[withheld, N chars]" instead of questions. Checked in a headless browser | E4.1, E4.2 |
 | ~~T37~~ | ~~Deploy; Firestore expiry for audit entries; check Activity live~~ | C + You | ₹0 | **done 2026-11-28** — your sign-in and your question appeared in Members → Activity; Firestore's expiry policy is active; the live log lines for that question read "[withheld, 37 chars]" and no log line holds its text | E4.1, E4.2 |
+| ~~T38~~ | ~~Build E6.1 + E6.2: feedback under every answer; admins' unanswered-questions list~~ | C | ₹0 | **done 2026-11-28** — thumbs up/down with a reason (wrong answer, wrong source, didn't answer, other) and an optional comment, kept in the audit record; every question a sheet could not answer (console, API, cached or streamed) is noted; Members → Unanswered questions groups them by sheet and wording, most asked first, with who and why. Checked in a headless browser | E6.1, E6.2 |
+| T39 | Deploy; give one thumbs-down and ask one question the sheet cannot answer; both show under Unanswered questions | C + You | ₹0 + paise | both rows appear live | E6.1, E6.2 |
 
-E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T37 done. Next: T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T39 is next (C + You). Then T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -289,6 +291,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A scheduled pass runs inside a 120 s request: a folder with hundreds of new files needs a longer limit or work split across passes
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T38 done: feedback under every answer and an unanswered-questions list for admins, both in the audit record. Not live. ₹0.
 
 - 2026-11-28 — T37 done: audit record live (Members → Activity), Firestore expiry on, questions withheld from live logs. ₹0.
 

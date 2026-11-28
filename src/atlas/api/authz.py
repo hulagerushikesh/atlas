@@ -102,6 +102,10 @@ POLICY: dict[tuple[str, str], Rule] = {
     ("GET", "/mcp"): "authenticated",
     ("POST", "/mcp"): "authenticated",
     ("DELETE", "/mcp"): "authenticated",
+    # E6: feedback on an answer (the route checks the sheet), and the
+    # admins' list of what sheets could not answer.
+    ("POST", "/feedback"): "authenticated",
+    ("GET", "/org/unanswered"): "org_admin",
     # The caller's own key's usage.
     ("GET", "/usage"): "authenticated",
     # Lists only what the caller may read.

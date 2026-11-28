@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import {
-  createGroup, createServiceAccount, createSheet, deleteGroup, getAudit, getOrg, invite, messageOf, removeMember,
-  revokeServiceAccount, setAuditRetention, updateMember, withdrawInvitation, type AuditEntry, type Grants, type Org, type Role,
+  createGroup, createServiceAccount, createSheet, deleteGroup, getAudit, getOrg, getUnanswered, invite, messageOf, removeMember,
+  revokeServiceAccount, setAuditRetention, updateMember, withdrawInvitation, type AuditEntry, type Grants, type Unanswered, type Org, type Role,
 } from "@/lib/api"
 import { GroupToggle } from "@/components/DocumentDialog"
 import { useAtlas } from "@/lib/store"
@@ -73,6 +73,7 @@ export function MembersDialog() {
             <Invite sheets={sheets} act={act} domain={org.domain} />
             <Sheets org={org} act={act} />
             <Machines org={org} sheets={sheets} act={act} />
+            <UnansweredList />
             <Activity />
           </div>
         )}
@@ -395,6 +396,7 @@ const DOING: Record<string, string> = {
   "mcp.list_sources": "listed sources through an assistant", sign_in: "signed in", upload: "uploaded",
   ingest: "indexed a server path", "document.access": "changed readers of", "document.remove": "removed",
   "audit.retention": "changed how long this record is kept",
+  feedback: "gave feedback on an answer", unanswered: "got no answer",
   "POST /org/groups": "made a group", "DELETE /org/groups/{group_id}": "deleted a group",
   "POST /org/invitations": "invited someone", "DELETE /org/invitations/{email}": "withdrew an invitation",
   "PUT /org/members/{user_id}": "changed a member's access", "DELETE /org/members/{user_id}": "removed a member",
@@ -468,6 +470,46 @@ function Activity() {
       )}
       {entries && more && (
         <Button variant="ghost" size="sm" className="press" onClick={() => void load(entries[entries.length - 1]?.ts)}>Older</Button>
+      )}
+    </Section>
+  )
+}
+
+const WHY: Record<string, string> = {
+  not_covered: "not in the documents", out_of_scope: "judged off-topic", wrong_answer: "marked wrong",
+  wrong_source: "wrong source", no_answer: "marked unanswered", other: "marked down", "marked down": "marked down",
+}
+
+/**
+ * What the sheets could not answer, or answered badly (E6.2), most asked
+ * first. The list a knowledge owner works from: each row is a document
+ * someone should write, fix or add to a sheet.
+ */
+function UnansweredList() {
+  const [rows, setRows] = useState<Unanswered[] | null>(null)
+  useEffect(() => {
+    getUnanswered(30).then((r) => setRows(r.questions)).catch((e) => toast.error("Unanswered questions not loaded", { description: messageOf(e) }))
+  }, [])
+  return (
+    <Section title={`Unanswered questions · last 30 days${rows ? ` · ${rows.length}` : ""}`}>
+      <p className="label normal-case tracking-normal text-[12px] leading-snug">
+        Questions a sheet could not answer, or whose answer someone marked down. Most asked first.
+      </p>
+      {rows === null ? <p className="label normal-case tracking-normal">Reading…</p> : rows.length === 0 ? (
+        <p className="label normal-case tracking-normal">None. Every question found an answer.</p>
+      ) : (
+        <ul className="flex flex-col">
+          {rows.map((r) => (
+            <li key={`${r.sheet}:${r.question}`} className="border-b border-border/60 py-1.5 text-[13px] leading-relaxed">
+              <div className="text-ink-1">{r.question}</div>
+              <div className="font-mono text-[11px] text-ink-3">
+                {r.sheet} · asked {r.times}× by {r.people} {r.people === 1 ? "person" : "people"} ·{" "}
+                {Object.entries(r.why).map(([k, n]) => `${WHY[k] ?? k}${n > 1 ? ` ×${n}` : ""}`).join(", ")}
+              </div>
+              {r.comments.map((c, i) => <div key={i} className="pl-3 text-[12px] text-ink-2">“{c}”</div>)}
+            </li>
+          ))}
+        </ul>
       )}
     </Section>
   )

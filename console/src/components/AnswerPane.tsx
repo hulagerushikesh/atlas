@@ -10,6 +10,7 @@ import { fmtScore, useAtlas, type Strength } from "@/lib/store"
 import type { Evidence } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { WhatIsThis } from "@/components/WhatIsThis"
+import { FeedbackBar } from "@/components/FeedbackBar"
 import { Orientation } from "@/components/Orientation"
 import { AGAIN, ASK, openerFor } from "@/lib/glossary"
 
@@ -244,7 +245,7 @@ function Opener({ question, onAsk }: { question: string; onAsk: (q: string) => v
 /* ── Pane ──────────────────────────────────────────────────────────────── */
 
 export function AnswerPane() {
-  const { run, sheet, sheetCovers, ask, tourOpen } = useAtlas()
+  const { run, sheet, sheetCovers, ask, tourOpen, me } = useAtlas()
   const [q, setQ] = useState("")
   const [topK, setTopK] = useState(5)
   const [stream, setStream] = useState(true)
@@ -356,6 +357,11 @@ export function AnswerPane() {
                 {run.strength && <StrengthBadge s={run.strength} />}
 
                 {settled && run.cached && <SameAnswer />}
+
+                {settled && me?.user && (run.phase === "done" || run.phase === "refused") && (
+                  <FeedbackBar sheet={run.sheet} question={run.question} startedAt={run.startedAt}
+                    sources={[...new Set(run.citations.map((c) => c.source))]} />
+                )}
 
                 {/* Below the badge, not above it: DESIGN §6 puts the strength
                     badge directly under the answer, and a refusal is still an
