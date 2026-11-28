@@ -279,7 +279,6 @@ Write the answer in the table when decided. Claude never decides these.
 
 ## 7. Parking lot — not scheduled, one line each
 
-- A sheet's spend before T42 was not counted per sheet, so its first day's figure starts at deploy
 - A description for every uploaded set of documents, learned automatically
 - Better handling of PDFs with tables
 - Per-user usage page in the console
