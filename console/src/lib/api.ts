@@ -381,6 +381,19 @@ export const getAudit = (before?: number) =>
 export const setAuditRetention = (days: number) =>
   api("/org/audit/settings", { method: "PUT", ...json({ retention_days: days }) }, 5000)
 
+/* ── Feedback on an answer, and what sheets could not answer (E6) ───────── */
+
+export type FeedbackReason = "wrong_answer" | "wrong_source" | "no_answer" | "other"
+export const postFeedback = (body: {
+  sheet: string; question: string; rating: "up" | "down"; reason?: FeedbackReason; comment?: string; sources?: string[]
+}) => api("/feedback", { method: "POST", ...json(body) }, 5000)
+export interface Unanswered {
+  sheet: string; question: string; times: number; people: number; last: number
+  why: Record<string, number>; comments: string[]
+}
+export const getUnanswered = (days = 30) =>
+  api(`/org/unanswered?days=${days}`, {}, 8000).then((r) => r.json() as Promise<{ days: number; questions: Unanswered[] }>)
+
 /* ── Personal keys, for AI assistants over MCP (E4) ─────────────────────── */
 
 export interface PersonalKey { key_id: string; name: string; created_at: number | null }

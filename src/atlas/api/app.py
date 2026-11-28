@@ -52,6 +52,7 @@ from atlas.api.routes import (
     auth,
     connectors,
     documents,
+    feedback,
     health,
     ingest,
     keys,
@@ -285,6 +286,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(connectors.router, tags=["connectors"])
     app.include_router(query.router, tags=["query"])
     app.include_router(me.router, tags=["auth"])
+    app.include_router(feedback.router, tags=["quality"])
 
     # E4: Atlas as an MCP server, for the AI assistants people already use.
     app.state.mcp, mcp_app = mcp_server.build()

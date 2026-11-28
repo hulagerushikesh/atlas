@@ -15,6 +15,7 @@ import pytest
 from starlette.middleware import Middleware
 
 from atlas.api import audit, tenancy
+from atlas.api.routes import feedback
 from atlas.logging import redact_questions
 from tests.unit.api.test_sign_in import (  # noqa: F401 -- pytest fixtures
     CONSOLE,
@@ -26,6 +27,7 @@ from tests.unit.api.test_sign_in import (  # noqa: F401 -- pytest fixtures
 
 @pytest.fixture
 def audited(site: Site, monkeypatch: pytest.MonkeyPatch) -> Iterator[Site]:
+    site.app.include_router(feedback.router)
     # Innermost, as in create_app: inside the key middleware.
     site.app.user_middleware.append(Middleware(audit.AuditMiddleware))
     site.app.middleware_stack = None

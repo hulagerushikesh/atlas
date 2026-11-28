@@ -105,6 +105,26 @@ def _entry(request: Request, response: Response) -> dict[str, Any] | None:
     return entry
 
 
+def base(request: Request, sheet: str) -> dict[str, Any] | None:
+    """Who is asking, captured now, for an entry made after the response
+    has started (a streamed answer's outcome)."""
+    principal = getattr(request.state, "principal", None)
+    if not isinstance(principal, tenancy.Principal) or not principal.org_id:
+        return None
+    return {"org_id": principal.org_id, "actor": _actor(request, principal), "sheet": sheet}
+
+
+def emit(trail: dict[str, Any] | None, action: str, **detail: Any) -> None:
+    """Record an outcome the middleware could not see, off the response path."""
+    if trail is None:
+        return
+    if isinstance(detail.get("question"), str):
+        detail["question"] = detail["question"][:QUESTION_CHARS]
+    spawn(write({**trail, "id": f"{time.time_ns():x}-{secrets.token_hex(4)}",
+                 "ts": time.time(), "action": action, "status": 200, "detail": detail}),
+          name="audit_write")
+
+
 async def write(entry: dict[str, Any]) -> None:
     """Never raises: a failed write is logged, the request it describes stands."""
     global _writes
