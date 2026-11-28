@@ -129,8 +129,8 @@ Why and for whom: `docs/enterprise-product.md`. E1 design: `docs/e1-identity.md`
 - [x] **E3.3** A deleted or unshared page stops being answered within 15 min, measured. **Done 2026-11-28: about 3 minutes, live.**
 
 **E4 Governance**
-- [x] **E4.1** Append-only audit record with a retention setting. **Built 2026-11-28** (not live until T37).
-- [x] **E4.2** Question text out of general logs. **Built 2026-11-28** (not live until T37).
+- [x] **E4.1** Append-only audit record with a retention setting. **Live 2026-11-28.**
+- [x] **E4.2** Question text out of general logs. **Live 2026-11-28.**
 - [ ] **E4.3** Budget per workspace with a hard cap.
 - [ ] **E4.4** Admin console: sources, members, usage, spend.
 
@@ -203,9 +203,9 @@ parking lot in section 7 as one line, and the session moves on.
 | ~~T34~~ | ~~Build E7.1: MCP server (list sheets, list sources, search) and personal keys~~ | C | ₹0 | **done 2026-11-28** — real SDK client against the app with the auth middleware: tools see only the key owner's sheets and passages, Drive email tokens included; revoked key and removed member refused; session cookie refused; the real app served it locally (protocol 2025-11-25). Console dialog checked in a headless browser | E7.1 |
 | ~~T35~~ | ~~Deploy; personal keys; live search from a real MCP client~~ | C + You | ₹0 + paise | **done 2026-11-28** — the official MCP client against https://atlas.hulage.in/mcp with two personal keys (read from files, never shown): your key found both your Drive documents and answered a Gandhi question from Gandhi's passages only; the second address's key listed the same two sheets but no sources on `drive-test` and got 0 passages for Gandhi and for Patel (unshared in T33) | E7.2 |
 | ~~T36~~ | ~~Build E4.1 + E4.2: audit record (who asked or changed what, when, where; retention 7–3650 days, default 90) and question text out of the general logs~~ | C | ₹0 | **done 2026-11-28** — every question (console, API, MCP) and every change is recorded with who, sheet and outcome, refusals included; only org admins read it (Members → Activity); entries expire by the setting; log lines show "[withheld, N chars]" instead of questions. Checked in a headless browser | E4.1, E4.2 |
-| T37 | Deploy; switch on Firestore's expiry for audit entries (one command); check Activity live | C + You | ₹0 | your own question and sign-in appear in Activity; a live log line shows the question withheld | E4.1, E4.2 |
+| ~~T37~~ | ~~Deploy; Firestore expiry for audit entries; check Activity live~~ | C + You | ₹0 | **done 2026-11-28** — your sign-in and your question appeared in Members → Activity; Firestore's expiry policy is active; the live log lines for that question read "[withheld, 37 chars]" and no log line holds its text | E4.1, E4.2 |
 
-E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T37 is next (C + You). Then T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
+E3 (Drive) is done; the owner chose MCP next (D11, 2026-11-28). T37 done. Next: T6 on or after 2026-11-30 — read invitees' questions in Members → Activity, not the logs. T6 is due on or after 2026-11-30. Left from T21 for the owner: Google's Branding page (homepage and `/privacy`) and Publish app (O7). Older Claude tasks still wait on the owner: T3 on the video (T2), T6 on the invitations (T5) plus three days, T14 on everything else being ticked. T12 is yours too.
 
 ## 5. The owner's list — things only you can do
 
@@ -289,6 +289,8 @@ Write the answer in the table when decided. Claude never decides these.
 - A scheduled pass runs inside a 120 s request: a folder with hundreds of new files needs a longer limit or work split across passes
 
 ## 8. Log — one line per session, newest first
+
+- 2026-11-28 — T37 done: audit record live (Members → Activity), Firestore expiry on, questions withheld from live logs. ₹0.
 
 - 2026-11-28 — T36 done: audit record (questions and changes, who/when/where, admin-only, retention setting) and questions withheld from general logs. Not live. ₹0.
 
